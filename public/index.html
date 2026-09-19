@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Interview Prep — Manoj</title>
+<meta name="description" content="Daily interview-prep tracker: HR, delivery/program management, people management, technical architecture and AI-product questions with spaced-repetition review." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<div id="toast" class="toast" hidden></div>
+
+<!-- AUTH SCREEN -->
+<section id="auth-screen" class="auth-screen">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2 3 6.5v6C3 17.2 6.9 21.3 12 22.5 17.1 21.3 21 17.2 21 12.5v-6L12 2Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8.5 12.2l2.3 2.3 4.7-4.9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>Interview Prep</span>
+    </div>
+    <p class="auth-sub">A 60-day tracker: HR &amp; behavioral, delivery/program management, people management, technical architecture, and AI-automation prep — 10 new questions a day, plus a daily random review of everything you've marked done.</p>
+
+    <div class="auth-tabs" role="tablist">
+      <button class="auth-tab is-active" data-tab="login" role="tab" aria-selected="true">Sign in</button>
+      <button class="auth-tab" data-tab="signup" role="tab" aria-selected="false">Create account</button>
+    </div>
+
+    <form id="login-form" class="auth-form">
+      <label class="field">
+        <span>Email</span>
+        <input type="email" id="login-email" autocomplete="email" required />
+      </label>
+      <label class="field">
+        <span>Password</span>
+        <input type="password" id="login-password" autocomplete="current-password" required />
+      </label>
+      <p class="form-error" id="login-error" hidden></p>
+      <p class="form-note" id="login-success" hidden></p>
+      <button type="submit" class="btn btn-primary btn-block">Sign in</button>
+      <button type="button" class="btn btn-ghost btn-block" id="forgot-password-link" style="margin-top:8px;">Forgot password?</button>
+    </form>
+
+    <form id="forgot-form" class="auth-form" hidden>
+      <p class="auth-sub" style="margin-bottom:16px;">Enter your account email and we'll send a link to reset your password.</p>
+      <label class="field">
+        <span>Email</span>
+        <input type="email" id="forgot-email" autocomplete="email" required />
+      </label>
+      <p class="form-error" id="forgot-error" hidden></p>
+      <p class="form-note" id="forgot-success" hidden></p>
+      <button type="submit" class="btn btn-primary btn-block">Send reset link</button>
+      <button type="button" class="btn btn-ghost btn-block" id="forgot-cancel-link" style="margin-top:8px;">Back to sign in</button>
+    </form>
+
+    <form id="reset-form" class="auth-form" hidden>
+      <p class="auth-sub" style="margin-bottom:16px;">Choose a new password for your account.</p>
+      <label class="field">
+        <span>New password</span>
+        <input type="password" id="reset-password" autocomplete="new-password" minlength="8" required />
+        <small>At least 8 characters.</small>
+      </label>
+      <p class="form-error" id="reset-error" hidden></p>
+      <button type="submit" class="btn btn-primary btn-block">Update password</button>
+    </form>
+
+    <form id="signup-form" class="auth-form" hidden>
+      <label class="field">
+        <span>Your name</span>
+        <input type="text" id="signup-name" autocomplete="name" required />
+      </label>
+      <label class="field">
+        <span>Email</span>
+        <input type="email" id="signup-email" autocomplete="email" required />
+      </label>
+      <label class="field">
+        <span>Password</span>
+        <input type="password" id="signup-password" autocomplete="new-password" minlength="8" required />
+        <small>At least 8 characters.</small>
+      </label>
+      <p class="form-error" id="signup-error" hidden></p>
+      <button type="submit" class="btn btn-primary btn-block">Create account</button>
+    </form>
+  </div>
+</section>
+
+<!-- APP SHELL -->
+<div id="app" class="app" hidden>
+  <header class="topbar">
+    <div class="topbar-brand">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2 3 6.5v6C3 17.2 6.9 21.3 12 22.5 17.1 21.3 21 17.2 21 12.5v-6L12 2Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8.5 12.2l2.3 2.3 4.7-4.9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>Interview Prep</span>
+    </div>
+    <div class="topbar-stats">
+      <div class="stat-pill" id="streak-pill" title="Consecutive days studied">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2c1.2 3 .5 4.6-.6 6.2C10 10 9 11.4 9 13.2A3 3 0 0 0 15 14c0-1-.4-1.7-.9-2.3.9.6 2.4 2 2.4 4.3a5.5 5.5 0 1 1-11 0C5.5 11.8 8.8 8.4 12 2Z" fill="currentColor"/></svg>
+        <span id="streak-count">0</span>
+      </div>
+      <div class="stat-pill" id="progress-pill" title="Topics completed">
+        <span id="progress-count">0/24</span>
+      </div>
+    </div>
+    <div class="topbar-user">
+      <span class="user-name" id="user-name-label"></span>
+      <button class="btn btn-ghost btn-small" id="settings-btn">Settings</button>
+      <button class="btn btn-ghost btn-small" id="logout-btn">Sign out</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav class="sidebar" id="sidebar" aria-label="Topics">
+      <div class="nav-top-row">
+        <button class="nav-home-btn" id="nav-home-btn" data-view="home">Overview</button>
+        <button class="nav-home-btn" id="nav-stats-btn" data-view="stats">Stats</button>
+      </div>
+      <div id="group-list"></div>
+    </nav>
+
+    <main class="main" id="main">
+      <!-- rendered by app.js -->
+    </main>
+  </div>
+</div>
+
+<script src="questions.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

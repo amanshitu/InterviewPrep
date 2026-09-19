@@ -1,0 +1,19 @@
+{
+  "name": "interview-prep",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Daily interview-prep tracker (HR, delivery/program management, people management, technical architecture, AI automation) with login and per-user progress, deployed on Cloudflare Workers + D1.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:create": "wrangler d1 create interview-prep-db",
+    "db:migrate:local": "wrangler d1 execute interview-prep-db --local --file=./migrations/0001_init.sql",
+    "db:migrate:remote": "wrangler d1 execute interview-prep-db --remote --file=./migrations/0001_init.sql",
+    "db:migrate:local:0002": "wrangler d1 execute interview-prep-db --local --file=./migrations/0002_accounts_security_activity.sql",
+    "db:migrate:remote:0002": "wrangler d1 execute interview-prep-db --remote --file=./migrations/0002_accounts_security_activity.sql",
+    "tail": "wrangler tail"
+  },
+  "devDependencies": {
+    "wrangler": "^4.20.0"
+  }
+}
