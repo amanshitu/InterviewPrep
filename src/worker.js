@@ -972,6 +972,86 @@ async function handleListMySets(request, env, user) {
   return json({ sets: rows.results || [] });
 }
 
+async function handleSubmitSet(request, env, user, setId) {
+  const row = await env.DB.prepare("SELECT owner_user_id, visibility FROM question_sets WHERE id = ?")
+    .bind(setId)
+    .first();
+  if (!row || row.owner_user_id !== user.id) return json({ error: "Question set not found." }, { status: 404 });
+  if (row.visibility !== "private" && row.visibility !== "rejected") {
+    return json({ error: "Only a private or rejected set can be submitted for review." }, { status: 400 });
+  }
+  await env.DB.prepare("UPDATE question_sets SET visibility = 'pending', rejected_reason = NULL WHERE id = ?")
+    .bind(setId)
+    .run();
+  return json({ ok: true });
+}
+
+async function handleSubscribeSet(request, env, user, setId) {
+  const row = await env.DB.prepare("SELECT visibility FROM question_sets WHERE id = ?").bind(setId).first();
+  if (!row || row.visibility !== "shared") {
+    return json({ error: "This question set isn't available to subscribe to." }, { status: 400 });
+  }
+  await env.DB.prepare(
+    "INSERT INTO user_question_sets (user_id, set_id, subscribed_at) VALUES (?, ?, ?) ON CONFLICT(user_id, set_id) DO NOTHING",
+  )
+    .bind(user.id, setId, new Date().toISOString())
+    .run();
+  return json({ ok: true });
+}
+
+async function handleListSuggestions(request, env, user) {
+  // Shared, user-submitted sets (not the official ones, which everyone is
+  // already auto-subscribed to) that this user hasn't picked up yet — sets
+  // matching the user's own track are surfaced first.
+  const rows = await env.DB.prepare(
+    `SELECT qs.id as id, qs.title as title, qs.track as track, u.name as owner_name
+     FROM question_sets qs
+     LEFT JOIN users u ON u.id = qs.owner_user_id
+     WHERE qs.visibility = 'shared' AND qs.owner_user_id IS NOT NULL
+       AND NOT EXISTS (SELECT 1 FROM user_question_sets WHERE user_id = ? AND set_id = qs.id)
+     ORDER BY (qs.track IS NOT NULL AND qs.track = ?) DESC, qs.created_at DESC`,
+  )
+    .bind(user.id, user.track || "")
+    .all();
+  return json({ sets: rows.results || [] });
+}
+
+// ---------- admin: question-set approval queue ----------
+
+async function handleAdminPendingSets(request, env, user) {
+  const rows = await env.DB.prepare(
+    `SELECT qs.id as id, qs.title as title, qs.track as track, qs.created_at as created_at,
+            u.name as owner_name, u.email as owner_email,
+            (SELECT COUNT(*) FROM questions WHERE set_id = qs.id) as question_count
+     FROM question_sets qs LEFT JOIN users u ON u.id = qs.owner_user_id
+     WHERE qs.visibility = 'pending' ORDER BY qs.created_at ASC`,
+  ).all();
+  return json({ sets: rows.results || [] });
+}
+
+async function handleApproveSet(request, env, user, setId) {
+  const row = await env.DB.prepare("SELECT visibility FROM question_sets WHERE id = ?").bind(setId).first();
+  if (!row || row.visibility !== "pending") return json({ error: "This set isn't pending review." }, { status: 400 });
+  await env.DB.prepare(
+    "UPDATE question_sets SET visibility = 'shared', approved_at = ?, approved_by = ?, rejected_reason = NULL WHERE id = ?",
+  )
+    .bind(new Date().toISOString(), user.id, setId)
+    .run();
+  return json({ ok: true });
+}
+
+async function handleRejectSet(request, env, user, setId) {
+  const parsed = await readJsonBody(request, 2000);
+  if (!parsed.ok) return json({ error: parsed.error }, { status: parsed.status });
+  const reason = (parsed.body.reason || "").toString().trim().slice(0, 300) || "No reason given.";
+  const row = await env.DB.prepare("SELECT visibility FROM question_sets WHERE id = ?").bind(setId).first();
+  if (!row || row.visibility !== "pending") return json({ error: "This set isn't pending review." }, { status: 400 });
+  await env.DB.prepare("UPDATE question_sets SET visibility = 'rejected', rejected_reason = ? WHERE id = ?")
+    .bind(reason, setId)
+    .run();
+  return json({ ok: true });
+}
+
 // ---------- AI: MCQ generation (once per question, cached forever) ----------
 
 const TEST_SIZE = 10;
@@ -1279,6 +1359,29 @@ export default {
         if (url.pathname === "/api/question-sets/mine" && request.method === "GET") {
           return applySecurityHeaders(await handleListMySets(request, env, user));
         }
+        if (url.pathname === "/api/question-sets/suggestions" && request.method === "GET") {
+          return applySecurityHeaders(await handleListSuggestions(request, env, user));
+        }
+
+        const setAction = url.pathname.match(/^\/api\/question-sets\/([^/]+)\/(submit|subscribe)$/);
+        if (setAction && request.method === "POST") {
+          const [, setId, action] = setAction;
+          if (action === "submit") return applySecurityHeaders(await handleSubmitSet(request, env, user, setId));
+          return applySecurityHeaders(await handleSubscribeSet(request, env, user, setId));
+        }
+
+        const adminSetAction = url.pathname.match(/^\/api\/admin\/question-sets\/([^/]+)\/(approve|reject)$/);
+        if (adminSetAction && request.method === "POST") {
+          if (user.role !== "admin") return applySecurityHeaders(json({ error: "Forbidden." }, { status: 403 }));
+          const [, setId, action] = adminSetAction;
+          if (action === "approve") return applySecurityHeaders(await handleApproveSet(request, env, user, setId));
+          return applySecurityHeaders(await handleRejectSet(request, env, user, setId));
+        }
+        if (url.pathname === "/api/admin/pending-sets" && request.method === "GET") {
+          if (user.role !== "admin") return applySecurityHeaders(json({ error: "Forbidden." }, { status: 403 }));
+          return applySecurityHeaders(await handleAdminPendingSets(request, env, user));
+        }
+
         if (url.pathname === "/api/test/today" && request.method === "GET") {
           return applySecurityHeaders(await handleGetTodayTest(request, env, user));
         }

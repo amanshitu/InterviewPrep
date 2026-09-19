@@ -39,6 +39,24 @@
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
+  // ---------- routing ----------
+  // Each view-entry function (renderHome, renderSettings, openStats,
+  // openTest, startReview, renderAdmin) calls setRoute() as its first
+  // action, so the URL always reflects what's on screen. Back/forward and
+  // a fresh load/refresh on a deep path both go through dispatchRoute().
+  function setRoute(path) {
+    if (location.pathname !== path) history.pushState(null, "", path);
+  }
+  function dispatchRoute(path) {
+    if (path === "/settings") return renderSettings();
+    if (path === "/stats") return openStats();
+    if (path === "/review") return startReview(DEFAULT_REVIEW_COUNT);
+    if (path === "/test") return openTest();
+    if (path === "/admin") return renderAdmin();
+    return renderHome();
+  }
+  window.addEventListener("popstate", () => dispatchRoute(location.pathname));
+
   async function api(path, opts) {
     const res = await fetch(path, opts);
     let data = {};
@@ -180,11 +198,15 @@
   function renderSidebar() {
     $("#nav-home-btn").classList.toggle("is-active", currentView === "home");
     $("#nav-stats-btn").classList.toggle("is-active", currentView === "stats");
+    const adminBtn = $("#nav-admin-btn");
+    adminBtn.hidden = currentUser.role !== "admin";
+    adminBtn.classList.toggle("is-active", currentView === "admin");
   }
 
   // ---------- HOME view (today's queue) ----------
   async function renderHome() {
     currentView = "home";
+    setRoute("/");
     const main = $("#main");
     main.innerHTML = "";
     main.appendChild(el(`<div class="view"><div class="card empty-state"><p>Loading today's questions…</p></div></div>`));
@@ -343,6 +365,7 @@
   // ---------- REVIEW view ----------
   async function startReview(count) {
     currentView = "review";
+    setRoute("/review");
     const main = $("#main");
     main.innerHTML = "";
     main.appendChild(el(`<div class="view"><div class="card empty-state"><p>Loading review batch…</p></div></div>`));
@@ -448,6 +471,7 @@
 
   async function openTest() {
     currentView = "test";
+    setRoute("/test");
     const main = $("#main");
     main.innerHTML = "";
     main.appendChild(el(`<div class="view"><div class="card empty-state"><p>Loading today's test — generating questions can take a few seconds the first time.</p></div></div>`));
@@ -543,6 +567,7 @@
   // ---------- SETTINGS view ----------
   function renderSettings() {
     currentView = "settings";
+    setRoute("/settings");
     const main = $("#main");
     main.innerHTML = "";
     const view = el(`<div class="view"></div>`);
@@ -610,6 +635,7 @@
     `));
 
     view.appendChild(buildQuestionSetsCard());
+    view.appendChild(buildSuggestionsCard());
 
     view.appendChild(el(`
       <div class="card">
@@ -698,6 +724,7 @@
     $("#export-progress-btn", view).addEventListener("click", exportProgress);
 
     wireQuestionSetsCard(view);
+    wireSuggestionsCard(view);
     wireAiProviderCard(view);
     renderSidebar();
   }
@@ -810,12 +837,26 @@
           <div class="weak-row" style="margin-bottom:8px;">
             <span class="weak-row-label">${escapeHtml(s.title)}${s.track ? ` <span class="section-sub">(${escapeHtml(s.track)})</span>` : ""}</span>
             ${renderSetStatusPill(s)}
+            ${s.visibility === "private" || s.visibility === "rejected"
+              ? `<button class="btn btn-ghost btn-small" data-submit-review="${s.id}">Submit for review</button>`
+              : ""}
           </div>
         `);
         if (s.visibility === "rejected" && s.rejected_reason) {
           row.appendChild(el(`<p class="section-sub" style="margin-top:-4px;">Reason: ${escapeHtml(s.rejected_reason)}</p>`));
         }
         container.appendChild(row);
+      });
+      $all("[data-submit-review]", container).forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          try {
+            await api(`/api/question-sets/${btn.dataset.submitReview}/submit`, { method: "POST" });
+            toast("Submitted for review.");
+            loadMySets(container);
+          } catch (err) {
+            toast(err.message);
+          }
+        });
       });
     } catch (err) {
       container.innerHTML = "";
@@ -929,6 +970,57 @@
     });
   }
 
+  // ---------- Suggested sets (shared, community-approved) ----------
+  function buildSuggestionsCard() {
+    return el(`
+      <div class="card">
+        <div class="section-title">Suggested sets</div>
+        <p class="section-sub" style="margin-top:6px;">Question sets other users have shared, approved by an admin. Subscribing adds them to your daily rotation.</p>
+        <div id="suggestions-list" style="margin-top:14px;"></div>
+      </div>
+    `);
+  }
+
+  async function loadSuggestions(container) {
+    container.innerHTML = "Loading…";
+    try {
+      const data = await api("/api/question-sets/suggestions");
+      container.innerHTML = "";
+      if (!data.sets.length) {
+        container.appendChild(el(`<p class="section-sub">No shared sets available to subscribe to right now.</p>`));
+        return;
+      }
+      data.sets.forEach((s) => {
+        const row = el(`
+          <div class="weak-row" style="margin-bottom:8px;">
+            <span class="weak-row-label">${escapeHtml(s.title)}${s.track ? ` <span class="section-sub">(${escapeHtml(s.track)})</span>` : ""}</span>
+            <span class="section-sub">by ${escapeHtml(s.owner_name || "someone")}</span>
+            <button class="btn btn-secondary btn-small" data-subscribe="${s.id}">Subscribe</button>
+          </div>
+        `);
+        container.appendChild(row);
+      });
+      $all("[data-subscribe]", container).forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          try {
+            await api(`/api/question-sets/${btn.dataset.subscribe}/subscribe`, { method: "POST" });
+            toast("Subscribed — it'll start showing up in your daily queue.");
+            loadSuggestions(container);
+          } catch (err) {
+            toast(err.message);
+          }
+        });
+      });
+    } catch (err) {
+      container.innerHTML = "";
+      container.appendChild(el(`<p class="form-error">${escapeHtml(err.message)}</p>`));
+    }
+  }
+
+  function wireSuggestionsCard(view) {
+    loadSuggestions($("#suggestions-list", view));
+  }
+
   // ---------- STATS view ----------
   function buildBarChartSvg(data) {
     const width = Math.max(320, data.length * 34);
@@ -956,6 +1048,7 @@
 
   async function openStats() {
     currentView = "stats";
+    setRoute("/stats");
     const main = $("#main");
     main.innerHTML = "";
     main.appendChild(el(`<div class="view"><div class="card empty-state"><p>Loading stats…</p></div></div>`));
@@ -1087,6 +1180,85 @@
     renderSidebar();
   }
 
+  // ---------- ADMIN view (question-set approval queue) ----------
+  async function renderAdmin() {
+    currentView = "admin";
+    setRoute("/admin");
+    const main = $("#main");
+    main.innerHTML = "";
+    main.appendChild(el(`<div class="view"><div class="card empty-state"><p>Loading pending sets…</p></div></div>`));
+    renderSidebar();
+
+    let sets = [];
+    try {
+      const data = await api("/api/admin/pending-sets");
+      sets = data.sets || [];
+    } catch (err) {
+      toast(err.message);
+    }
+    paintAdmin(sets);
+  }
+
+  function paintAdmin(sets) {
+    const main = $("#main");
+    main.innerHTML = "";
+    const view = el(`<div class="view"></div>`);
+
+    view.appendChild(el(`
+      <div class="card">
+        <div class="section-title">Pending question sets</div>
+        <p class="section-sub" style="margin-top:6px;">Review sets submitted for sharing. Approved sets become suggestions for every user.</p>
+      </div>
+    `));
+
+    if (sets.length === 0) {
+      view.appendChild(el(`<div class="card empty-state"><p>Nothing pending review.</p></div>`));
+    } else {
+      sets.forEach((s) => {
+        view.appendChild(el(`
+          <div class="card">
+            <div class="section-title" style="font-size:16px;">${escapeHtml(s.title)}</div>
+            <p class="section-sub" style="margin-top:4px;">${s.question_count} question${s.question_count === 1 ? "" : "s"}${s.track ? ` · ${escapeHtml(s.track)}` : ""} · by ${escapeHtml(s.owner_name || "unknown")} (${escapeHtml(s.owner_email || "")})</p>
+            <div class="q-actions" style="margin-top:12px;">
+              <button class="btn btn-success btn-small" data-approve="${s.id}">Approve</button>
+              <button class="btn btn-warn btn-small" data-reject="${s.id}">Reject</button>
+            </div>
+          </div>
+        `));
+      });
+    }
+
+    main.appendChild(view);
+    $all("[data-approve]", view).forEach((btn) => btn.addEventListener("click", () => approveSet(btn.dataset.approve)));
+    $all("[data-reject]", view).forEach((btn) => btn.addEventListener("click", () => rejectSet(btn.dataset.reject)));
+    renderSidebar();
+  }
+
+  async function approveSet(id) {
+    try {
+      await api(`/api/admin/question-sets/${id}/approve`, { method: "POST" });
+      toast("Approved — now shows up as a suggestion for other users.");
+      renderAdmin();
+    } catch (err) {
+      toast(err.message);
+    }
+  }
+
+  async function rejectSet(id) {
+    const reason = prompt("Reason for rejecting this set (shown to the owner):") || "";
+    try {
+      await api(`/api/admin/question-sets/${id}/reject`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ reason }),
+      });
+      toast("Rejected.");
+      renderAdmin();
+    } catch (err) {
+      toast(err.message);
+    }
+  }
+
   // ---------- boot ----------
   async function boot(user) {
     currentUser = user;
@@ -1098,9 +1270,14 @@
     });
     $("#nav-home-btn").addEventListener("click", renderHome);
     $("#nav-stats-btn").addEventListener("click", openStats);
+    $("#nav-admin-btn").addEventListener("click", renderAdmin);
     $("#settings-btn").addEventListener("click", renderSettings);
     renderShell();
-    await renderHome();
+    await dispatchRoute(location.pathname);
+  }
+
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/sw.js").catch(() => { /* best-effort */ });
   }
 
   (async function init() {

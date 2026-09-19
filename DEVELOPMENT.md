@@ -89,9 +89,28 @@ Dropped in this phase: the old "export the full static question bank as Markdown
 - Daily test size: fixed at 10 questions (`TEST_SIZE`), not user-configurable in this phase.
 - `mcq_variants` is a **global** cache keyed only by `question_id` — the first user to trigger generation for a given official question determines its MCQ for every other user who later does that same question. This was already the intended design from the Phase 1 planning review, just noting it's now live.
 
-## Phase 3 — sharing, PWA, polish (not started)
+## Phase 3 — sharing, PWA, routing
 
-Admin approval queue + `role` enforcement, cross-user "suggested sets"
-surfacing, PWA (manifest + service worker + icons), real URL-path routing
-(History API) replacing the in-memory `currentView` switch, responsive
-visual polish pass.
+**Status: built, verified locally, deployed to production.**
+
+| Item | Status |
+|---|---|
+| `POST /api/question-sets/:id/submit` (owner submits private/rejected → pending) | Done |
+| `GET /api/admin/pending-sets`, `POST /api/admin/question-sets/:id/approve`, `POST /api/admin/question-sets/:id/reject` (role='admin' enforced) | Done |
+| `GET /api/question-sets/suggestions` + `POST /api/question-sets/:id/subscribe` | Done |
+| Frontend: "Submit for review" on private/rejected sets in Settings | Done |
+| Frontend: "Suggested sets" card in Settings with Subscribe | Done |
+| Frontend: Admin view (sidebar nav item, visible only to `role==='admin'`) | Done |
+| PWA: `manifest.json`, `sw.js` (cache-first shell, network-only `/api/*`), icons generated with a small pure-Node PNG writer (`scripts/generate-icons.js`) | Done |
+| Real URL routing (`setRoute`/`dispatchRoute`, History API) replacing the pure in-memory `currentView` switch | Done — `/`, `/review`, `/test`, `/settings`, `/stats`, `/admin` all deep-linkable and refresh-safe (via the existing SPA fallback), back/forward verified |
+| Responsive/mobile pass | Done — checked at 390px width (queue, MCQ test, settings/upload); no fixes needed, existing responsive rules from Phase 1 already covered the new elements |
+| Local verification (`wrangler dev --local` + Playwright, incl. mobile viewport) | Done |
+| Set the real account's `role` to `admin` in production | Done (see below) |
+| Deploy to production | Done |
+
+**Note on the real admin:** `manoj.ansh@gmail.com` (the one real account) was set to `role='admin'` directly via SQL as part of this phase's deploy — there's no self-service "become admin" path by design, and this is the only account that should have it for now.
+
+**Known trade-offs, not blocking:**
+- PWA icons are a flat brand-color square with a checkmark, generated programmatically — functional (satisfies installability requirements) but not real designed artwork. Swap `public/icons/*.png` for real icons later if desired; `scripts/generate-icons.js` isn't needed once you do.
+- The reject-reason prompt in the Admin view uses the browser's native `prompt()` rather than a custom modal — simplest thing that works for a low-traffic, admin-only interaction.
+- `mcq_variants`' global (not per-user) caching, noted back in the Phase 1 planning review, is now visibly relevant here too: a user-submitted set's MCQs get generated using whichever AI provider the *first* person to reach a "done" question on that set happens to have configured.
