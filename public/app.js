@@ -1,24 +1,13 @@
 (() => {
   "use strict";
 
-  const BANK = window.QUESTION_BANK; // { groups: [...], topics: [...] }
-  const TOPIC_BY_ID = {};
-  const TOPIC_OF_QUESTION = {};
-  BANK.topics.forEach((t) => {
-    TOPIC_BY_ID[t.id] = t;
-    t.questions.forEach((q) => (TOPIC_OF_QUESTION[q.id] = t.id));
-  });
-  const NEW_BATCH_SIZE = 10;
   const DEFAULT_REVIEW_COUNT = 15;
 
   let currentUser = null;
-  let state = null; // { version, topics: {id:{status, shownIds, startedAt, doneAt}}, streak, questionStats }
   let currentView = "home";
-  let currentTopicId = null;
-  let openBatchIds = []; // question ids currently visible in topic view (grows via "show more")
-  let reviewBatch = []; // [{topicId, topicTitle, id, q, a}]
-  let saveTimer = null;
-  let pendingEvents = []; // activity events queued since the last successful save
+  let todayQueue = null; // { date, target, completed, remaining, questions } from /api/queue/today
+  let localRevealed = {}; // question_id -> revealed answer text, for this page load
+  let reviewBatch = []; // [{id, q, a, topic_label, revealed, graded}]
 
   // ---------- utils ----------
   function $(sel, root = document) { return root.querySelector(sel); }
@@ -27,29 +16,12 @@
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   }
-  function todayStr() {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  }
-  function yesterdayStr() {
-    const d = new Date();
-    d.setDate(d.getDate() - 1);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  }
   function toast(msg) {
     const node = $("#toast");
     node.textContent = msg;
     node.hidden = false;
     clearTimeout(toast._t);
     toast._t = setTimeout(() => (node.hidden = true), 2600);
-  }
-  function shuffled(arr) {
-    const a = arr.slice();
-    for (let i = a.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [a[i], a[j]] = [a[j], a[i]];
-    }
-    return a;
   }
   function formatDate(iso) {
     if (!iso) return "—";
@@ -66,82 +38,12 @@
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
-
-  // ---------- state helpers ----------
-  // Old saved state (version < 2) has no streak.longest — upgrade in place
-  // on load rather than assuming every user's state is on the latest shape.
-  function migrateState(s) {
-    if (!s.streak) s.streak = { count: 0, longest: 0, lastActiveDate: null };
-    if (typeof s.streak.longest !== "number") s.streak.longest = s.streak.count || 0;
-    s.version = 2;
-    return s;
-  }
-
-  function ensureTopicState(topicId) {
-    if (!state.topics[topicId]) {
-      state.topics[topicId] = { status: "not_started", shownIds: [], startedAt: null, doneAt: null };
-    }
-    return state.topics[topicId];
-  }
-
-  function bumpStreak() {
-    const today = todayStr();
-    if (state.streak.lastActiveDate === today) return;
-    const y = yesterdayStr();
-    state.streak.count = state.streak.lastActiveDate === y ? state.streak.count + 1 : 1;
-    state.streak.lastActiveDate = today;
-    state.streak.longest = Math.max(state.streak.longest || 0, state.streak.count);
-  }
-
-  function logEvent(eventType, topicId, questionId, result) {
-    pendingEvents.push({
-      event_type: eventType,
-      topic_id: topicId || null,
-      question_id: questionId || null,
-      result: result || null,
-      occurred_at: new Date().toISOString(),
-    });
-  }
-
-  function scheduleSave() {
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(saveStateNow, 500);
-  }
-
-  async function saveStateNow() {
-    const eventsToSend = pendingEvents.slice();
-    try {
-      await fetch("/api/state", {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ state, events: eventsToSend }),
-      });
-      pendingEvents.splice(0, eventsToSend.length);
-    } catch (e) {
-      // best-effort; state (and queued events) are retried on next save
-    }
-  }
-
-  function overallCounts() {
-    const total = BANK.topics.length;
-    let done = 0;
-    BANK.topics.forEach((t) => {
-      if (state.topics[t.id] && state.topics[t.id].status === "done") done++;
-    });
-    return { done, total };
-  }
-
-  function groupCounts(groupId) {
-    const topics = BANK.topics.filter((t) => t.group === groupId);
-    let done = 0;
-    topics.forEach((t) => {
-      if (state.topics[t.id] && state.topics[t.id].status === "done") done++;
-    });
-    return { done, total: topics.length };
-  }
-
-  function firstUnfinishedTopic() {
-    return BANK.topics.find((t) => !state.topics[t.id] || state.topics[t.id].status !== "done");
+  async function api(path, opts) {
+    const res = await fetch(path, opts);
+    let data = {};
+    try { data = await res.json(); } catch { /* no body */ }
+    if (!res.ok) throw Object.assign(new Error(data.error || "Request failed."), { status: res.status, data });
+    return data;
   }
 
   // ---------- auth ----------
@@ -150,12 +52,6 @@
     if (!res.ok) return null;
     const data = await res.json();
     return data.user;
-  }
-
-  async function loadState() {
-    const res = await fetch("/api/state");
-    const data = await res.json();
-    return data.state;
   }
 
   function showAuthForm(which) {
@@ -186,19 +82,18 @@
       const okBox = $("#forgot-success");
       errBox.hidden = true;
       okBox.hidden = true;
-      const res = await fetch("/api/password/forgot", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        errBox.textContent = data.error || "Something went wrong.";
+      try {
+        const data = await api("/api/password/forgot", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email }),
+        });
+        okBox.textContent = data.message || "If that email is registered, we've sent a reset link.";
+        okBox.hidden = false;
+      } catch (err) {
+        errBox.textContent = err.message;
         errBox.hidden = false;
-        return;
       }
-      okBox.textContent = data.message || "If that email is registered, we've sent a reset link.";
-      okBox.hidden = false;
     });
 
     $("#reset-form").addEventListener("submit", async (e) => {
@@ -208,22 +103,21 @@
       const password = $("#reset-password").value;
       const errBox = $("#reset-error");
       errBox.hidden = true;
-      const res = await fetch("/api/password/reset", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ token, password }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        errBox.textContent = data.error || "Could not reset your password.";
+      try {
+        await api("/api/password/reset", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ token, password }),
+        });
+        history.replaceState(null, "", location.pathname);
+        showAuthForm("login");
+        const okBox = $("#login-success");
+        okBox.textContent = "Password updated — please sign in.";
+        okBox.hidden = false;
+      } catch (err) {
+        errBox.textContent = err.message;
         errBox.hidden = false;
-        return;
       }
-      history.replaceState(null, "", location.pathname);
-      showAuthForm("login");
-      const okBox = $("#login-success");
-      okBox.textContent = "Password updated — please sign in.";
-      okBox.hidden = false;
     });
 
     $("#login-form").addEventListener("submit", async (e) => {
@@ -232,18 +126,17 @@
       const password = $("#login-password").value;
       const errBox = $("#login-error");
       errBox.hidden = true;
-      const res = await fetch("/api/login", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        errBox.textContent = data.error || "Could not sign in.";
+      try {
+        const data = await api("/api/login", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        });
+        await boot(data.user);
+      } catch (err) {
+        errBox.textContent = err.message;
         errBox.hidden = false;
-        return;
       }
-      await boot(data.user);
     });
 
     $("#signup-form").addEventListener("submit", async (e) => {
@@ -251,24 +144,25 @@
       const name = $("#signup-name").value.trim();
       const email = $("#signup-email").value.trim();
       const password = $("#signup-password").value;
+      const track = $("#signup-track").value.trim();
+      const dailyQuota = parseInt($("#signup-quota").value, 10) || 10;
       const errBox = $("#signup-error");
       errBox.hidden = true;
-      const res = await fetch("/api/signup", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name, email, password }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        errBox.textContent = data.error || "Could not create account.";
+      try {
+        const data = await api("/api/signup", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ name, email, password, track, dailyQuota }),
+        });
+        await boot(data.user);
+      } catch (err) {
+        errBox.textContent = err.message;
         errBox.hidden = false;
-        return;
       }
-      await boot(data.user);
     });
   }
 
-  // ---------- rendering: shell ----------
+  // ---------- shell ----------
   function renderShell() {
     $("#user-name-label").textContent = currentUser.name;
     renderTopStats();
@@ -276,211 +170,79 @@
   }
 
   function renderTopStats() {
-    $("#streak-count").textContent = state.streak.count || 0;
-    const { done, total } = overallCounts();
-    $("#progress-count").textContent = `${done}/${total}`;
+    $("#streak-count").textContent = (currentUser.streak && currentUser.streak.count) || 0;
+    if (todayQueue) {
+      $("#progress-count").textContent = `${todayQueue.completed}/${todayQueue.target}`;
+    }
   }
 
   function renderSidebar() {
-    const container = $("#group-list");
-    container.innerHTML = "";
-    BANK.groups.forEach((g) => {
-      const { done, total } = groupCounts(g.id);
-      const topics = BANK.topics.filter((t) => t.group === g.id);
-      const wrap = el(`
-        <div class="nav-group">
-          <button class="nav-group-head" data-group="${g.id}">
-            <span>${escapeHtml(g.label)}</span>
-            <span class="nav-group-frac">${done}/${total}</span>
-          </button>
-          <div class="nav-topic-list" data-group-list="${g.id}"></div>
-        </div>
-      `);
-      const list = $(`[data-group-list="${g.id}"]`, wrap);
-      topics.forEach((t) => {
-        const st = state.topics[t.id] ? state.topics[t.id].status : "not_started";
-        const btn = el(`
-          <button class="nav-topic${currentTopicId === t.id ? " is-active" : ""}" data-topic="${t.id}">
-            <span class="status-dot ${st}"></span>
-            <span class="nav-topic-title">${escapeHtml(t.title)}</span>
-          </button>
-        `);
-        list.appendChild(btn);
-      });
-      container.appendChild(wrap);
-    });
-
     $("#nav-home-btn").classList.toggle("is-active", currentView === "home");
     $("#nav-stats-btn").classList.toggle("is-active", currentView === "stats");
-
-    $all(".nav-topic", container).forEach((btn) => {
-      btn.addEventListener("click", () => openTopic(btn.dataset.topic));
-    });
   }
 
-  // ---------- HOME view ----------
-  function renderHome() {
+  // ---------- HOME view (today's queue) ----------
+  async function renderHome() {
     currentView = "home";
-    currentTopicId = null;
-    const { done, total } = overallCounts();
-    const pct = total ? Math.round((done / total) * 100) : 0;
-    const next = firstUnfinishedTopic();
-    const nextState = next ? (state.topics[next.id] || { status: "not_started", shownIds: [] }) : null;
+    const main = $("#main");
+    main.innerHTML = "";
+    main.appendChild(el(`<div class="view"><div class="card empty-state"><p>Loading today's questions…</p></div></div>`));
+    renderSidebar();
 
+    try {
+      todayQueue = await api("/api/queue/today");
+    } catch (err) {
+      todayQueue = { date: "", target: 0, completed: 0, remaining: 0, questions: [] };
+      toast(err.message);
+    }
+    localRevealed = {};
+    renderTopStats();
+    paintHome();
+  }
+
+  function paintHome() {
     const main = $("#main");
     main.innerHTML = "";
     const view = el(`<div class="view"></div>`);
+    const pct = todayQueue.target ? Math.round((todayQueue.completed / todayQueue.target) * 100) : 0;
 
     view.appendChild(el(`
       <div class="card card-hero">
         <div class="section-title">Welcome back, ${escapeHtml(currentUser.name.split(" ")[0])}</div>
-        <p class="section-sub" style="margin-top:6px;">${done} of ${total} topics done · ${pct}% through the 60-day plan</p>
+        <p class="section-sub" style="margin-top:6px;">${todayQueue.completed} of ${todayQueue.target} questions done today${currentUser.track ? ` · preparing for ${escapeHtml(currentUser.track)}` : ""}</p>
         <div class="progress-track" style="margin-top:14px;"><div class="progress-fill" style="width:${pct}%"></div></div>
       </div>
     `));
 
     view.appendChild(el(`
       <div class="stat-grid">
-        <div class="stat-tile"><div class="stat-tile-value">${state.streak.count || 0}</div><div class="stat-tile-label">Day streak</div></div>
-        <div class="stat-tile"><div class="stat-tile-value">${done}</div><div class="stat-tile-label">Topics done</div></div>
-        <div class="stat-tile"><div class="stat-tile-value">${countTotalShown()}</div><div class="stat-tile-label">Questions covered</div></div>
-        <div class="stat-tile"><div class="stat-tile-value">${Object.keys(state.questionStats).length}</div><div class="stat-tile-label">Questions reviewed</div></div>
+        <div class="stat-tile"><div class="stat-tile-value">${(currentUser.streak && currentUser.streak.count) || 0}</div><div class="stat-tile-label">Day streak</div></div>
+        <div class="stat-tile"><div class="stat-tile-value">${(currentUser.streak && currentUser.streak.longest) || 0}</div><div class="stat-tile-label">Longest streak</div></div>
+        <div class="stat-tile"><div class="stat-tile-value">${todayQueue.target}</div><div class="stat-tile-label">Today's target</div></div>
+        <div class="stat-tile"><div class="stat-tile-value">${currentUser.dailyQuota}</div><div class="stat-tile-label">Daily quota</div></div>
       </div>
     `));
 
-    const row = el(`<div class="card-row"></div>`);
-
-    if (next) {
-      const shown = nextState.shownIds.length;
-      const totalQ = next.questions.length;
-      const label = nextState.status === "in_progress" ? "Continue" : "Start";
-      row.appendChild(el(`
-        <div class="card">
-          <div class="group-days">${escapeHtml(groupLabel(next.group))} · ${escapeHtml(groupDays(next.group))}</div>
-          <div class="section-title" style="font-size:17px;margin-top:2px;">${escapeHtml(next.title)}</div>
-          <p class="section-sub" style="margin-top:6px;">${shown} of ${totalQ} questions covered in this topic</p>
-          <div class="progress-track" style="margin-top:10px;"><div class="progress-fill" style="width:${Math.round((shown/totalQ)*100)}%"></div></div>
-          <button class="btn btn-primary" style="margin-top:16px;" data-action="open-next">${label} today's 10</button>
-        </div>
-      `));
-    } else {
-      row.appendChild(el(`
-        <div class="card">
-          <div class="section-title" style="font-size:17px;">All 24 topics done 🎉</div>
-          <p class="section-sub" style="margin-top:6px;">Every topic is marked complete — keep sharp with daily review.</p>
-        </div>
-      `));
-    }
-
-    const doneCount = done;
-    row.appendChild(el(`
+    const queueCard = el(`
       <div class="card">
-        <div class="group-days">Spaced repetition</div>
-        <div class="section-title" style="font-size:17px;margin-top:2px;">Daily review</div>
-        <p class="section-sub" style="margin-top:6px;">${doneCount === 0 ? "Finish your first topic to unlock review." : "Random questions pulled from everything you've marked done."}</p>
-        <div class="review-controls" style="margin-top:14px;">
-          <span class="range-label">Count: <strong id="review-count-label">${DEFAULT_REVIEW_COUNT}</strong></span>
-          <input type="range" id="review-count" min="10" max="20" step="1" value="${DEFAULT_REVIEW_COUNT}" ${doneCount === 0 ? "disabled" : ""}/>
-        </div>
-        <button class="btn btn-primary" style="margin-top:14px;" id="start-review-btn" ${doneCount === 0 ? "disabled" : ""}>Generate today's review</button>
+        <div class="section-title" style="font-size:17px;">Today's questions</div>
+        <p class="section-sub" style="margin-top:4px;">Unfinished questions from a prior day show up first, up to your daily quota's worth of backlog.</p>
       </div>
-    `));
-
-    view.appendChild(row);
-
-    view.appendChild(el(`
-      <div>
-        <div class="section-title" style="font-size:16px;margin-bottom:10px;">All topics</div>
-        <div class="topic-grid" id="topic-grid"></div>
-      </div>
-    `));
-
-    main.appendChild(view);
-
-    const grid = $("#topic-grid");
-    BANK.topics.forEach((t) => {
-      const st = state.topics[t.id] ? state.topics[t.id].status : "not_started";
-      const shown = state.topics[t.id] ? state.topics[t.id].shownIds.length : 0;
-      const tile = el(`
-        <button class="topic-tile" data-topic="${t.id}">
-          <div class="topic-tile-title">${escapeHtml(t.title)}</div>
-          <div class="topic-tile-meta">
-            <span>${shown}/${t.questions.length} seen</span>
-            <span class="pill pill-${st}">${st.replace("_", " ")}</span>
-          </div>
-        </button>
-      `);
-      grid.appendChild(tile);
-    });
-    $all(".topic-tile", grid).forEach((btn) => btn.addEventListener("click", () => openTopic(btn.dataset.topic)));
-
-    const nextBtn = $('[data-action="open-next"]', view);
-    if (nextBtn) nextBtn.addEventListener("click", () => openTopic(next.id));
-
-    const rangeInput = $("#review-count");
-    if (rangeInput) {
-      rangeInput.addEventListener("input", () => { $("#review-count-label").textContent = rangeInput.value; });
-    }
-    const reviewBtn = $("#start-review-btn");
-    if (reviewBtn) reviewBtn.addEventListener("click", () => startReview(parseInt(rangeInput.value, 10)));
-
-    renderSidebar();
-  }
-
-  function countTotalShown() {
-    let n = 0;
-    Object.values(state.topics).forEach((t) => (n += t.shownIds.length));
-    return n;
-  }
-  function groupLabel(id) { const g = BANK.groups.find((x) => x.id === id); return g ? g.label : id; }
-  function groupDays(id) { const g = BANK.groups.find((x) => x.id === id); return g ? g.days : ""; }
-
-  // ---------- TOPIC view ----------
-  function openTopic(topicId) {
-    currentView = "topic";
-    currentTopicId = topicId;
-    const ts = ensureTopicState(topicId);
-    // Build the visible batch: previously shown questions stay visible, plus fill up to NEW_BATCH_SIZE with unseen ones.
-    const topic = TOPIC_BY_ID[topicId];
-    const allIds = topic.questions.map((q) => q.id);
-    const unseen = allIds.filter((id) => !ts.shownIds.includes(id));
-    openBatchIds = ts.shownIds.concat(unseen.slice(0, Math.max(0, NEW_BATCH_SIZE - ts.shownIds.length)));
-    if (openBatchIds.length === 0) openBatchIds = allIds.slice(0, NEW_BATCH_SIZE);
-    renderTopic();
-  }
-
-  function renderTopic() {
-    const topic = TOPIC_BY_ID[currentTopicId];
-    const ts = ensureTopicState(currentTopicId);
-    const main = $("#main");
-    main.innerHTML = "";
-    const view = el(`<div class="view"></div>`);
-
-    const remaining = topic.questions.length - ts.shownIds.length;
-
-    view.appendChild(el(`
-      <div class="card">
-        <div class="group-days">${escapeHtml(groupLabel(topic.group))} · ${escapeHtml(groupDays(topic.group))}</div>
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-top:2px;">
-          <div class="section-title" style="font-size:20px;">${escapeHtml(topic.title)}</div>
-          <span class="pill pill-${ts.status}">${ts.status.replace("_", " ")}</span>
-        </div>
-        <p class="section-sub" style="margin-top:6px;">${ts.shownIds.length} of ${topic.questions.length} questions covered</p>
-        <div class="progress-track" style="margin-top:10px;"><div class="progress-fill" style="width:${Math.round((ts.shownIds.length/topic.questions.length)*100)}%"></div></div>
-        <div class="q-actions">
-          ${remaining > 0 ? `<button class="btn btn-secondary" id="more-btn">Show ${Math.min(NEW_BATCH_SIZE, remaining)} more</button>` : ""}
-          <button class="btn ${ts.status === "done" ? "btn-secondary" : "btn-success"}" id="done-btn">${ts.status === "done" ? "Marked done ✓" : "Mark topic as done"}</button>
-        </div>
-      </div>
-    `));
-
-    const list = el(`<div style="display:flex;flex-direction:column;gap:12px;"></div>`);
-    openBatchIds.forEach((qid, idx) => {
-      const q = topic.questions.find((x) => x.id === qid);
-      const revealed = ts.shownIds.includes(qid);
+    `);
+    const list = el(`<div style="display:flex;flex-direction:column;gap:12px;margin-top:14px;"></div>`);
+    if (todayQueue.questions.length === 0 && todayQueue.remaining <= 0) {
       list.appendChild(el(`
-        <div class="q-card" data-qid="${qid}">
-          <div class="q-card-head">
+        <div class="empty-state">
+          <p>All done for today — nice work. Come back tomorrow, or request more below.</p>
+        </div>
+      `));
+    }
+    todayQueue.questions.forEach((q, idx) => {
+      const revealed = localRevealed[q.id];
+      list.appendChild(el(`
+        <div class="q-card" data-qid="${q.id}">
+          <div class="q-topic-tag">${escapeHtml(q.topic_label)}</div>
+          <div class="q-card-head" style="margin-top:6px;">
             <div>
               <div class="q-index">Q${idx + 1}</div>
               <div class="q-text">${escapeHtml(q.q)}</div>
@@ -488,94 +250,98 @@
           </div>
           ${revealed
             ? `<div class="q-answer">${escapeHtml(q.a)}</div>`
-            : `<button class="btn btn-secondary btn-small" data-reveal="${qid}">Show model answer</button>`}
+            : `<button class="btn btn-secondary btn-small" data-reveal="${q.id}">Show model answer</button>`}
         </div>
       `));
     });
-    view.appendChild(list);
+    queueCard.appendChild(list);
+
+    if (todayQueue.remaining <= 0) {
+      queueCard.appendChild(el(`
+        <button class="btn btn-secondary" id="request-more-btn" style="margin-top:14px;">Request 5 more questions</button>
+      `));
+    }
+    view.appendChild(queueCard);
+
+    view.appendChild(el(`
+      <div class="card">
+        <div class="group-days">Spaced repetition</div>
+        <div class="section-title" style="font-size:17px;margin-top:2px;">Daily review</div>
+        <p class="section-sub" style="margin-top:6px;">Random questions pulled from everything you've completed so far.</p>
+        <div class="review-controls" style="margin-top:14px;">
+          <span class="range-label">Count: <strong id="review-count-label">${DEFAULT_REVIEW_COUNT}</strong></span>
+          <input type="range" id="review-count" min="10" max="20" step="1" value="${DEFAULT_REVIEW_COUNT}" />
+        </div>
+        <button class="btn btn-primary" style="margin-top:14px;" id="start-review-btn">Generate today's review</button>
+      </div>
+    `));
+
     main.appendChild(view);
 
     $all("[data-reveal]", view).forEach((btn) => {
       btn.addEventListener("click", () => revealQuestion(btn.dataset.reveal));
     });
-    const moreBtn = $("#more-btn", view);
-    if (moreBtn) moreBtn.addEventListener("click", showMore);
-    $("#done-btn", view).addEventListener("click", markTopicDone);
+    const moreBtn = $("#request-more-btn", view);
+    if (moreBtn) moreBtn.addEventListener("click", requestMore);
+
+    const rangeInput = $("#review-count", view);
+    rangeInput.addEventListener("input", () => { $("#review-count-label", view).textContent = rangeInput.value; });
+    $("#start-review-btn", view).addEventListener("click", () => startReview(parseInt(rangeInput.value, 10)));
 
     renderSidebar();
   }
 
-  function revealQuestion(qid) {
-    const ts = ensureTopicState(currentTopicId);
-    if (!ts.shownIds.includes(qid)) {
-      ts.shownIds.push(qid);
-      if (ts.status === "not_started") { ts.status = "in_progress"; ts.startedAt = new Date().toISOString(); }
-      bumpStreak();
-      logEvent("reveal", currentTopicId, qid, null);
-      scheduleSave();
-    }
-    renderTopic();
+  async function revealQuestion(qid) {
+    const q = todayQueue.questions.find((x) => x.id === qid);
+    if (!q || localRevealed[qid]) return;
+    localRevealed[qid] = true;
+    todayQueue.completed += 1;
+    todayQueue.remaining = Math.max(0, todayQueue.target - todayQueue.completed);
+    paintHome();
     renderTopStats();
+    try {
+      await api("/api/questions/complete", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ question_id: qid }),
+      });
+      // Refresh streak from the server (it may have just bumped).
+      const me = await api("/api/me");
+      currentUser = me.user;
+      renderTopStats();
+    } catch (err) {
+      toast(err.message);
+    }
   }
 
-  function showMore() {
-    const topic = TOPIC_BY_ID[currentTopicId];
-    const ts = ensureTopicState(currentTopicId);
-    const allIds = topic.questions.map((q) => q.id);
-    const unseen = allIds.filter((id) => !openBatchIds.includes(id));
-    openBatchIds = openBatchIds.concat(unseen.slice(0, NEW_BATCH_SIZE));
-    renderTopic();
-  }
-
-  function markTopicDone() {
-    const ts = ensureTopicState(currentTopicId);
-    ts.status = "done";
-    ts.doneAt = new Date().toISOString();
-    bumpStreak();
-    scheduleSave();
-    saveStateNow();
-    toast("Topic marked done — nice work.");
-    renderHome();
+  async function requestMore() {
+    try {
+      const data = await api("/api/questions/request-more", { method: "POST" });
+      const existingIds = new Set(todayQueue.questions.map((q) => q.id));
+      data.questions.forEach((q) => { if (!existingIds.has(q.id)) todayQueue.questions.push(q); });
+      todayQueue.target += 5;
+      todayQueue.remaining = Math.max(0, todayQueue.target - todayQueue.completed);
+      paintHome();
+      renderTopStats();
+    } catch (err) {
+      toast(err.message);
+    }
   }
 
   // ---------- REVIEW view ----------
-  function pickReviewBatch(count) {
-    const doneIds = Object.keys(state.topics).filter((id) => state.topics[id].status === "done");
-    const pool = [];
-    doneIds.forEach((tid) => {
-      const topic = TOPIC_BY_ID[tid];
-      if (!topic) return;
-      topic.questions.forEach((q) => pool.push({ topicId: tid, topicTitle: topic.title, id: q.id, q: q.q, a: q.a }));
-    });
-    if (pool.length === 0) return [];
-    const weighted = pool.map((item) => {
-      const stat = state.questionStats[item.id];
-      let w = 1;
-      if (!stat) w = 1.6;
-      else if (stat.lastResult === "again") w = 3;
-      else w = Math.max(0.35, 1 - (stat.correctStreak || 0) * 0.15);
-      return { item, w };
-    });
-    const chosen = [];
-    const n = Math.min(count, weighted.length);
-    for (let i = 0; i < n; i++) {
-      const totalW = weighted.reduce((s, x) => s + x.w, 0);
-      let r = Math.random() * totalW;
-      let idx = 0;
-      for (; idx < weighted.length; idx++) { r -= weighted[idx].w; if (r <= 0) break; }
-      idx = Math.min(idx, weighted.length - 1);
-      chosen.push(weighted[idx].item);
-      weighted.splice(idx, 1);
-    }
-    return chosen;
-  }
-
-  function startReview(count) {
+  async function startReview(count) {
     currentView = "review";
-    currentTopicId = null;
-    reviewBatch = pickReviewBatch(count || DEFAULT_REVIEW_COUNT).map((q) => ({ ...q, revealed: false }));
-    bumpStreak();
-    scheduleSave();
+    const main = $("#main");
+    main.innerHTML = "";
+    main.appendChild(el(`<div class="view"><div class="card empty-state"><p>Loading review batch…</p></div></div>`));
+    renderSidebar();
+    try {
+      const data = await api(`/api/review?count=${count || DEFAULT_REVIEW_COUNT}`);
+      reviewBatch = data.questions.map((q) => ({ ...q, revealed: false, graded: false }));
+    } catch (err) {
+      reviewBatch = [];
+      toast(err.message);
+    }
     renderReview();
   }
 
@@ -587,8 +353,9 @@
     view.appendChild(el(`
       <div class="card">
         <div class="section-title" style="font-size:20px;">Daily review</div>
-        <p class="section-sub" style="margin-top:6px;">${reviewBatch.length} random questions pulled from your completed topics.</p>
+        <p class="section-sub" style="margin-top:6px;">${reviewBatch.length} random questions pulled from your completed questions.</p>
         <button class="btn btn-secondary" id="reshuffle-btn" style="margin-top:14px;">New batch</button>
+        <button class="btn btn-ghost" id="back-home-btn" style="margin-top:14px;">Back to Today</button>
       </div>
     `));
 
@@ -596,16 +363,15 @@
       view.appendChild(el(`
         <div class="card empty-state">
           <svg width="40" height="40" viewBox="0 0 24 24" fill="none"><path d="M12 2 3 6.5v6C3 17.2 6.9 21.3 12 22.5 17.1 21.3 21 17.2 21 12.5v-6L12 2Z" stroke="currentColor" stroke-width="1.4"/></svg>
-          <p>No completed topics yet — finish one to unlock daily review.</p>
+          <p>No completed questions yet — finish some of today's questions to unlock review.</p>
         </div>
       `));
     } else {
       const list = el(`<div style="display:flex;flex-direction:column;gap:12px;"></div>`);
       reviewBatch.forEach((item, idx) => {
-        const stat = state.questionStats[item.id];
         list.appendChild(el(`
           <div class="q-card" data-ridx="${idx}">
-            <div class="q-topic-tag">${escapeHtml(item.topicTitle)}</div>
+            <div class="q-topic-tag">${escapeHtml(item.topic_label || "")}</div>
             <div class="q-card-head" style="margin-top:6px;">
               <div>
                 <div class="q-index">Q${idx + 1}</div>
@@ -614,12 +380,14 @@
             </div>
             ${item.revealed
               ? `<div class="q-answer">${escapeHtml(item.a)}</div>
-                 <div class="q-actions">
-                   <button class="btn btn-success btn-small" data-got="${idx}">Got it</button>
-                   <button class="btn btn-warn btn-small" data-again="${idx}">Review again soon</button>
-                 </div>`
+                 ${item.graded
+                   ? `<p class="section-sub" style="margin-top:8px;">Graded: ${item.graded === "got_it" ? "Got it" : "Review again soon"}</p>`
+                   : `<div class="q-actions">
+                        <button class="btn btn-success btn-small" data-got="${idx}">Got it</button>
+                        <button class="btn btn-warn btn-small" data-again="${idx}">Review again soon</button>
+                      </div>`}`
               : `<button class="btn btn-secondary btn-small" data-reveal-review="${idx}">Show model answer</button>`}
-            ${stat ? `<div class="section-sub" style="margin-top:8px;">Reviewed ${stat.timesShown || 0}× before</div>` : ""}
+            ${item.times_shown ? `<div class="section-sub" style="margin-top:8px;">Reviewed ${item.times_shown}× before</div>` : ""}
           </div>
         `));
       });
@@ -628,10 +396,8 @@
 
     main.appendChild(view);
 
-    $("#reshuffle-btn", view).addEventListener("click", () => {
-      const rangeVal = reviewBatch.length || DEFAULT_REVIEW_COUNT;
-      startReview(rangeVal);
-    });
+    $("#reshuffle-btn", view).addEventListener("click", () => startReview(reviewBatch.length || DEFAULT_REVIEW_COUNT));
+    $("#back-home-btn", view).addEventListener("click", renderHome);
     $all("[data-reveal-review]", view).forEach((btn) => {
       btn.addEventListener("click", () => {
         reviewBatch[parseInt(btn.dataset.revealReview, 10)].revealed = true;
@@ -648,25 +414,26 @@
     renderSidebar();
   }
 
-  function markReviewResult(idx, result) {
+  async function markReviewResult(idx, result) {
     const item = reviewBatch[idx];
     if (!item) return;
-    const stat = state.questionStats[item.id] || { timesShown: 0, correctStreak: 0, lastResult: null, lastShown: null };
-    stat.timesShown = (stat.timesShown || 0) + 1;
-    stat.correctStreak = result === "got_it" ? (stat.correctStreak || 0) + 1 : 0;
-    stat.lastResult = result;
-    stat.lastShown = todayStr();
-    state.questionStats[item.id] = stat;
-    logEvent("review", item.topicId, item.id, result);
-    scheduleSave();
-    toast(result === "got_it" ? "Nice — noted." : "Got it, we'll bring this back sooner.");
+    item.graded = result;
     renderReview();
+    try {
+      await api("/api/questions/review-result", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ question_id: item.id, result }),
+      });
+      toast(result === "got_it" ? "Nice — noted." : "Got it, we'll bring this back sooner.");
+    } catch (err) {
+      toast(err.message);
+    }
   }
 
   // ---------- SETTINGS view ----------
   function renderSettings() {
     currentView = "settings";
-    currentTopicId = null;
     const main = $("#main");
     main.innerHTML = "";
     const view = el(`<div class="view"></div>`);
@@ -682,6 +449,24 @@
         <p class="form-error" id="name-error" hidden></p>
         <p class="form-note" id="name-success" hidden></p>
         <button class="btn btn-primary" id="save-name-btn">Save name</button>
+      </div>
+    `));
+
+    view.appendChild(el(`
+      <div class="card">
+        <div class="section-title">Prep profile</div>
+        <p class="section-sub" style="margin-top:6px;">What you're preparing for, and how many questions you want per day.</p>
+        <label class="field" style="margin-top:16px;">
+          <span>What are you preparing for?</span>
+          <input type="text" id="settings-track" value="${escapeHtml(currentUser.track || "")}" placeholder="e.g. Engineering Management" />
+        </label>
+        <label class="field">
+          <span>Questions per day</span>
+          <input type="number" id="settings-quota" min="5" max="50" value="${currentUser.dailyQuota}" />
+        </label>
+        <p class="form-error" id="profile-error" hidden></p>
+        <p class="form-note" id="profile-success" hidden></p>
+        <button class="btn btn-primary" id="save-profile-btn">Save profile</button>
       </div>
     `));
 
@@ -713,14 +498,13 @@
       </div>
     `));
 
+    view.appendChild(buildQuestionSetsCard());
+
     view.appendChild(el(`
       <div class="card">
         <div class="section-title">Export data</div>
-        <p class="section-sub" style="margin-top:6px;">Download your progress, or the full question bank for offline studying.</p>
-        <div class="q-actions" style="margin-top:12px;">
-          <button class="btn btn-secondary" id="export-progress-btn">Export my progress (JSON)</button>
-          <button class="btn btn-secondary" id="export-bank-btn">Download question bank (Markdown)</button>
-        </div>
+        <p class="section-sub" style="margin-top:6px;">Download your progress as a JSON file.</p>
+        <button class="btn btn-secondary" id="export-progress-btn" style="margin-top:12px;">Export my progress (JSON)</button>
       </div>
     `));
 
@@ -732,26 +516,43 @@
       nameErr.hidden = true;
       nameOk.hidden = true;
       const name = $("#settings-name", view).value.trim();
-      if (!name) {
-        nameErr.textContent = "Please enter your name.";
+      if (!name) { nameErr.textContent = "Please enter your name."; nameErr.hidden = false; return; }
+      try {
+        const data = await api("/api/account", {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ name }),
+        });
+        currentUser = data.user;
+        nameOk.textContent = "Saved.";
+        nameOk.hidden = false;
+        renderShell();
+      } catch (err) {
+        nameErr.textContent = err.message;
         nameErr.hidden = false;
-        return;
       }
-      const res = await fetch("/api/account", {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        nameErr.textContent = data.error || "Could not update name.";
-        nameErr.hidden = false;
-        return;
+    });
+
+    $("#save-profile-btn", view).addEventListener("click", async () => {
+      const errBox = $("#profile-error", view);
+      const okBox = $("#profile-success", view);
+      errBox.hidden = true;
+      okBox.hidden = true;
+      const track = $("#settings-track", view).value.trim();
+      const dailyQuota = parseInt($("#settings-quota", view).value, 10) || 10;
+      try {
+        const data = await api("/api/profile", {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ track, dailyQuota }),
+        });
+        currentUser = data.user;
+        okBox.textContent = "Saved.";
+        okBox.hidden = false;
+      } catch (err) {
+        errBox.textContent = err.message;
+        errBox.hidden = false;
       }
-      currentUser = data.user;
-      nameOk.textContent = "Saved.";
-      nameOk.hidden = false;
-      renderShell();
     });
 
     $("#change-password-form", view).addEventListener("submit", async (e) => {
@@ -762,20 +563,19 @@
       okBox.hidden = true;
       const currentPassword = $("#current-password", view).value;
       const newPassword = $("#new-password", view).value;
-      const res = await fetch("/api/password/change", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ currentPassword, newPassword }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        errBox.textContent = data.error || "Could not update password.";
+      try {
+        await api("/api/password/change", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ currentPassword, newPassword }),
+        });
+        okBox.textContent = "Password updated.";
+        okBox.hidden = false;
+        $("#change-password-form", view).reset();
+      } catch (err) {
+        errBox.textContent = err.message;
         errBox.hidden = false;
-        return;
       }
-      okBox.textContent = "Password updated.";
-      okBox.hidden = false;
-      $("#change-password-form", view).reset();
     });
 
     $("#revoke-all-btn", view).addEventListener("click", async () => {
@@ -784,32 +584,172 @@
       location.reload();
     });
 
-    $("#export-progress-btn", view).addEventListener("click", exportProgressJson);
-    $("#export-bank-btn", view).addEventListener("click", exportQuestionBankMarkdown);
+    $("#export-progress-btn", view).addEventListener("click", exportProgress);
 
+    wireQuestionSetsCard(view);
     renderSidebar();
   }
 
-  function exportProgressJson() {
-    downloadBlob(`interview-prep-progress-${todayStr()}.json`, JSON.stringify(state, null, 2), "application/json");
-    toast("Progress exported.");
+  async function exportProgress() {
+    try {
+      const data = await api("/api/export/progress");
+      downloadBlob(`interview-prep-progress-${data.exportedAt.slice(0, 10)}.json`, JSON.stringify(data, null, 2), "application/json");
+      toast("Progress exported.");
+    } catch (err) {
+      toast(err.message);
+    }
   }
 
-  function exportQuestionBankMarkdown() {
-    let md = "# Interview Prep — Question Bank\n\n";
-    BANK.groups.forEach((g) => {
-      const topics = BANK.topics.filter((t) => t.group === g.id);
-      if (!topics.length) return;
-      md += `## ${g.label}\n\n`;
-      topics.forEach((t) => {
-        md += `### ${t.title}\n\n`;
-        t.questions.forEach((q, i) => {
-          md += `**Q${i + 1}. ${q.q}**\n\n${q.a}\n\n`;
-        });
+  // ---------- Question set upload (structured: title + ordered sections + ordered questions) ----------
+  function buildQuestionSetsCard() {
+    const card = el(`
+      <div class="card">
+        <div class="section-title">My question sets</div>
+        <p class="section-sub" style="margin-top:6px;">Upload your own set of questions, grouped into sections. New sets start private to you; sharing them with other users needs admin approval.</p>
+        <div id="my-sets-list" style="margin-top:14px;"></div>
+        <button class="btn btn-secondary" id="new-set-btn" style="margin-top:14px;">Upload a question set</button>
+        <div id="new-set-form-wrap" hidden style="margin-top:16px;"></div>
+      </div>
+    `);
+    return card;
+  }
+
+  function renderSetStatusPill(set) {
+    const labels = { private: "Private", pending: "Pending review", shared: "Shared", rejected: "Rejected" };
+    return `<span class="pill pill-${set.visibility === "shared" ? "done" : set.visibility === "rejected" ? "not_started" : "in_progress"}">${labels[set.visibility] || set.visibility}</span>`;
+  }
+
+  async function loadMySets(container) {
+    container.innerHTML = "Loading…";
+    try {
+      const data = await api("/api/question-sets/mine");
+      container.innerHTML = "";
+      if (!data.sets.length) {
+        container.appendChild(el(`<p class="section-sub">You haven't uploaded any question sets yet.</p>`));
+        return;
+      }
+      data.sets.forEach((s) => {
+        const row = el(`
+          <div class="weak-row" style="margin-bottom:8px;">
+            <span class="weak-row-label">${escapeHtml(s.title)}${s.track ? ` <span class="section-sub">(${escapeHtml(s.track)})</span>` : ""}</span>
+            ${renderSetStatusPill(s)}
+          </div>
+        `);
+        if (s.visibility === "rejected" && s.rejected_reason) {
+          row.appendChild(el(`<p class="section-sub" style="margin-top:-4px;">Reason: ${escapeHtml(s.rejected_reason)}</p>`));
+        }
+        container.appendChild(row);
+      });
+    } catch (err) {
+      container.innerHTML = "";
+      container.appendChild(el(`<p class="form-error">${escapeHtml(err.message)}</p>`));
+    }
+  }
+
+  function addQuestionRow(sectionQuestionsEl) {
+    const row = el(`
+      <div class="upload-question-row">
+        <input type="text" class="upload-q" placeholder="Question" />
+        <input type="text" class="upload-a" placeholder="Model answer" />
+        <button type="button" class="btn btn-ghost btn-small" title="Remove question">✕</button>
+      </div>
+    `);
+    $("button", row).addEventListener("click", () => row.remove());
+    sectionQuestionsEl.appendChild(row);
+  }
+
+  function addSectionBlock(sectionsEl) {
+    const section = el(`
+      <div class="upload-section">
+        <div class="upload-section-head">
+          <input type="text" class="upload-section-label" placeholder="Section title (e.g. Networking)" />
+          <button type="button" class="btn btn-ghost btn-small" title="Remove section">✕ section</button>
+        </div>
+        <div class="upload-section-questions"></div>
+        <button type="button" class="btn btn-ghost btn-small">+ Add question</button>
+      </div>
+    `);
+    const questionsEl = $(".upload-section-questions", section);
+    const buttons = $all("button", section);
+    buttons[0].addEventListener("click", () => section.remove());
+    buttons[1].addEventListener("click", () => addQuestionRow(questionsEl));
+    addQuestionRow(questionsEl);
+    sectionsEl.appendChild(section);
+  }
+
+  function buildNewSetForm() {
+    const wrap = el(`
+      <div>
+        <label class="field">
+          <span>Set title</span>
+          <input type="text" id="new-set-title" placeholder="e.g. Cloud Architecture Deep Dive" />
+        </label>
+        <label class="field">
+          <span>Track (optional)</span>
+          <input type="text" id="new-set-track" placeholder="e.g. tech" />
+        </label>
+        <div id="new-set-sections"></div>
+        <button type="button" class="btn btn-secondary btn-small" id="add-section-btn" style="margin-top:8px;">+ Add section</button>
+        <p class="form-error" id="new-set-error" hidden style="margin-top:12px;"></p>
+        <div class="q-actions" style="margin-top:14px;">
+          <button type="button" class="btn btn-primary" id="submit-set-btn">Submit</button>
+          <button type="button" class="btn btn-ghost" id="cancel-set-btn">Cancel</button>
+        </div>
+      </div>
+    `);
+    const sectionsEl = $("#new-set-sections", wrap);
+    addSectionBlock(sectionsEl);
+    $("#add-section-btn", wrap).addEventListener("click", () => addSectionBlock(sectionsEl));
+    return wrap;
+  }
+
+  function wireQuestionSetsCard(view) {
+    const listEl = $("#my-sets-list", view);
+    loadMySets(listEl);
+
+    const newSetBtn = $("#new-set-btn", view);
+    const formWrap = $("#new-set-form-wrap", view);
+
+    newSetBtn.addEventListener("click", () => {
+      formWrap.innerHTML = "";
+      formWrap.appendChild(buildNewSetForm());
+      formWrap.hidden = false;
+      newSetBtn.hidden = true;
+
+      $("#cancel-set-btn", formWrap).addEventListener("click", () => {
+        formWrap.hidden = true;
+        newSetBtn.hidden = false;
+      });
+
+      $("#submit-set-btn", formWrap).addEventListener("click", async () => {
+        const errBox = $("#new-set-error", formWrap);
+        errBox.hidden = true;
+        const title = $("#new-set-title", formWrap).value.trim();
+        const track = $("#new-set-track", formWrap).value.trim();
+        const sections = $all(".upload-section", formWrap).map((sectionEl) => ({
+          label: $(".upload-section-label", sectionEl).value.trim(),
+          questions: $all(".upload-question-row", sectionEl).map((row) => ({
+            q: $(".upload-q", row).value.trim(),
+            a: $(".upload-a", row).value.trim(),
+          })).filter((q) => q.q || q.a),
+        }));
+
+        try {
+          await api("/api/question-sets", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ title, track, sections }),
+          });
+          toast("Question set uploaded.");
+          formWrap.hidden = true;
+          newSetBtn.hidden = false;
+          loadMySets(listEl);
+        } catch (err) {
+          errBox.textContent = err.message;
+          errBox.hidden = false;
+        }
       });
     });
-    downloadBlob("interview-prep-question-bank.md", md, "text/markdown");
-    toast("Question bank exported.");
   }
 
   // ---------- STATS view ----------
@@ -839,7 +779,6 @@
 
   async function openStats() {
     currentView = "stats";
-    currentTopicId = null;
     const main = $("#main");
     main.innerHTML = "";
     main.appendChild(el(`<div class="view"><div class="card empty-state"><p>Loading stats…</p></div></div>`));
@@ -847,13 +786,10 @@
 
     let events = [];
     try {
-      const res = await fetch("/api/activity?limit=2000");
-      if (res.ok) {
-        const data = await res.json();
-        events = data.events || [];
-      }
-    } catch (e) {
-      // best-effort; render with whatever we have (none)
+      const data = await api("/api/activity?limit=2000");
+      events = data.events || [];
+    } catch (err) {
+      toast(err.message);
     }
     renderStats(events);
   }
@@ -872,13 +808,12 @@
 
     view.appendChild(el(`
       <div class="stat-grid">
-        <div class="stat-tile"><div class="stat-tile-value">${state.streak.count || 0}</div><div class="stat-tile-label">Current streak</div></div>
-        <div class="stat-tile"><div class="stat-tile-value">${state.streak.longest || 0}</div><div class="stat-tile-label">Longest streak</div></div>
+        <div class="stat-tile"><div class="stat-tile-value">${(currentUser.streak && currentUser.streak.count) || 0}</div><div class="stat-tile-label">Current streak</div></div>
+        <div class="stat-tile"><div class="stat-tile-value">${(currentUser.streak && currentUser.streak.longest) || 0}</div><div class="stat-tile-label">Longest streak</div></div>
         <div class="stat-tile"><div class="stat-tile-value">${events.length}</div><div class="stat-tile-label">Logged actions</div></div>
       </div>
     `));
 
-    // chronological order, oldest first (the API returns newest-first)
     const reviewEvents = events.filter((e) => e.event_type === "review" && e.result).slice().reverse();
 
     const byDay = {};
@@ -911,21 +846,21 @@
     const topicAgg = {};
     const questionAgg = {};
     reviewEvents.forEach((e) => {
-      const tid = e.topic_id || TOPIC_OF_QUESTION[e.question_id];
-      if (tid) {
-        topicAgg[tid] = topicAgg[tid] || { total: 0, again: 0 };
-        topicAgg[tid].total++;
-        if (e.result === "again") topicAgg[tid].again++;
+      if (e.topic_id) {
+        topicAgg[e.topic_id] = topicAgg[e.topic_id] || { total: 0, again: 0 };
+        topicAgg[e.topic_id].total++;
+        if (e.result === "again") topicAgg[e.topic_id].again++;
       }
       if (e.question_id) {
-        questionAgg[e.question_id] = questionAgg[e.question_id] || { total: 0, again: 0 };
-        questionAgg[e.question_id].total++;
-        if (e.result === "again") questionAgg[e.question_id].again++;
+        const key = e.question_id;
+        questionAgg[key] = questionAgg[key] || { total: 0, again: 0, text: e.question_text };
+        questionAgg[key].total++;
+        if (e.result === "again") questionAgg[key].again++;
       }
     });
 
     const weakTopics = Object.keys(topicAgg)
-      .map((tid) => ({ tid, ...topicAgg[tid], rate: topicAgg[tid].again / topicAgg[tid].total }))
+      .map((label) => ({ label, ...topicAgg[label], rate: topicAgg[label].again / topicAgg[label].total }))
       .filter((x) => x.total >= 2)
       .sort((a, b) => b.rate - a.rate)
       .slice(0, 5);
@@ -936,10 +871,9 @@
     } else {
       const list = el(`<div class="weak-list"></div>`);
       weakTopics.forEach((t) => {
-        const topic = TOPIC_BY_ID[t.tid];
         list.appendChild(el(`
           <div class="weak-row">
-            <span class="weak-row-label">${escapeHtml(topic ? topic.title : t.tid)}</span>
+            <span class="weak-row-label">${escapeHtml(t.label)}</span>
             <div class="weak-row-bar"><div class="weak-row-fill" style="width:${Math.round(t.rate * 100)}%"></div></div>
             <span class="weak-row-pct">${Math.round(t.rate * 100)}% review-again</span>
           </div>
@@ -961,12 +895,9 @@
     } else {
       const list = el(`<div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;"></div>`);
       weakQuestions.forEach((q) => {
-        const tid = TOPIC_OF_QUESTION[q.qid];
-        const topic = tid ? TOPIC_BY_ID[tid] : null;
-        const question = topic ? topic.questions.find((x) => x.id === q.qid) : null;
         list.appendChild(el(`
           <div class="weak-row">
-            <span class="weak-row-label">${escapeHtml(question ? question.q : q.qid)}</span>
+            <span class="weak-row-label">${escapeHtml(q.text || q.qid)}</span>
             <span class="weak-row-pct">${Math.round(q.rate * 100)}% again (${q.total}×)</span>
           </div>
         `));
@@ -982,7 +913,6 @@
   // ---------- boot ----------
   async function boot(user) {
     currentUser = user;
-    state = migrateState(await loadState());
     $("#auth-screen").hidden = true;
     $("#app").hidden = false;
     $("#logout-btn").addEventListener("click", async () => {
@@ -993,7 +923,7 @@
     $("#nav-stats-btn").addEventListener("click", openStats);
     $("#settings-btn").addEventListener("click", renderSettings);
     renderShell();
-    renderHome();
+    await renderHome();
   }
 
   (async function init() {

@@ -11,6 +11,10 @@
     "db:migrate:remote": "wrangler d1 execute interview-prep-db --remote --file=./migrations/0001_init.sql",
     "db:migrate:local:0002": "wrangler d1 execute interview-prep-db --local --file=./migrations/0002_accounts_security_activity.sql",
     "db:migrate:remote:0002": "wrangler d1 execute interview-prep-db --remote --file=./migrations/0002_accounts_security_activity.sql",
+    "db:migrate:local:0003": "wrangler d1 execute interview-prep-db --local --file=./migrations/0003_relational_content.sql",
+    "db:migrate:remote:0003": "wrangler d1 execute interview-prep-db --remote --file=./migrations/0003_relational_content.sql",
+    "db:seed:local": "wrangler d1 execute interview-prep-db --local --file=./migrations/seed_official_bank.sql",
+    "db:seed:remote": "wrangler d1 execute interview-prep-db --remote --file=./migrations/seed_official_bank.sql",
     "tail": "wrangler tail"
   },
   "devDependencies": {

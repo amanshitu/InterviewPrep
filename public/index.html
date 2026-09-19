@@ -21,7 +21,7 @@
       <svg width="34" height="34" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2 3 6.5v6C3 17.2 6.9 21.3 12 22.5 17.1 21.3 21 17.2 21 12.5v-6L12 2Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8.5 12.2l2.3 2.3 4.7-4.9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <span>Interview Prep</span>
     </div>
-    <p class="auth-sub">A 60-day tracker: HR &amp; behavioral, delivery/program management, people management, technical architecture, and AI-automation prep — 10 new questions a day, plus a daily random review of everything you've marked done.</p>
+    <p class="auth-sub">A daily interview-prep tracker: everyone gets the shared HR/behavioral curriculum, plus whatever question sets you or others upload — a fresh batch every day sized to your own pace, plus spaced-repetition review of everything you've covered.</p>
 
     <div class="auth-tabs" role="tablist">
       <button class="auth-tab is-active" data-tab="login" role="tab" aria-selected="true">Sign in</button>
@@ -80,6 +80,16 @@
         <input type="password" id="signup-password" autocomplete="new-password" minlength="8" required />
         <small>At least 8 characters.</small>
       </label>
+      <label class="field">
+        <span>What are you preparing for?</span>
+        <input type="text" id="signup-track" placeholder="e.g. Engineering Management" />
+        <small>Optional — helps us suggest relevant question sets later.</small>
+      </label>
+      <label class="field">
+        <span>Questions per day</span>
+        <input type="number" id="signup-quota" min="5" max="50" value="10" />
+        <small>You can change this any time in Settings.</small>
+      </label>
       <p class="form-error" id="signup-error" hidden></p>
       <button type="submit" class="btn btn-primary btn-block">Create account</button>
     </form>
@@ -98,8 +108,8 @@
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2c1.2 3 .5 4.6-.6 6.2C10 10 9 11.4 9 13.2A3 3 0 0 0 15 14c0-1-.4-1.7-.9-2.3.9.6 2.4 2 2.4 4.3a5.5 5.5 0 1 1-11 0C5.5 11.8 8.8 8.4 12 2Z" fill="currentColor"/></svg>
         <span id="streak-count">0</span>
       </div>
-      <div class="stat-pill" id="progress-pill" title="Topics completed">
-        <span id="progress-count">0/24</span>
+      <div class="stat-pill" id="progress-pill" title="Today's questions">
+        <span id="progress-count">0/0</span>
       </div>
     </div>
     <div class="topbar-user">
@@ -110,12 +120,11 @@
   </header>
 
   <div class="layout">
-    <nav class="sidebar" id="sidebar" aria-label="Topics">
+    <nav class="sidebar" id="sidebar" aria-label="Navigation">
       <div class="nav-top-row">
-        <button class="nav-home-btn" id="nav-home-btn" data-view="home">Overview</button>
+        <button class="nav-home-btn" id="nav-home-btn" data-view="home">Today</button>
         <button class="nav-home-btn" id="nav-stats-btn" data-view="stats">Stats</button>
       </div>
-      <div id="group-list"></div>
     </nav>
 
     <main class="main" id="main">
@@ -124,7 +133,6 @@
   </div>
 </div>
 
-<script src="questions.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
