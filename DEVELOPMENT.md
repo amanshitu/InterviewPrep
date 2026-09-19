@@ -58,10 +58,32 @@ durable summary future sessions should trust).
 
 Dropped in this phase: the old "export the full static question bank as Markdown" Settings button. It doesn't have a clear meaning anymore now that content is multi-set and partly user-owned; revisit if there's demand for a per-set export instead.
 
-## Phase 2 — AI (not started)
+## Phase 2 — AI
 
-Workers AI binding, per-user BYOK profile fields + encryption, MCQ
-generation-and-cache, daily multiple-choice Test view, `daily_test_results`.
+**Status: built and verified locally; not yet deployed to production** (no schema migration needed — `mcq_variants`/`daily_test_results` already existed from `0003`, schema-only until now).
+
+| Item | Status |
+|---|---|
+| `[ai]` binding in `wrangler.toml` | Done — see note below on local dev limitations |
+| `AI_KEY_ENCRYPTION_SECRET` Worker secret (prod) + `.dev.vars` (local) | Done — generated, set, never printed to any log |
+| BYOK encryption (AES-GCM, `encryptSecret`/`decryptSecret` in `src/worker.js`) | Done |
+| `PATCH /api/profile` extended for `aiProvider`/`aiApiKey` (set/clear) | Done |
+| MCQ generation + cache (`generateMcq`, `getOrCreateMcqVariant`) — Workers AI default, OpenAI/Anthropic via BYOK, generic fallback on any AI failure | Done |
+| `GET /api/test/today` (stable daily set, persisted on first fetch) | Done |
+| `POST /api/test/answer` (idempotent — can change an answer, re-grades) | Done |
+| Frontend: Daily test view (MCQ buttons, correct/incorrect highlight, score) | Done |
+| Frontend: Settings "AI provider" card (provider select + key field + clear) | Done |
+| Local verification (`wrangler dev --local` + Playwright) | Done — full flow tested with the fallback MCQ (see note below); BYOK set/clear tested with a fake key; two-user isolation re-confirmed |
+| Real Workers AI / OpenAI / Anthropic call verified end-to-end | **Not done yet** — see note below |
+| Deploy to production | **Not done yet — checking with the user first** |
+
+**Local dev AI limitation:** Workers AI has no local inference simulator, and this wrangler version reports the `[ai]` binding's `remote = true` mode as "not supported" under plain `wrangler dev` (only the older blanket `wrangler dev --remote` works, which would also point D1 at production — undesirable for routine testing). `generateMcq()` catches any AI failure and falls back to a generic MCQ (correct answer + 3 generic distractors), so local dev exercises the full queue/cache/scoring/UI logic correctly, just without real AI-generated distractors. The real Workers AI call (and the OpenAI/Anthropic BYOK paths, which need real provider keys nobody has supplied yet) can only be verified after a real deploy.
+
+**Decisions made in this phase, not previously locked:**
+- Model: `@cf/meta/llama-3.1-8b-instruct` (Workers AI free tier default, ~50-200 neurons/request against the 10,000/day free quota).
+- BYOK providers supported: OpenAI (`gpt-4o-mini`) and Anthropic (`claude-3-5-haiku-20241022`), called directly via `fetch()` (no SDK). Other providers aren't supported yet.
+- Daily test size: fixed at 10 questions (`TEST_SIZE`), not user-configurable in this phase.
+- `mcq_variants` is a **global** cache keyed only by `question_id` — the first user to trigger generation for a given official question determines its MCQ for every other user who later does that same question. This was already the intended design from the Phase 1 planning review, just noting it's now live.
 
 ## Phase 3 — sharing, PWA, polish (not started)
 

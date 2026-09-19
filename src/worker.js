@@ -89,6 +89,34 @@ async function hashPassword(password, saltHex) {
   return bytesToHex(new Uint8Array(bits));
 }
 
+// ---------- BYOK encryption ----------
+// Per-user AI provider keys are encrypted at rest with AES-GCM, using a
+// master key that only exists as a Worker secret (never in D1). Plaintext
+// keys only ever exist in memory for the duration of the request that
+// needs them.
+async function getMasterKey(env) {
+  const raw = hexToBytes(env.AI_KEY_ENCRYPTION_SECRET);
+  return crypto.subtle.importKey("raw", raw, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+}
+
+async function encryptSecret(env, plaintext) {
+  const key = await getMasterKey(env);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const enc = new TextEncoder().encode(plaintext);
+  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, enc);
+  return { ciphertext: bytesToHex(new Uint8Array(ciphertext)), iv: bytesToHex(iv) };
+}
+
+async function decryptSecret(env, ciphertextHex, ivHex) {
+  const key = await getMasterKey(env);
+  const plainBuf = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: hexToBytes(ivHex) },
+    key,
+    hexToBytes(ciphertextHex),
+  );
+  return new TextDecoder().decode(plainBuf);
+}
+
 // Reads and parses a JSON request body, defensively capping its size so a
 // huge payload can't be used to burn CPU/memory before we've even validated
 // anything. Returns { ok: true, body } or { ok: false, status, error }.
@@ -191,7 +219,8 @@ async function getUserFromRequest(request, env) {
   const row = await env.DB.prepare(
     `SELECT s.user_id as user_id, s.expires_at as expires_at, u.id as id, u.email as email, u.name as name,
             u.created_at as created_at, u.track as track, u.role as role, u.daily_quota as daily_quota,
-            u.streak_count as streak_count, u.streak_longest as streak_longest, u.streak_last_active as streak_last_active
+            u.streak_count as streak_count, u.streak_longest as streak_longest, u.streak_last_active as streak_last_active,
+            u.ai_provider as ai_provider, u.ai_key_ciphertext as ai_key_ciphertext, u.ai_key_iv as ai_key_iv
      FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ?`,
   )
     .bind(token)
@@ -213,6 +242,9 @@ async function getUserFromRequest(request, env) {
     streakCount: row.streak_count,
     streakLongest: row.streak_longest,
     streakLastActive: row.streak_last_active,
+    aiProvider: row.ai_provider,
+    aiKeyCiphertext: row.ai_key_ciphertext,
+    aiKeyIv: row.ai_key_iv,
   };
 }
 
@@ -226,6 +258,8 @@ function userPayload(user) {
     role: user.role,
     dailyQuota: user.dailyQuota,
     streak: { count: user.streakCount || 0, longest: user.streakLongest || 0, lastActiveDate: user.streakLastActive || null },
+    aiProvider: user.aiProvider || "workers-ai",
+    hasAiKey: !!user.aiKeyCiphertext,
   };
 }
 
@@ -498,22 +532,49 @@ async function handleUpdateAccount(request, env, user) {
   });
 }
 
+const AI_PROVIDERS = ["workers-ai", "openai", "anthropic"];
+
 async function handleUpdateProfile(request, env, user) {
-  const parsed = await readJsonBody(request, 2000);
+  const parsed = await readJsonBody(request, 4000);
   if (!parsed.ok) return json({ error: parsed.error }, { status: parsed.status });
   const body = parsed.body;
   const track = body.track !== undefined ? (body.track ? String(body.track).trim().slice(0, 120) : null) : user.track;
   const dailyQuota = body.dailyQuota !== undefined ? clampQuota(body.dailyQuota) : user.dailyQuota;
 
-  await env.DB.prepare("UPDATE users SET track = ?, daily_quota = ? WHERE id = ?")
-    .bind(track, dailyQuota, user.id)
+  let aiProvider = user.aiProvider;
+  let aiKeyCiphertext = user.aiKeyCiphertext;
+  let aiKeyIv = user.aiKeyIv;
+
+  if (body.aiApiKey === "") {
+    // Explicit clear: drop back to the shared Workers AI default.
+    aiProvider = null;
+    aiKeyCiphertext = null;
+    aiKeyIv = null;
+  } else if (typeof body.aiApiKey === "string" && body.aiApiKey.trim()) {
+    const provider = AI_PROVIDERS.includes(body.aiProvider) ? body.aiProvider : "openai";
+    if (provider === "workers-ai") {
+      return json({ error: "Workers AI doesn't need an API key — clear the key field instead." }, { status: 400 });
+    }
+    const enc = await encryptSecret(env, body.aiApiKey.trim());
+    aiProvider = provider;
+    aiKeyCiphertext = enc.ciphertext;
+    aiKeyIv = enc.iv;
+  } else if (body.aiProvider === "workers-ai") {
+    aiProvider = null;
+    aiKeyCiphertext = null;
+    aiKeyIv = null;
+  }
+
+  await env.DB.prepare(
+    "UPDATE users SET track = ?, daily_quota = ?, ai_provider = ?, ai_key_ciphertext = ?, ai_key_iv = ? WHERE id = ?",
+  )
+    .bind(track, dailyQuota, aiProvider, aiKeyCiphertext, aiKeyIv, user.id)
     .run();
 
   return json({
-    user: {
-      id: user.id, email: user.email, name: user.name, createdAt: user.createdAt, track, role: user.role, dailyQuota,
-      streak: { count: user.streakCount || 0, longest: user.streakLongest || 0, lastActiveDate: user.streakLastActive },
-    },
+    user: userPayload({
+      ...user, track, dailyQuota, aiProvider, aiKeyCiphertext, aiKeyIv,
+    }),
   });
 }
 
@@ -911,6 +972,225 @@ async function handleListMySets(request, env, user) {
   return json({ sets: rows.results || [] });
 }
 
+// ---------- AI: MCQ generation (once per question, cached forever) ----------
+
+const TEST_SIZE = 10;
+const WORKERS_AI_MODEL = "@cf/meta/llama-3.1-8b-instruct";
+
+function buildMcqPrompt(question, answer) {
+  return `You are creating a multiple-choice quiz question from an interview question and its model answer.
+
+Question: ${question}
+
+Model answer: ${answer}
+
+Produce a JSON object with exactly this shape, and nothing else — no markdown fences, no commentary:
+{"options": ["...", "...", "...", "..."], "correct_index": 0}
+
+Rules:
+- Exactly 4 short options (one sentence each, plain text).
+- Exactly one option must be a faithful short paraphrase of the model answer's core point.
+- The other three must be plausible but incorrect for this specific question.
+- "correct_index" is the 0-based index of the correct option in "options".`;
+}
+
+function parseMcqJson(raw) {
+  if (!raw) return null;
+  let text = String(raw).trim();
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced) text = fenced[1].trim();
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) return null;
+  try {
+    const obj = JSON.parse(text.slice(start, end + 1));
+    if (!Array.isArray(obj.options) || obj.options.length !== 4) return null;
+    if (!Number.isInteger(obj.correct_index) || obj.correct_index < 0 || obj.correct_index > 3) return null;
+    return { options: obj.options.map((o) => String(o).slice(0, 300)), correctIndex: obj.correct_index };
+  } catch {
+    return null;
+  }
+}
+
+// Used only if the model call fails or returns something unparsable, so the
+// daily test never hard-breaks on an AI hiccup — just degrades in quality.
+function fallbackMcq(answer) {
+  const correct = String(answer).slice(0, 160);
+  return {
+    options: [
+      correct,
+      "An unrelated approach that doesn't address the question.",
+      "The opposite of the recommended approach.",
+      "None of the above.",
+    ],
+    correctIndex: 0,
+  };
+}
+
+async function callWorkersAi(env, prompt) {
+  const result = await env.AI.run(WORKERS_AI_MODEL, {
+    messages: [{ role: "user", content: prompt }],
+    temperature: 0.4,
+  });
+  return result && result.response;
+}
+
+async function callOpenAi(apiKey, prompt) {
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.4,
+    }),
+  });
+  if (!res.ok) throw new Error(`OpenAI request failed (${res.status})`);
+  const data = await res.json();
+  return data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+}
+
+async function callAnthropic(apiKey, prompt) {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: "claude-3-5-haiku-20241022",
+      max_tokens: 400,
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
+  if (!res.ok) throw new Error(`Anthropic request failed (${res.status})`);
+  const data = await res.json();
+  return data.content && data.content[0] && data.content[0].text;
+}
+
+async function generateMcq(env, user, question, answer) {
+  const prompt = buildMcqPrompt(question, answer);
+  let raw = null;
+  let generatedBy = "workers-ai";
+  try {
+    if (user.aiProvider && user.aiKeyCiphertext && user.aiProvider !== "workers-ai") {
+      const apiKey = await decryptSecret(env, user.aiKeyCiphertext, user.aiKeyIv);
+      generatedBy = user.aiProvider;
+      raw = user.aiProvider === "anthropic" ? await callAnthropic(apiKey, prompt) : await callOpenAi(apiKey, prompt);
+    } else {
+      raw = await callWorkersAi(env, prompt);
+    }
+  } catch {
+    raw = null;
+  }
+  return { ...(parseMcqJson(raw) || fallbackMcq(answer)), generatedBy };
+}
+
+async function getOrCreateMcqVariant(env, user, question) {
+  const existing = await env.DB.prepare("SELECT options_json, correct_index FROM mcq_variants WHERE question_id = ?")
+    .bind(question.id)
+    .first();
+  if (existing) return { options: JSON.parse(existing.options_json), correctIndex: existing.correct_index };
+
+  const generated = await generateMcq(env, user, question.q, question.a);
+  await env.DB.prepare(
+    "INSERT INTO mcq_variants (question_id, options_json, correct_index, generated_by, generated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(question_id) DO NOTHING",
+  )
+    .bind(question.id, JSON.stringify(generated.options), generated.correctIndex, generated.generatedBy, new Date().toISOString())
+    .run();
+
+  // Re-read so a concurrent generation race converges on one canonical variant.
+  const row = await env.DB.prepare("SELECT options_json, correct_index FROM mcq_variants WHERE question_id = ?")
+    .bind(question.id)
+    .first();
+  return { options: JSON.parse(row.options_json), correctIndex: row.correct_index };
+}
+
+// ---------- daily multiple-choice test ----------
+
+async function handleGetTodayTest(request, env, user) {
+  const today = todayDateStr();
+  const testQuery = `SELECT t.question_id as id, t.selected_index as selected_index, t.correct as correct,
+            q.q as q, q.a as a, q.topic_label as topic_label
+     FROM daily_test_results t JOIN questions q ON q.id = t.question_id
+     WHERE t.user_id = ? AND t.date = ? ORDER BY t.id ASC`;
+
+  let testRows = ((await env.DB.prepare(testQuery).bind(user.id, today).all()).results) || [];
+
+  if (testRows.length === 0) {
+    const pool = await env.DB.prepare(
+      `SELECT q.id as id FROM user_question_progress p JOIN questions q ON q.id = p.question_id
+       WHERE p.user_id = ? AND p.status = 'done' ORDER BY RANDOM() LIMIT ?`,
+    )
+      .bind(user.id, TEST_SIZE)
+      .all();
+    const ids = (pool.results || []).map((r) => r.id);
+    if (ids.length) {
+      const now = new Date().toISOString();
+      const stmts = ids.map((qid) =>
+        env.DB.prepare(
+          "INSERT INTO daily_test_results (user_id, date, question_id, selected_index, correct, answered_at) VALUES (?, ?, ?, NULL, 0, ?) ON CONFLICT(user_id, date, question_id) DO NOTHING",
+        ).bind(user.id, today, qid, now),
+      );
+      await env.DB.batch(stmts);
+      testRows = ((await env.DB.prepare(testQuery).bind(user.id, today).all()).results) || [];
+    }
+  }
+
+  const questions = [];
+  for (const row of testRows) {
+    const variant = await getOrCreateMcqVariant(env, user, { id: row.id, q: row.q, a: row.a });
+    questions.push({
+      id: row.id,
+      q: row.q,
+      topic_label: row.topic_label,
+      options: variant.options,
+      answered: row.selected_index !== null,
+      selectedIndex: row.selected_index,
+      correct: row.selected_index !== null ? !!row.correct : null,
+      correctIndex: row.selected_index !== null ? variant.correctIndex : null,
+    });
+  }
+
+  return json({ date: today, questions });
+}
+
+async function handleAnswerTest(request, env, user) {
+  const parsed = await readJsonBody(request, 2000);
+  if (!parsed.ok) return json({ error: parsed.error }, { status: parsed.status });
+  const questionId = (parsed.body.question_id || "").toString();
+  const selectedIndex = parseInt(parsed.body.selected_index, 10);
+  if (!questionId || !Number.isInteger(selectedIndex) || selectedIndex < 0 || selectedIndex > 3) {
+    return json({ error: "Invalid answer." }, { status: 400 });
+  }
+
+  const variant = await env.DB.prepare("SELECT correct_index FROM mcq_variants WHERE question_id = ?")
+    .bind(questionId)
+    .first();
+  if (!variant) return json({ error: "No test question found for this id." }, { status: 404 });
+
+  const today = todayDateStr();
+  const now = new Date().toISOString();
+  const correct = selectedIndex === variant.correct_index ? 1 : 0;
+
+  await env.DB.prepare(
+    `INSERT INTO daily_test_results (user_id, date, question_id, selected_index, correct, answered_at)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT(user_id, date, question_id) DO UPDATE SET selected_index = excluded.selected_index, correct = excluded.correct, answered_at = excluded.answered_at`,
+  )
+    .bind(user.id, today, questionId, selectedIndex, correct, now)
+    .run();
+
+  await env.DB.prepare(
+    "INSERT INTO activity_log (user_id, occurred_at, event_type, topic_id, question_id, result) VALUES (?, ?, 'test_answer', NULL, ?, ?)",
+  )
+    .bind(user.id, now, questionId, correct ? "got_it" : "again")
+    .run();
+
+  return json({ ok: true, correct: !!correct, correctIndex: variant.correct_index });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -992,6 +1272,12 @@ export default {
         }
         if (url.pathname === "/api/question-sets/mine" && request.method === "GET") {
           return applySecurityHeaders(await handleListMySets(request, env, user));
+        }
+        if (url.pathname === "/api/test/today" && request.method === "GET") {
+          return applySecurityHeaders(await handleGetTodayTest(request, env, user));
+        }
+        if (url.pathname === "/api/test/answer" && request.method === "POST") {
+          return applySecurityHeaders(await handleAnswerTest(request, env, user));
         }
 
         return applySecurityHeaders(json({ error: "Not found." }, { status: 404 }));

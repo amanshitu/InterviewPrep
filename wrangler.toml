@@ -15,3 +15,15 @@ run_worker_first = true
 binding = "DB"
 database_name = "interview-prep-db"
 database_id = "e68c64ae-fe6a-4935-b665-245aebcad8a3"
+
+[ai]
+binding = "AI"
+# Workers AI has no local inference simulator. `remote = true` is meant to
+# let this one binding hit the real Cloudflare AI service under plain
+# `wrangler dev` while D1 stays local, but as of wrangler 4.135 the AI
+# binding reports Mode "not supported" for that and calls just fail
+# locally — generateMcq() in src/worker.js falls back to a generic MCQ in
+# that case, so local dev still works end-to-end, just without real AI
+# output. To test the real provider calls, use `wrangler dev --remote`
+# (touches the real D1 too) or test after `wrangler deploy`.
+remote = true

@@ -276,6 +276,18 @@ img { max-width: 100%; }
 .empty-state { text-align: center; padding: 40px 20px; color: var(--text-muted); }
 .empty-state svg { color: var(--border); margin-bottom: 10px; }
 
+/* ---------- Daily test (MCQ) ---------- */
+.mcq-options { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.mcq-option {
+  text-align: left; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface-2); color: var(--text); padding: 10px 14px; font-size: 14px;
+  cursor: pointer; font-family: inherit;
+}
+.mcq-option:hover:not(:disabled) { border-color: var(--primary); }
+.mcq-option:disabled { cursor: default; }
+.mcq-option.mcq-correct { background: var(--success-soft); border-color: var(--success); color: var(--success); font-weight: 600; }
+.mcq-option.mcq-incorrect { background: var(--danger-soft); border-color: var(--danger); color: var(--danger); font-weight: 600; }
+
 /* ---------- Question set upload form ---------- */
 .upload-section {
   border: 1px solid var(--border); border-radius: var(--radius-md);

@@ -2,6 +2,7 @@
   "use strict";
 
   const DEFAULT_REVIEW_COUNT = 15;
+  const TEST_SIZE = 10;
 
   let currentUser = null;
   let currentView = "home";
@@ -263,7 +264,8 @@
     }
     view.appendChild(queueCard);
 
-    view.appendChild(el(`
+    const row2 = el(`<div class="card-row"></div>`);
+    row2.appendChild(el(`
       <div class="card">
         <div class="group-days">Spaced repetition</div>
         <div class="section-title" style="font-size:17px;margin-top:2px;">Daily review</div>
@@ -275,6 +277,15 @@
         <button class="btn btn-primary" style="margin-top:14px;" id="start-review-btn">Generate today's review</button>
       </div>
     `));
+    row2.appendChild(el(`
+      <div class="card">
+        <div class="group-days">AI-generated</div>
+        <div class="section-title" style="font-size:17px;margin-top:2px;">Daily test</div>
+        <p class="section-sub" style="margin-top:6px;">${TEST_SIZE} multiple-choice questions drawn from what you've completed — same set all day, so you can pick it back up.</p>
+        <button class="btn btn-primary" style="margin-top:14px;" id="start-test-btn">Start today's test</button>
+      </div>
+    `));
+    view.appendChild(row2);
 
     main.appendChild(view);
 
@@ -287,6 +298,7 @@
     const rangeInput = $("#review-count", view);
     rangeInput.addEventListener("input", () => { $("#review-count-label", view).textContent = rangeInput.value; });
     $("#start-review-btn", view).addEventListener("click", () => startReview(parseInt(rangeInput.value, 10)));
+    $("#start-test-btn", view).addEventListener("click", openTest);
 
     renderSidebar();
   }
@@ -431,6 +443,103 @@
     }
   }
 
+  // ---------- DAILY TEST view (AI-generated multiple choice) ----------
+  let testBatch = [];
+
+  async function openTest() {
+    currentView = "test";
+    const main = $("#main");
+    main.innerHTML = "";
+    main.appendChild(el(`<div class="view"><div class="card empty-state"><p>Loading today's test — generating questions can take a few seconds the first time.</p></div></div>`));
+    renderSidebar();
+    try {
+      const data = await api("/api/test/today");
+      testBatch = data.questions;
+    } catch (err) {
+      testBatch = [];
+      toast(err.message);
+    }
+    renderTest();
+  }
+
+  function renderTest() {
+    const main = $("#main");
+    main.innerHTML = "";
+    const view = el(`<div class="view"></div>`);
+
+    const answeredCount = testBatch.filter((q) => q.answered).length;
+    const correctCount = testBatch.filter((q) => q.correct).length;
+
+    view.appendChild(el(`
+      <div class="card">
+        <div class="section-title" style="font-size:20px;">Daily test</div>
+        <p class="section-sub" style="margin-top:6px;">${answeredCount}/${testBatch.length} answered${answeredCount ? ` · ${correctCount} correct` : ""}</p>
+        <button class="btn btn-ghost" id="back-home-btn" style="margin-top:14px;">Back to Today</button>
+      </div>
+    `));
+
+    if (testBatch.length === 0) {
+      view.appendChild(el(`
+        <div class="card empty-state">
+          <p>No completed questions yet — finish some of today's questions to unlock the daily test.</p>
+        </div>
+      `));
+    } else {
+      const list = el(`<div style="display:flex;flex-direction:column;gap:12px;"></div>`);
+      testBatch.forEach((item, idx) => {
+        const card = el(`
+          <div class="q-card" data-tidx="${idx}">
+            <div class="q-topic-tag">${escapeHtml(item.topic_label || "")}</div>
+            <div class="q-card-head" style="margin-top:6px;">
+              <div>
+                <div class="q-index">Q${idx + 1}</div>
+                <div class="q-text">${escapeHtml(item.q)}</div>
+              </div>
+            </div>
+          </div>
+        `);
+        const optsWrap = el(`<div class="mcq-options"></div>`);
+        item.options.forEach((opt, optIdx) => {
+          let cls = "mcq-option";
+          if (item.answered) {
+            if (optIdx === item.correctIndex) cls += " mcq-correct";
+            else if (optIdx === item.selectedIndex) cls += " mcq-incorrect";
+          }
+          const btn = el(`<button type="button" class="${cls}" data-opt="${optIdx}">${escapeHtml(opt)}</button>`);
+          if (item.answered) btn.disabled = true;
+          else btn.addEventListener("click", () => answerTest(idx, optIdx));
+          optsWrap.appendChild(btn);
+        });
+        card.appendChild(optsWrap);
+        list.appendChild(card);
+      });
+      view.appendChild(list);
+    }
+
+    main.appendChild(view);
+    $("#back-home-btn", view).addEventListener("click", renderHome);
+    renderSidebar();
+  }
+
+  async function answerTest(idx, optIdx) {
+    const item = testBatch[idx];
+    if (!item || item.answered) return;
+    try {
+      const data = await api("/api/test/answer", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ question_id: item.id, selected_index: optIdx }),
+      });
+      item.answered = true;
+      item.selectedIndex = optIdx;
+      item.correct = data.correct;
+      item.correctIndex = data.correctIndex;
+      renderTest();
+    } catch (err) {
+      toast(err.message);
+    }
+  }
+
   // ---------- SETTINGS view ----------
   function renderSettings() {
     currentView = "settings";
@@ -469,6 +578,8 @@
         <button class="btn btn-primary" id="save-profile-btn">Save profile</button>
       </div>
     `));
+
+    view.appendChild(buildAiProviderCard());
 
     view.appendChild(el(`
       <div class="card">
@@ -587,7 +698,73 @@
     $("#export-progress-btn", view).addEventListener("click", exportProgress);
 
     wireQuestionSetsCard(view);
+    wireAiProviderCard(view);
     renderSidebar();
+  }
+
+  // ---------- AI provider (BYOK) ----------
+  const AI_PROVIDER_LABELS = { "workers-ai": "Workers AI (free, default)", openai: "OpenAI", anthropic: "Anthropic" };
+
+  function buildAiProviderCard() {
+    const provider = currentUser.aiProvider || "workers-ai";
+    return el(`
+      <div class="card">
+        <div class="section-title">AI provider</div>
+        <p class="section-sub" style="margin-top:6px;">Used to generate the daily multiple-choice test. Defaults to Cloudflare's free Workers AI — set your own key to use a different provider instead.</p>
+        <p class="section-sub" style="margin-top:10px;">Currently using: <strong>${escapeHtml(AI_PROVIDER_LABELS[provider] || provider)}</strong>${currentUser.hasAiKey ? " (your key)" : ""}</p>
+        <label class="field" style="margin-top:14px;">
+          <span>Provider</span>
+          <select id="ai-provider-select">
+            <option value="workers-ai" ${provider === "workers-ai" ? "selected" : ""}>Workers AI (free, default)</option>
+            <option value="openai" ${provider === "openai" ? "selected" : ""}>OpenAI</option>
+            <option value="anthropic" ${provider === "anthropic" ? "selected" : ""}>Anthropic</option>
+          </select>
+        </label>
+        <label class="field" id="ai-key-field" ${provider === "workers-ai" ? "hidden" : ""}>
+          <span>API key</span>
+          <input type="password" id="ai-api-key" placeholder="${currentUser.hasAiKey ? "Already set — enter a new key to replace it" : "sk-..."}" autocomplete="off" />
+        </label>
+        <p class="form-error" id="ai-error" hidden></p>
+        <p class="form-note" id="ai-success" hidden></p>
+        <button class="btn btn-primary" id="save-ai-btn">Save AI provider</button>
+      </div>
+    `);
+  }
+
+  function wireAiProviderCard(view) {
+    const select = $("#ai-provider-select", view);
+    const keyField = $("#ai-key-field", view);
+    select.addEventListener("change", () => {
+      keyField.hidden = select.value === "workers-ai";
+    });
+
+    $("#save-ai-btn", view).addEventListener("click", async () => {
+      const errBox = $("#ai-error", view);
+      const okBox = $("#ai-success", view);
+      errBox.hidden = true;
+      okBox.hidden = true;
+      const aiProvider = select.value;
+      const keyInput = $("#ai-api-key", view);
+      const body = { aiProvider };
+      if (aiProvider === "workers-ai") {
+        body.aiApiKey = "";
+      } else if (keyInput.value.trim()) {
+        body.aiApiKey = keyInput.value.trim();
+      }
+      try {
+        const data = await api("/api/profile", {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        currentUser = data.user;
+        okBox.textContent = "Saved.";
+        okBox.hidden = false;
+      } catch (err) {
+        errBox.textContent = err.message;
+        errBox.hidden = false;
+      }
+    });
   }
 
   async function exportProgress() {
