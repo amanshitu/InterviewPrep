@@ -1,4 +1,4 @@
-name = "interview-prep"
+name = "int-prep"
 main = "src/worker.js"
 compatibility_date = "2025-01-01"
 
