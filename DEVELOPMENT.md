@@ -30,25 +30,33 @@ durable summary future sessions should trust).
 
 ## Phase 1 — relational content model, quota engine (no AI, no PWA, no admin UI yet)
 
+**Status: done, deployed to remote D1, not yet deployed as the live Worker** (schema + data are live on the real `interview-prep-db`; `wrangler deploy` hasn't been run yet — see note at the bottom).
+
 | Item | Status |
 |---|---|
-| Schema migration `0003_relational_content.sql` | Not started |
-| Seed script: `public/questions.js` → official `question_sets`/`questions` rows | Not started |
-| Backfill script: existing `user_state` JSON → relational tables | Not started |
-| Queue/backlog engine (`buildTodayQueue`, ledger) in `src/worker.js` | Not started |
-| `GET /api/queue/today` | Not started |
-| `POST /api/questions/complete` | Not started |
-| `POST /api/questions/request-more` | Not started |
-| `POST /api/question-sets` (structured upload, validation) | Not started |
-| `GET /api/question-sets/mine` | Not started |
-| `PATCH /api/profile` (track + daily_quota) | Not started |
-| Signup: track + daily quota fields | Not started |
-| Frontend: today's queue view re-pointed at new API | Not started |
-| Frontend: "My question sets" + upload form in Settings | Not started |
-| Frontend: Review/Stats re-pointed at relational tables | Not started |
-| `app.js` stops reading `window.QUESTION_BANK` live | Not started |
-| Local verification (`wrangler dev --local`) | Not started |
-| Apply `0003` + seed + backfill to remote D1 | Not started |
+| Schema migration `0003_relational_content.sql` | Done |
+| Seed script: `public/questions.js` → official `question_sets`/`questions` rows (`scripts/generate-seed-sql.js` → `migrations/seed_official_bank.sql`) | Done |
+| Backfill script: existing `user_state` JSON → relational tables (`scripts/generate-backfill-sql.js` → `migrations/backfill.sql`) | Done — only one real account existed with empty progress, so this was mostly a subscribe-to-official-sets no-op; script is generic/reusable if more historical data ever needs it |
+| Queue/backlog engine (`ensureTodayQueueFilled`, `getOrCreateTodayLedger`) in `src/worker.js` | Done |
+| `GET /api/queue/today` | Done |
+| `POST /api/questions/complete` | Done (also bumps streak server-side now) |
+| `POST /api/questions/request-more` | Done (grants `EXTRA_BATCH`=5 per call, gated until today's target is met) |
+| `POST /api/questions/review-result` | Done (spaced-repetition grading, separate from daily completion) |
+| `GET /api/review` | Done (server-side weighted pick, moved off the client) |
+| `POST /api/question-sets` (structured upload, validation) | Done |
+| `GET /api/question-sets/mine` | Done |
+| `PATCH /api/profile` (track + daily_quota) | Done |
+| `GET /api/export/progress` | Done (replaces the old client-side JSON export, which relied on the removed local `state` object) |
+| Signup: track + daily quota fields | Done |
+| Frontend: today's queue view re-pointed at new API | Done — Home view now renders the daily queue directly (topic browsing/sidebar topic list removed, since topics aren't a fixed curriculum anymore) |
+| Frontend: "My question sets" + upload form in Settings | Done |
+| Frontend: Review/Stats re-pointed at relational tables | Done |
+| `app.js` stops reading `window.QUESTION_BANK` live | Done — `<script src="questions.js">` removed from `index.html` entirely; the file stays in the repo only as the seed source |
+| Local verification (`wrangler dev --local` + Playwright smoke test) | Done — signup w/ profile fields, queue reveal, request-more, review grading, settings/upload form, stats all verified in a real browser; two-user isolation re-verified against the new schema |
+| Apply `0003` + seed + backfill to remote D1 | Done |
+| Deploy the new Worker code live (`wrangler deploy`) | **Not done yet — checking with the user before pushing to production** |
+
+Dropped in this phase: the old "export the full static question bank as Markdown" Settings button. It doesn't have a clear meaning anymore now that content is multi-set and partly user-owned; revisit if there's demand for a per-set export instead.
 
 ## Phase 2 — AI (not started)
 
