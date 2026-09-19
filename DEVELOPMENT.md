@@ -74,13 +74,17 @@ Dropped in this phase: the old "export the full static question bank as Markdown
 | Frontend: Daily test view (MCQ buttons, correct/incorrect highlight, score) | Done |
 | Frontend: Settings "AI provider" card (provider select + key field + clear) | Done |
 | Local verification (`wrangler dev --local` + Playwright) | Done — full flow tested with the fallback MCQ (see note below); BYOK set/clear tested with a fake key; two-user isolation re-confirmed |
-| Real Workers AI / OpenAI / Anthropic call verified end-to-end | **Not done yet** — see note below |
-| Deploy to production | **Not done yet — checking with the user first** |
+| Real Workers AI call verified end-to-end | Done — see note below on the model id catch |
+| Deploy to production | Done |
 
-**Local dev AI limitation:** Workers AI has no local inference simulator, and this wrangler version reports the `[ai]` binding's `remote = true` mode as "not supported" under plain `wrangler dev` (only the older blanket `wrangler dev --remote` works, which would also point D1 at production — undesirable for routine testing). `generateMcq()` catches any AI failure and falls back to a generic MCQ (correct answer + 3 generic distractors), so local dev exercises the full queue/cache/scoring/UI logic correctly, just without real AI-generated distractors. The real Workers AI call (and the OpenAI/Anthropic BYOK paths, which need real provider keys nobody has supplied yet) can only be verified after a real deploy.
+**Local dev AI limitation:** Workers AI has no local inference simulator, and this wrangler version reports the `[ai]` binding's `remote = true` mode as "not supported" under plain `wrangler dev` (only the older blanket `wrangler dev --remote` works, which would also point D1 at production — undesirable for routine testing). `generateMcq()` catches any AI failure and falls back to a generic MCQ (correct answer + 3 generic distractors) and logs the failure via `console.error` (visible with `wrangler tail`), so local dev exercises the full queue/cache/scoring/UI logic correctly even without real AI-generated distractors, and a real failure in production degrades gracefully instead of breaking the test.
+
+**Caught during production verification:** the first deploy used `@cf/meta/llama-3.1-8b-instruct`, which turned out to be deprecated (as of 2026-05-30) — it silently fell back to the generic MCQ every time, which is exactly the failure mode the fallback+logging above is meant to catch. Confirmed via `wrangler tail` and swapped to `@cf/meta/llama-3.1-8b-instruct-fp8`, verified live against the account's actual model catalog with `wrangler ai models` rather than trusting docs/memory. Real AI-generated distractors confirmed working and graded correctly after the fix. Worth rechecking this model id periodically — Workers AI's catalog changes fairly often.
+
+**OpenAI/Anthropic BYOK paths are implemented but not verified against a real key** — nobody has supplied test credentials for either. The request/response handling follows each provider's standard, stable chat-completion API shape; low risk, but flagged as unverified.
 
 **Decisions made in this phase, not previously locked:**
-- Model: `@cf/meta/llama-3.1-8b-instruct` (Workers AI free tier default, ~50-200 neurons/request against the 10,000/day free quota).
+- Model: `@cf/meta/llama-3.1-8b-instruct-fp8` (Workers AI free tier default, ~50-200 neurons/request against the 10,000/day free quota).
 - BYOK providers supported: OpenAI (`gpt-4o-mini`) and Anthropic (`claude-3-5-haiku-20241022`), called directly via `fetch()` (no SDK). Other providers aren't supported yet.
 - Daily test size: fixed at 10 questions (`TEST_SIZE`), not user-configurable in this phase.
 - `mcq_variants` is a **global** cache keyed only by `question_id` — the first user to trigger generation for a given official question determines its MCQ for every other user who later does that same question. This was already the intended design from the Phase 1 planning review, just noting it's now live.

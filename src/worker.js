@@ -975,7 +975,9 @@ async function handleListMySets(request, env, user) {
 // ---------- AI: MCQ generation (once per question, cached forever) ----------
 
 const TEST_SIZE = 10;
-const WORKERS_AI_MODEL = "@cf/meta/llama-3.1-8b-instruct";
+// @cf/meta/llama-3.1-8b-instruct (without -fp8) is deprecated as of 2026-05-30 —
+// verified live against this account's catalog via `wrangler ai models`.
+const WORKERS_AI_MODEL = "@cf/meta/llama-3.1-8b-instruct-fp8";
 
 function buildMcqPrompt(question, answer) {
   return `You are creating a multiple-choice quiz question from an interview question and its model answer.
@@ -1081,7 +1083,11 @@ async function generateMcq(env, user, question, answer) {
     } else {
       raw = await callWorkersAi(env, prompt);
     }
-  } catch {
+  } catch (err) {
+    // Swallow and fall back — an AI hiccup shouldn't break the daily test.
+    // If MCQs are unexpectedly low quality in production, `wrangler tail`
+    // will show "[mcq generation] provider=... error=..." lines from here.
+    console.error(`[mcq generation] provider=${generatedBy} error=${err && err.message ? err.message : err}`);
     raw = null;
   }
   return { ...(parseMcqJson(raw) || fallbackMcq(answer)), generatedBy };
