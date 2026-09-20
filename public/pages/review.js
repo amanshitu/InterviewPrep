@@ -1,5 +1,5 @@
 // Spaced-repetition review, drawn from everything the user has completed.
-import { $, $all, el, escapeHtml, toast, api, state, renderNav, navigate } from "../app.js";
+import { $, $all, el, escapeHtml, toastSuccess, toastError, api, state, renderNav, navigate } from "../app.js";
 
 const DEFAULT_REVIEW_COUNT = 15;
 
@@ -16,7 +16,7 @@ export async function render(count) {
     reviewBatch = data.questions.map((q) => ({ ...q, revealed: false, graded: false }));
   } catch (err) {
     reviewBatch = [];
-    toast(err.message);
+    toastError(err.message);
   }
   paint();
 }
@@ -101,8 +101,8 @@ async function markReviewResult(idx, result) {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ question_id: item.id, result }),
     });
-    toast(result === "got_it" ? "Nice — noted." : "Got it, we'll bring this back sooner.");
+    toastSuccess(result === "got_it" ? "Nice — noted." : "Got it, we'll bring this back sooner.");
   } catch (err) {
-    toast(err.message);
+    toastError(err.message);
   }
 }

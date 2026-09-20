@@ -1,5 +1,5 @@
 // Today's queue — the default/home view.
-import { $, $all, el, escapeHtml, toast, api, state, renderNav, renderTopStats, navigate } from "../app.js";
+import { $, $all, el, escapeHtml, toastError, api, state, renderNav, renderTopStats, navigate } from "../app.js";
 
 const TEST_SIZE = 10;
 const DEFAULT_REVIEW_COUNT = 15;
@@ -17,7 +17,7 @@ export async function render() {
     state.todayQueue = await api("/api/queue/today");
   } catch (err) {
     state.todayQueue = { date: "", target: 0, completed: 0, remaining: 0, questions: [] };
-    toast(err.message);
+    toastError(err.message);
   }
   localRevealed = {};
   renderTopStats();
@@ -148,7 +148,7 @@ async function revealQuestion(qid) {
     state.currentUser = me.user;
     renderTopStats();
   } catch (err) {
-    toast(err.message);
+    toastError(err.message);
   }
 }
 
@@ -163,6 +163,6 @@ async function requestMore() {
     paint();
     renderTopStats();
   } catch (err) {
-    toast(err.message);
+    toastError(err.message);
   }
 }

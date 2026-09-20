@@ -22,13 +22,20 @@ export function el(html) { const t = document.createElement("template"); t.inner
 export function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
-export function toast(msg) {
+// type is one of "info" (default, neutral), "success", "error", "warning" —
+// styled via .toast-{type} in styles.css. Plain toast(msg) still works
+// exactly as before for anywhere that doesn't care about styling.
+export function toast(msg, type = "info") {
   const node = $("#toast");
   node.textContent = msg;
+  node.className = `toast toast-${type}`;
   node.hidden = false;
   clearTimeout(toast._t);
   toast._t = setTimeout(() => (node.hidden = true), 2600);
 }
+export function toastSuccess(msg) { toast(msg, "success"); }
+export function toastError(msg) { toast(msg, "error"); }
+export function toastWarning(msg) { toast(msg, "warning"); }
 export function formatDate(iso) {
   if (!iso) return "—";
   return new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });

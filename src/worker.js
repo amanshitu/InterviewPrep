@@ -1243,15 +1243,16 @@ function fallbackMcq(answer) {
   };
 }
 
-async function callWorkersAi(env, prompt, model) {
+async function callWorkersAi(env, prompt, model, maxTokens = 600) {
   const result = await env.AI.run(model || DEFAULT_WORKERS_AI_MODEL, {
     messages: [{ role: "user", content: prompt }],
     temperature: 0.4,
+    max_tokens: maxTokens,
   });
   return result && result.response;
 }
 
-async function callOpenAi(apiKey, prompt) {
+async function callOpenAi(apiKey, prompt, maxTokens = 600) {
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
@@ -1259,6 +1260,7 @@ async function callOpenAi(apiKey, prompt) {
       model: "gpt-4o-mini",
       messages: [{ role: "user", content: prompt }],
       temperature: 0.4,
+      max_tokens: maxTokens,
     }),
   });
   if (!res.ok) throw new Error(`OpenAI request failed (${res.status})`);
@@ -1266,7 +1268,7 @@ async function callOpenAi(apiKey, prompt) {
   return data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
 }
 
-async function callAnthropic(apiKey, prompt) {
+async function callAnthropic(apiKey, prompt, maxTokens = 600) {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -1276,7 +1278,7 @@ async function callAnthropic(apiKey, prompt) {
     },
     body: JSON.stringify({
       model: "claude-3-5-haiku-20241022",
-      max_tokens: 400,
+      max_tokens: maxTokens,
       messages: [{ role: "user", content: prompt }],
     }),
   });
@@ -1323,11 +1325,14 @@ async function handleGetAiUsage(request, env, user) {
 // cap — if the cap is already used up, returns null without calling
 // anything (the caller falls back to a generic response and, for
 // cacheable results, must NOT persist that fallback permanently).
-async function callConfiguredAi(env, user, prompt, label) {
+async function callConfiguredAi(env, user, prompt, label, maxTokens = 600) {
   if (usesByok(user)) {
     try {
       const apiKey = await decryptSecret(env, user.aiKeyCiphertext, user.aiKeyIv);
-      const raw = user.aiProvider === "anthropic" ? await callAnthropic(apiKey, prompt) : await callOpenAi(apiKey, prompt);
+      const raw =
+        user.aiProvider === "anthropic"
+          ? await callAnthropic(apiKey, prompt, maxTokens)
+          : await callOpenAi(apiKey, prompt, maxTokens);
       return { raw, generatedBy: user.aiProvider, capped: false };
     } catch (err) {
       console.error(`[${label}] provider=${user.aiProvider} error=${err && err.message ? err.message : err}`);
@@ -1341,7 +1346,7 @@ async function callConfiguredAi(env, user, prompt, label) {
   }
   const model = resolveWorkersAiModel(user);
   try {
-    const raw = await callWorkersAi(env, prompt, model);
+    const raw = await callWorkersAi(env, prompt, model, maxTokens);
     return { raw, generatedBy: "workers-ai", model, capped: false };
   } catch (err) {
     console.error(`[${label}] provider=workers-ai model=${model} error=${err && err.message ? err.message : err}`);
@@ -1616,7 +1621,9 @@ function buildPromptGenerationMetaPrompt({ resumeText, targetRole, categories, p
   const categoryList = categories.join(", ");
   return `You are an expert interview coach writing a prompt that will be pasted into a separate AI assistant (ChatGPT or Claude) to generate senior-level interview questions and model answers.
 
-Write that prompt now, tailored specifically to this person's actual background — reference their real companies, technologies, seniority signals, and career trajectory from the resume below, so the questions and answers the other assistant produces end up genuinely specific to them and their target role instead of generic advice.
+Your ONLY job is to write that prompt's text. Do NOT answer it yourself, do NOT generate any example questions or answers, and do NOT include any actual CSV rows — the other assistant does that part after receiving your prompt. Keep your own output short: 4-6 sentences of tailored framing, nothing more.
+
+Base that framing specifically on this person's actual background — mention their real companies, technologies, seniority signals, and career trajectory from the resume below, so the questions and answers the other assistant later produces end up genuinely specific to them and their target role instead of generic advice.
 
 Target role: ${targetRole}
 
@@ -1625,11 +1632,11 @@ Resume:
 ${resumeText}
 """
 
-The prompt you write MUST end with the following output-format instructions, reproduced exactly as given here — do not paraphrase, shorten, or omit any part of them, since another program will parse the reply as a CSV file:
+Immediately after your framing, append the following output-format instructions verbatim — copy them exactly as given here, do not paraphrase, shorten, omit, or add anything after them, since another program will parse the other assistant's eventual reply as a CSV file:
 
 ${resumePromptFormatRules(categories, perCategory)}
 
-Respond with ONLY the finished prompt text itself — no commentary about what you wrote, no markdown code fences, nothing before or after it.`;
+Respond with ONLY the finished prompt text itself (your framing immediately followed by the verbatim rules above) — no commentary about what you wrote, no markdown code fences, no example rows, nothing before or after it.`;
 }
 
 async function handleGenerateResumePrompt(request, env, user) {
@@ -1647,7 +1654,10 @@ async function handleGenerateResumePrompt(request, env, user) {
   if (categories.length === 0) return json({ error: "Pick at least one category." }, { status: 400 });
 
   const metaPrompt = buildPromptGenerationMetaPrompt({ resumeText, targetRole, categories, perCategory });
-  const { raw, capped } = await callConfiguredAi(env, user, metaPrompt, "resume prompt generation");
+  // Generous budget: the framing itself is short, but the verbatim rules
+  // block it has to reproduce is a few hundred tokens on its own, and the
+  // default 600-token budget was clipping replies mid-instruction.
+  const { raw, capped } = await callConfiguredAi(env, user, metaPrompt, "resume prompt generation", 1200);
   if (capped) {
     return json(
       { error: "You've used today's free AI allowance — try again tomorrow, or set your own AI key in Settings.", limited: true },
@@ -1663,7 +1673,15 @@ async function handleGenerateResumePrompt(request, env, user) {
     .trim()
     .replace(/^```[a-z]*\n?/i, "")
     .replace(/```$/, "")
+    // Smaller models routinely ignore "no commentary" and prepend a line
+    // like "Here is the prompt:" before the actual content — strip it.
+    .replace(/^(here'?s|here is)\b[^\n:]*:\s*\n*/i, "")
     .trim();
+  // Same models also sometimes wrap the whole reply in one matching pair
+  // of quotes, as if quoting it back — unwrap that too.
+  if ((prompt.startsWith('"') && prompt.endsWith('"')) || (prompt.startsWith("“") && prompt.endsWith("”"))) {
+    prompt = prompt.slice(1, -1).trim();
+  }
   if (!prompt.includes("section,question,answer")) {
     prompt += `\n\n${resumePromptFormatRules(categories, perCategory)}`;
   }

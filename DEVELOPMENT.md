@@ -330,9 +330,11 @@ Solution: native ES modules (`<script type="module">` + dynamic `import()`), whi
 - Fetched question lists are cached client-side per set id (`questionsCache` in `admin.js`) so toggling a review panel open/closed repeatedly, or re-expanding the same set from both the pending list and history, doesn't re-fetch every time.
 - The review-questions endpoint isn't restricted to pending sets — an admin can call it for any set id, since re-inspecting an already-decided set's content from the history view is exactly the kind of thing this feature exists for.
 
+**Incident (2026-09-21):** approving/rejecting any set on production started returning "Server error." Root cause: something outside this session's own `wrangler deploy` calls is auto-deploying every commit to production almost immediately (confirmed by checking the live `admin.js`/`settings.js` content right after committing, with no manual deploy run) — so this phase's code went live before its migration (`0008_set_review_audit.sql`, adding `rejected_at`/`rejected_by`) had been applied to the *remote* database, and `handleApproveSet`'s UPDATE statement referencing those columns failed outright. Fixed by applying the migration to the remote D1 database directly; verified live with disposable submitter/admin test accounts (approve and reject both confirmed working, test data cleaned up afterward). Given this auto-deploy behavior, any future migration-adding commit needs its remote migration applied essentially immediately, not deferred to a separate "when you're ready to deploy" step.
+
 ## Phase 4.2 — AI-generated resume prompt
 
-**Status: implemented and locally verified; not yet deployed.**
+**Status: done, deployed, verified live.**
 
 | Item | Status |
 |---|---|
@@ -341,9 +343,31 @@ Solution: native ES modules (`<script type="module">` + dynamic `import()`), whi
 | The CSV-import contract (exact `section,question,answer` header, quoting rules, category list, count per category) stays deterministic, never AI-generated: the model is instructed to reproduce it verbatim, and the server checks for the literal header string in the reply and appends the rules block itself if it's missing, so a hallucinated or truncated reply can never produce an unimportable prompt | Done |
 | Graceful fallback: any failure calling the endpoint (AI capped for the day, or the call failing outright) falls back to the original deterministic client-side template (`buildResumePrompt`, kept in `settings.js` for exactly this) rather than leaving the button broken — strictly a superset of the old behavior, never a regression | Done |
 | Local verification (Playwright): confirmed the button shows a "Generating…" loading state, and — since Workers AI isn't reachable from local dev — confirmed the fallback path produces a working prompt with the correct CSV header and the resume's own detail embedded, with the button correctly re-enabled afterward | Done |
-| Live verification of the actual AI-generated path (Workers AI isn't available in local dev) | Pending deploy |
-| Deploy | Pending |
+| Live verification against production with a disposable test account, catching and fixing two real bugs the local fallback-only testing couldn't have caught (see below) | Done |
+
+**Bugs caught during live verification, not local testing:**
+- The reply came back truncated mid-instruction, cutting off the verbatim rules block before it finished — because `callWorkersAi`/`callAnthropic` had a small hardcoded token budget (Workers AI's implicit default; Anthropic hardcoded to 400) sized for this app's existing short AI outputs (a one-line role suggestion, a short MCQ), never previously large enough to matter until this call's much longer expected output. Fixed by threading an explicit `maxTokens` parameter through `callConfiguredAi` → `callWorkersAi`/`callOpenAi`/`callAnthropic` (default 600, raised to 1200 specifically for this call).
+- The model routinely prepended commentary like `Here is the prompt:` and sometimes wrapped its whole reply in a stray quote — despite explicit instructions not to. Added light server-side cleanup (strip a leading "here's/here is...:" line; unwrap a fully-matching pair of wrapping quotes) alongside the existing markdown-fence stripping.
+
+**Known trade-off, not blocking:** the free-tier Workers AI model (small, weaker instruction-following) still sometimes drafts a few illustrative example questions of its own before the verbatim rules block, despite being told not to — cosmetically imperfect, but functionally harmless: the verbatim rules block is always present (verified via the header-string safety-net check) and unambiguously overrides anything before it once pasted into a genuinely capable downstream assistant (ChatGPT/Claude). Not worth further prompt-engineering effort against a small model's known instruction-following ceiling.
 
 **Design notes:**
 - Deliberately narrow scope for what's AI-generated: only the framing/analysis portion of the prompt, never the machine-readable output contract. This was a conscious reversal of the original Phase 3.5 decision to keep prompt-building "pure frontend, zero AI calls" — the user explicitly asked for AI-generated prompt content, and the risk (a broken CSV contract) is mitigated by the deterministic verbatim-reproduction instruction plus the server-side string-check-and-repair, rather than by avoiding AI involvement entirely.
 - Reuses the exact same cap/BYOK plumbing as `handleSuggestTargetRole` right above it in `worker.js` — one more short-output AI call, no new accounting needed.
+
+## Phase 4.3 — typed toasts (success / error / warning)
+
+**Status: done, deployed.**
+
+| Item | Status |
+|---|---|
+| `toast(msg, type)` now applies a `.toast-{type}` class (`success`/`error`/`warning`/`info`, default `info` unchanged from before) so the pill is colored — green/red/amber — instead of every message looking identical regardless of outcome | Done |
+| New `toastSuccess()`/`toastError()`/`toastWarning()` convenience exports from `app.js`, matching the common `toast.success()`-style API of most toast libraries | Done |
+| Swept every existing `toast(...)` call site across the app (home, review, test, stats, admin, settings — about.js has none) and classified each: server/network failures → error, completed actions (imported, uploaded, approved, exported, subscribed, copied…) → success, and soft/non-blocking nudges (missing input before a click, AI quota exhausted with a working fallback, clipboard access failing but text still selected) → warning | Done |
+| Removed the now-unused plain `toast` import from every file where every call site got a specific type | Done |
+| Local verification (Playwright): triggered one of each type (export progress → success, empty-resume click → warning, malformed CSV import → error, AI-fallback path → warning, manual set upload → success) and confirmed both the CSS class and message text on `#toast` each time; screenshotted the success (green) and warning (amber) pills to confirm the colors actually render correctly in both the base and dark-mode CSS paths | Done |
+| Deploy | Done |
+
+**Design notes:**
+- The dark-mode/system-default override rule for `.toast` (`:root:not([data-theme="light"]) .toast { ... }`) isn't inside a `prefers-color-scheme` media query in this file — it's unconditional whenever `data-theme` isn't explicitly `"light"`, which was already true before this phase and not something this change altered. Because that rule's selector specificity (three combined selectors) is higher than a plain `.toast-success` class alone, the type-modifier rules had to be duplicated under that same `:root:not([data-theme="light"])` prefix to actually win the cascade in the default/dark state — a plain lower-specificity `.toast-success` rule placed after it in source order would have silently lost.
+- "Rejected." (in the admin approve/reject flow) is styled as `toastSuccess`, not a negative color, since the color communicates "this action completed without error," not "this is good news for the submitter" — kept consistent with "Approved" using the same styling logic.

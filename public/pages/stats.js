@@ -1,6 +1,6 @@
 // Accuracy trend, weakest topics/questions, streaks — derived from
 // /api/activity (the append-only history table).
-import { $, el, escapeHtml, toast, api, state, renderNav } from "../app.js";
+import { $, el, escapeHtml, toastError, api, state, renderNav } from "../app.js";
 
 function buildBarChartSvg(data) {
   const width = Math.max(320, data.length * 34);
@@ -40,7 +40,7 @@ export async function render() {
     api("/api/stats/progress"),
   ]);
   if (activityResult.status === "fulfilled") events = activityResult.value.events || [];
-  else toast(activityResult.reason.message);
+  else toastError(activityResult.reason.message);
   if (progressResult.status === "fulfilled") progress = progressResult.value;
 
   paint(events, progress);

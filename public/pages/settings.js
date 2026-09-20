@@ -1,6 +1,6 @@
 // Account, prep profile, AI provider (BYOK), password/sessions, question
 // sets (upload + suggestions), and data export.
-import { $, $all, el, escapeHtml, toast, formatDate, downloadBlob, api, state, renderShell, renderNav, renderAvatar, refreshBankStats } from "../app.js";
+import { $, $all, el, escapeHtml, toastSuccess, toastError, toastWarning, formatDate, downloadBlob, api, state, renderShell, renderNav, renderAvatar, refreshBankStats } from "../app.js";
 
 // Client-side resize keeps the uploaded picture small (well under the
 // server's MAX_AVATAR_DATA_URL_LENGTH backstop) without needing any file
@@ -224,7 +224,7 @@ export function render() {
       renderAvatar($("#avatar-preview", view), state.currentUser);
       renderShell();
       $("#avatar-remove-btn", view).hidden = false;
-      toast("Profile picture updated.");
+      toastSuccess("Profile picture updated.");
     } catch (err) {
       errBox.textContent = err.message;
       errBox.hidden = false;
@@ -244,7 +244,7 @@ export function render() {
       renderAvatar($("#avatar-preview", view), state.currentUser);
       renderShell();
       $("#avatar-remove-btn", view).hidden = true;
-      toast("Profile picture removed.");
+      toastSuccess("Profile picture removed.");
     } catch (err) {
       errBox.textContent = err.message;
       errBox.hidden = false;
@@ -447,9 +447,9 @@ async function exportProgress() {
   try {
     const data = await api("/api/export/progress");
     downloadBlob(`interview-prep-progress-${data.exportedAt.slice(0, 10)}.json`, JSON.stringify(data, null, 2), "application/json");
-    toast("Progress exported.");
+    toastSuccess("Progress exported.");
   } catch (err) {
-    toast(err.message);
+    toastError(err.message);
   }
 }
 
@@ -571,10 +571,10 @@ async function loadMySets(container) {
       btn.addEventListener("click", async () => {
         try {
           await api(`/api/question-sets/${btn.dataset.submitReview}/submit`, { method: "POST" });
-          toast("Submitted for review.");
+          toastSuccess("Submitted for review.");
           loadMySets(container);
         } catch (err) {
-          toast(err.message);
+          toastError(err.message);
         }
       });
     });
@@ -683,7 +683,7 @@ function wireQuestionSetsCard(view) {
     if (!file) return;
     const text = await file.text();
     const { sections, error, skipped } = csvRowsToSections(parseCsv(text));
-    if (error) { toast(error); return; }
+    if (error) { toastError(error); return; }
 
     const defaultTitle = file.name.replace(/\.csv$/i, "");
     formWrap.innerHTML = "";
@@ -709,7 +709,7 @@ function wireQuestionSetsCard(view) {
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ title, track, sections }),
         });
-        toast("Question set imported.");
+        toastSuccess("Question set imported.");
         formWrap.hidden = true;
         newSetBtn.hidden = false;
         importCsvBtn.hidden = false;
@@ -754,7 +754,7 @@ function wireQuestionSetsCard(view) {
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ title, track, sections }),
         });
-        toast("Question set uploaded.");
+        toastSuccess("Question set uploaded.");
         formWrap.hidden = true;
         newSetBtn.hidden = false;
         importCsvBtn.hidden = false;
@@ -885,7 +885,7 @@ function wireResumePromptCard(view) {
     const errBox = $("#resume-role-error", view);
     errBox.hidden = true;
     const resumeText = $("#resume-text", view).value.trim();
-    if (!resumeText) { toast("Paste your resume text first."); return; }
+    if (!resumeText) { toastWarning("Paste your resume text first."); return; }
 
     btn.disabled = true;
     const originalLabel = btn.textContent;
@@ -897,7 +897,7 @@ function wireResumePromptCard(view) {
         body: JSON.stringify({ resumeText }),
       });
       $("#resume-target-role", view).value = data.role;
-      toast("Suggested a target role from your resume — edit it if you'd like something else.");
+      toastSuccess("Suggested a target role from your resume — edit it if you'd like something else.");
     } catch (err) {
       errBox.textContent = err.message;
       errBox.hidden = false;
@@ -914,9 +914,9 @@ function wireResumePromptCard(view) {
     const perCategory = parseInt($("#resume-per-category", view).value, 10) || 10;
     const categories = $all("#resume-categories-list input[type=checkbox]:checked", view).map((cb) => cb.value);
 
-    if (!resumeText) { toast("Paste your resume text first."); return; }
-    if (!targetRole) { toast("Enter a target role."); return; }
-    if (categories.length === 0) { toast("Pick at least one category."); return; }
+    if (!resumeText) { toastWarning("Paste your resume text first."); return; }
+    if (!targetRole) { toastWarning("Enter a target role."); return; }
+    if (categories.length === 0) { toastWarning("Pick at least one category."); return; }
 
     btn.disabled = true;
     const originalLabel = btn.textContent;
@@ -938,7 +938,7 @@ function wireResumePromptCard(view) {
       $("#resume-prompt-text", view).value = prompt;
       $("#resume-prompt-output", view).hidden = false;
       const reason = err.data && err.data.limited ? "Today's free AI allowance is used up" : "Couldn't reach the AI right now";
-      toast(`${reason} — used the standard prompt template instead.`);
+      toastWarning(`${reason} — used the standard prompt template instead.`);
     } finally {
       btn.disabled = false;
       btn.textContent = originalLabel;
@@ -949,10 +949,10 @@ function wireResumePromptCard(view) {
     const textarea = $("#resume-prompt-text", view);
     try {
       await navigator.clipboard.writeText(textarea.value);
-      toast("Prompt copied to clipboard.");
+      toastSuccess("Prompt copied to clipboard.");
     } catch {
       textarea.select();
-      toast("Couldn't access the clipboard — the text is selected, press Ctrl/Cmd+C to copy.");
+      toastWarning("Couldn't access the clipboard — the text is selected, press Ctrl/Cmd+C to copy.");
     }
   });
 }
@@ -991,11 +991,11 @@ async function loadSuggestions(container) {
       btn.addEventListener("click", async () => {
         try {
           await api(`/api/question-sets/${btn.dataset.subscribe}/subscribe`, { method: "POST" });
-          toast("Subscribed — it'll start showing up in your daily queue.");
+          toastSuccess("Subscribed — it'll start showing up in your daily queue.");
           loadSuggestions(container);
           refreshBankStats();
         } catch (err) {
-          toast(err.message);
+          toastError(err.message);
         }
       });
     });

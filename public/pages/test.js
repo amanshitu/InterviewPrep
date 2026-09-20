@@ -1,5 +1,5 @@
 // Daily AI-generated multiple-choice test.
-import { $, $all, el, escapeHtml, toast, api, state, renderNav, navigate } from "../app.js";
+import { $, $all, el, escapeHtml, toastError, api, state, renderNav, navigate } from "../app.js";
 
 let testBatch = [];
 
@@ -14,7 +14,7 @@ export async function render() {
     testBatch = data.questions;
   } catch (err) {
     testBatch = [];
-    toast(err.message);
+    toastError(err.message);
   }
   paint();
 }
@@ -93,6 +93,6 @@ async function answerTest(idx, optIdx) {
     item.correctIndex = data.correctIndex;
     paint();
   } catch (err) {
-    toast(err.message);
+    toastError(err.message);
   }
 }

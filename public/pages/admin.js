@@ -1,6 +1,6 @@
 // Question-set approval queue + review history — only reachable/visible
 // for role='admin'.
-import { $, $all, el, escapeHtml, toast, api, state, renderNav } from "../app.js";
+import { $, $all, el, escapeHtml, toastSuccess, toastError, api, state, renderNav } from "../app.js";
 
 // Cache fetched question lists per set within this page load so toggling
 // a review panel open/closed repeatedly doesn't re-fetch every time.
@@ -20,9 +20,9 @@ export async function render() {
     api("/api/admin/approval-history"),
   ]);
   if (pendingResult.status === "fulfilled") sets = pendingResult.value.sets || [];
-  else toast(pendingResult.reason.message);
+  else toastError(pendingResult.reason.message);
   if (historyResult.status === "fulfilled") history = historyResult.value.history || [];
-  else toast(historyResult.reason.message);
+  else toastError(historyResult.reason.message);
 
   paint(sets, history);
 }
@@ -154,10 +154,10 @@ function paint(sets, history) {
 async function approveSet(id) {
   try {
     await api(`/api/admin/question-sets/${id}/approve`, { method: "POST" });
-    toast("Approved — now shows up as a suggestion for other users.");
+    toastSuccess("Approved — now shows up as a suggestion for other users.");
     render();
   } catch (err) {
-    toast(err.message);
+    toastError(err.message);
   }
 }
 
@@ -169,9 +169,9 @@ async function rejectSet(id) {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ reason }),
     });
-    toast("Rejected.");
+    toastSuccess("Rejected.");
     render();
   } catch (err) {
-    toast(err.message);
+    toastError(err.message);
   }
 }
