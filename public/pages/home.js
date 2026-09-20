@@ -49,7 +49,6 @@ function paint() {
       <div class="stat-tile"><div class="stat-tile-value">${todayQueue.questions.length}</div><div class="stat-tile-label">Pending today</div></div>
       <div class="stat-tile"><div class="stat-tile-value">${todayQueue.completed}</div><div class="stat-tile-label">Completed today</div></div>
       <div class="stat-tile"><div class="stat-tile-value">${todayQueue.target}</div><div class="stat-tile-label">Today's target</div></div>
-      <div class="stat-tile"><div class="stat-tile-value">${currentUser.dailyQuota}</div><div class="stat-tile-label">Daily quota</div></div>
     </div>
   `));
 
