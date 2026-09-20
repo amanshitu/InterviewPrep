@@ -899,15 +899,20 @@ async function handleCompleteQuestion(request, env, user) {
   return json({ ok: true });
 }
 
-// The "Review again soon" counterpart to completing a question — used on
-// the Today page for a question the user has looked at but doesn't want
-// to mark done yet. Deliberately does NOT touch status='done', the daily
-// ledger, or the streak: the question stays in today's active queue (and
-// naturally carries over to tomorrow via the existing backlog-priority
-// rule in ensureTodayQueueFilled) rather than counting as finished. Reuses
-// the same last_result='again' signal the Daily Review page's "Review
-// again soon" already writes, so it also feeds weakest-topic/accuracy
-// stats identically.
+// The "Review again soon" / "Need Review" counterpart to completing a
+// question — used on the Today page both for a question the user has just
+// looked at but doesn't want to mark done yet, AND for pulling an
+// already-completed question back out of "Completed today" for another
+// look. Either way it does NOT touch the streak. If the question was
+// already status='done', its ledger completed-count is decremented so
+// today's target/remaining stay consistent with what's actually still in
+// the active queue; if it wasn't done yet, the ledger is left untouched —
+// the question simply stays in today's active queue (and naturally
+// carries over to tomorrow via the existing backlog-priority rule in
+// ensureTodayQueueFilled) rather than counting as finished. Reuses the
+// same last_result='again' signal the Daily Review page's "Review again
+// soon" already writes, so it also feeds weakest-topic/accuracy stats
+// identically.
 async function handleFlagQuestionForReview(request, env, user) {
   const parsed = await readJsonBody(request, 2000);
   if (!parsed.ok) return json({ error: parsed.error }, { status: parsed.status });
@@ -917,6 +922,19 @@ async function handleFlagQuestionForReview(request, env, user) {
   const today = todayDateStr(user.timezone);
   const now = new Date().toISOString();
   await getOrCreateTodayLedger(env, user.id, user.dailyQuota, today);
+
+  const existing = await env.DB.prepare("SELECT status FROM user_question_progress WHERE user_id = ? AND question_id = ?")
+    .bind(user.id, questionId)
+    .first();
+  const wasDone = !!(existing && existing.status === "done");
+
+  if (wasDone) {
+    await env.DB.prepare(
+      "UPDATE daily_quota_ledger SET completed = MAX(0, completed - 1) WHERE user_id = ? AND date = ?",
+    )
+      .bind(user.id, today)
+      .run();
+  }
 
   await env.DB.prepare(
     `INSERT INTO user_question_progress (user_id, question_id, status, queued_for_date, first_shown_at, last_shown_at, times_shown, correct_streak, last_result)

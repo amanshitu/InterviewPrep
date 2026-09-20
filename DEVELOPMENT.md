@@ -391,3 +391,22 @@ Solution: native ES modules (`<script type="module">` + dynamic `import()`), whi
 - Deliberately did *not* add a way to pull a question back out of "Completed today" into "needs review" — that would require decrementing `daily_quota_ledger.completed` and the user's streak bump to stay consistent, and re-reading the request, "so I can review them if required" reads more plausibly as "so I can browse back and re-check the answer" than "so I can un-complete it." The completed section is read-only by design; revisiting that trade-off is a reasonable follow-up if actually wanted.
 - The Daily Review page's spaced-repetition pool only draws from `status='done'` rows, so a question flagged "Review again soon" on the Today page (which deliberately stays `status != 'done'`) won't show up there until it's eventually marked "Got it" — it's meant to resurface in *today's own list* first, exactly as asked, not skip straight into the separate spaced-repetition feature.
 - Reused the exact same visual language (`btn-success`/`btn-warn`, "Got it"/"Review again soon") as the pre-existing Daily Review page instead of inventing new terminology, so the concept reads as one consistent mechanic across both places rather than two similar-but-differently-worded features.
+
+## Phase 4.5 — "Need Review" on completed questions, plus Pending/Completed stat tiles
+
+**Status: implemented and locally verified; not yet deployed.**
+
+Follow-up to Phase 4.4: the "Completed today" section was deliberately read-only there. The user asked for exactly the reverse-flow trapdoor that design note flagged as a possible follow-up — a "Need Review" button per completed question that pulls it back out of "Completed today" and into today's active list — plus two new at-a-glance stat tiles up top.
+
+| Item | Status |
+|---|---|
+| Each card in "Completed today" now has a "Need Review" button | Done |
+| Clicking it moves the question back into "Today's questions" (already revealed, tagged "Needs review", both "Got it"/"Review again soon" actions available again) | Done |
+| `POST /api/questions/flag-review` (already existing from Phase 4.4) now also handles being called on a `status='done'` row: it decrements `daily_quota_ledger.completed` by 1 (floored at 0, so a duplicate/retry call can't push it negative) so today's target/remaining stay arithmetically consistent with what's actually still sitting in the active list, then applies the same `status='shown'`/`last_result='again'` update as before. The streak is deliberately left untouched either way — un-completing a question isn't treated as "you didn't actually study today" | Done |
+| Top stat row gains two tiles: "Pending today" (count of the active list) and "Completed today" (the ledger's completed count), alongside the existing streak/target/quota tiles | Done |
+| Verified via direct API calls against the local D1-backed dev server (signup → complete a question → confirm `completed:1`, `completedQuestions` holds it → call `flag-review` on it → confirm `completed:0`, it's back in `questions` with `status:"shown"`/`last_result:"again"` and gone from `completedQuestions` → called `flag-review` again on the now-active question to confirm it does **not** double-decrement) | Done |
+| Deploy | Not yet — pending |
+
+**Design notes:**
+- One endpoint (`flag-review`) now serves both "don't mark this done yet" (called from the active list) and "actually, un-complete this" (called from the Completed section) — the only difference the handler cares about is whether the row was already `status='done'` when the request came in, which is exactly the condition that decides whether the ledger needs adjusting.
+- `.stat-grid` was already `grid-template-columns: repeat(auto-fit, minmax(130px, 1fr))`, so adding two more tiles needed no CSS changes — it wraps cleanly at any width, mobile included.

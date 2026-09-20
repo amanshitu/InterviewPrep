@@ -46,6 +46,8 @@ function paint() {
     <div class="stat-grid">
       <div class="stat-tile"><div class="stat-tile-value">${(currentUser.streak && currentUser.streak.count) || 0}</div><div class="stat-tile-label">Day streak</div></div>
       <div class="stat-tile"><div class="stat-tile-value">${(currentUser.streak && currentUser.streak.longest) || 0}</div><div class="stat-tile-label">Longest streak</div></div>
+      <div class="stat-tile"><div class="stat-tile-value">${todayQueue.questions.length}</div><div class="stat-tile-label">Pending today</div></div>
+      <div class="stat-tile"><div class="stat-tile-value">${todayQueue.completed}</div><div class="stat-tile-label">Completed today</div></div>
       <div class="stat-tile"><div class="stat-tile-value">${todayQueue.target}</div><div class="stat-tile-label">Today's target</div></div>
       <div class="stat-tile"><div class="stat-tile-value">${currentUser.dailyQuota}</div><div class="stat-tile-label">Daily quota</div></div>
     </div>
@@ -121,6 +123,9 @@ function paint() {
             <span class="pill pill-done">Done</span>
           </div>
           <div class="q-answer">${escapeHtml(q.a)}</div>
+          <div class="q-actions">
+            <button class="btn btn-warn btn-small" data-need-review="${q.id}">Need Review</button>
+          </div>
         </div>
       `));
     });
@@ -161,6 +166,9 @@ function paint() {
   });
   $all("[data-flag-review]", view).forEach((btn) => {
     btn.addEventListener("click", () => flagForReview(btn.dataset.flagReview));
+  });
+  $all("[data-need-review]", view).forEach((btn) => {
+    btn.addEventListener("click", () => moveBackToReview(btn.dataset.needReview));
   });
   const completedToggle = $("#completed-toggle", view);
   if (completedToggle) {
@@ -228,6 +236,31 @@ async function flagForReview(qid) {
       body: JSON.stringify({ question_id: qid }),
     });
     toastSuccess("Kept for review — it'll stay in today's list.");
+  } catch (err) {
+    toastError(err.message);
+  }
+}
+
+async function moveBackToReview(qid) {
+  const todayQueue = state.todayQueue;
+  const idx = (todayQueue.completedQuestions || []).findIndex((x) => x.id === qid);
+  if (idx === -1) return;
+  const [q] = todayQueue.completedQuestions.splice(idx, 1);
+  q.status = "shown";
+  q.last_result = "again";
+  todayQueue.questions.push(q);
+  todayQueue.completed = Math.max(0, todayQueue.completed - 1);
+  todayQueue.remaining = Math.max(0, todayQueue.target - todayQueue.completed);
+  localRevealed[qid] = true;
+  paint();
+  renderTopStats();
+  try {
+    await api("/api/questions/flag-review", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ question_id: qid }),
+    });
+    toastSuccess("Moved back to today's questions.");
   } catch (err) {
     toastError(err.message);
   }
