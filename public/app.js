@@ -199,14 +199,17 @@ function setupAuthScreen() {
     const email = $("#signup-email").value.trim();
     const password = $("#signup-password").value;
     const track = $("#signup-track").value.trim();
+    const headline = $("#signup-headline").value.trim();
     const dailyQuota = parseInt($("#signup-quota").value, 10) || 10;
+    let timezone = "UTC";
+    try { timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; } catch { /* keep UTC */ }
     const errBox = $("#signup-error");
     errBox.hidden = true;
     try {
       const data = await api("/api/signup", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name, email, password, track, dailyQuota }),
+        body: JSON.stringify({ name, email, password, track, headline, dailyQuota, timezone }),
       });
       await boot(data.user);
     } catch (err) {

@@ -146,6 +146,26 @@ Solution: native ES modules (`<script type="module">` + dynamic `import()`), whi
 - **CSV import format**: header row must include `section`, `question`, `answer` columns (any order, case-insensitive); quoted fields with embedded commas/newlines are supported (RFC4180-ish parser, hand-written, no dependency). "Excel" support means exporting a spreadsheet to CSV first — true `.xlsx` binary parsing was considered and explicitly declined (would need a CDN-hosted parsing library and a CSP change) in favor of staying dependency-free, per the user's choice.
 - **Favicon root cause**: before this, there was no `/favicon.ico` at all — some browsers probe that path directly regardless of `<link rel="icon">`, and with `not_found_handling = "single-page-application"` in `wrangler.toml`, an unmatched `/favicon.ico` request was silently served `index.html` (200, wrong content type) instead of 404ing or serving an icon. Added a real ICO-format file (PNG-in-ICO, supported by all modern browsers) plus explicit `sizes` attributes and a `?v=2` cache-busting query string, since favicons are cached unusually aggressively by browsers.
 
+## Phase 3.3 — expanded profile fields
+
+**Status: done, deployed.** Closes out the last item flagged as partial back in Phase 3's review.
+
+| Item | Status |
+|---|---|
+| Migration `0005_profile_fields.sql` (`headline`, `years_experience`, `bio`, `timezone`) | Done |
+| Signup: optional "Current role" field + silently auto-detected browser timezone | Done |
+| Settings → Prep profile: headline, years of experience, bio, editable timezone | Done |
+| Timezone-aware "today"— `todayDateStr()` now takes the user's IANA timezone (validated server-side, falls back to UTC on anything invalid/unparseable) instead of always using UTC | Done — affects the daily quota ledger, the daily test set, and the AI usage cap, all of which now reset at the user's own midnight |
+| AI Stats insight prompt now includes headline/years/bio/track when set, for a more tailored coaching note | Done |
+| Fixed along the way: `handleLogin`'s response was missing `aiProvider`/`hasAiKey` entirely (a real latent bug — a BYOK user's key status wouldn't show correctly until something else refetched `/api/me`). Consolidated signup/login/change-password onto one `mapUserRow()` + `userPayload()` path instead of three hand-rolled object literals, so this class of drift can't recur | Done |
+| Local verification (curl: signup/login/profile-update with new fields, invalid-timezone fallback, and a real cross-timezone date-boundary check against a live UTC-offset difference; Playwright: signup → Settings → save → reload persistence) | Done |
+| Apply `0005` + deploy | Done |
+
+**Design notes:**
+- Progressive profiling: only "current role" was added to signup (kept optional, to not add friction) — years of experience, bio, and timezone override live in Settings, filled in whenever the user gets to it, not forced upfront.
+- Timezone is auto-detected via `Intl.DateTimeFormat().resolvedOptions().timeZone` in the browser and sent silently at signup; users only need to touch the field manually if traveling or if detection was wrong.
+- `mcq_variants`, `daily_test_results`, etc. are still all UTC-agnostic identifiers already (`date` is just a plain `YYYY-MM-DD` string) — the timezone-awareness lives entirely in *which* string gets computed as "today" for a given user, not in the schema.
+
 **Known trade-offs, not blocking:**
 - PWA icons are a flat brand-color square with a checkmark, generated programmatically — functional (satisfies installability requirements) but not real designed artwork. Swap `public/icons/*.png` for real icons later if desired; `scripts/generate-icons.js` isn't needed once you do.
 - The reject-reason prompt in the Admin view uses the browser's native `prompt()` rather than a custom modal — simplest thing that works for a low-traffic, admin-only interaction.

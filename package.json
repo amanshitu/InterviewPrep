@@ -17,6 +17,8 @@
     "db:seed:remote": "wrangler d1 execute interview-prep-db --remote --file=./migrations/seed_official_bank.sql",
     "db:migrate:local:0004": "wrangler d1 execute interview-prep-db --local --file=./migrations/0004_ai_usage_insights.sql",
     "db:migrate:remote:0004": "wrangler d1 execute interview-prep-db --remote --file=./migrations/0004_ai_usage_insights.sql",
+    "db:migrate:local:0005": "wrangler d1 execute interview-prep-db --local --file=./migrations/0005_profile_fields.sql",
+    "db:migrate:remote:0005": "wrangler d1 execute interview-prep-db --remote --file=./migrations/0005_profile_fields.sql",
     "tail": "wrangler tail"
   },
   "devDependencies": {

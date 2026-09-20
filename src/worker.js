@@ -220,7 +220,8 @@ async function getUserFromRequest(request, env) {
     `SELECT s.user_id as user_id, s.expires_at as expires_at, u.id as id, u.email as email, u.name as name,
             u.created_at as created_at, u.track as track, u.role as role, u.daily_quota as daily_quota,
             u.streak_count as streak_count, u.streak_longest as streak_longest, u.streak_last_active as streak_last_active,
-            u.ai_provider as ai_provider, u.ai_key_ciphertext as ai_key_ciphertext, u.ai_key_iv as ai_key_iv
+            u.ai_provider as ai_provider, u.ai_key_ciphertext as ai_key_ciphertext, u.ai_key_iv as ai_key_iv,
+            u.headline as headline, u.years_experience as years_experience, u.bio as bio, u.timezone as timezone
      FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ?`,
   )
     .bind(token)
@@ -230,12 +231,20 @@ async function getUserFromRequest(request, env) {
     await env.DB.prepare("DELETE FROM sessions WHERE token = ?").bind(token).run();
     return null;
   }
+  return { ...mapUserRow(row), token };
+}
+
+// Normalizes a raw D1 users-table row (snake_case columns) into the same
+// camelCase shape getUserFromRequest() returns, so handleLogin/handleSignup
+// can build a session payload the same way instead of hand-rolling a
+// second, easy-to-drift-from-reality object literal (a real earlier bug:
+// the login response was missing aiProvider/hasAiKey entirely).
+function mapUserRow(row) {
   return {
     id: row.id,
     email: row.email,
     name: row.name,
     createdAt: row.created_at,
-    token,
     track: row.track,
     role: row.role,
     dailyQuota: row.daily_quota,
@@ -245,6 +254,10 @@ async function getUserFromRequest(request, env) {
     aiProvider: row.ai_provider,
     aiKeyCiphertext: row.ai_key_ciphertext,
     aiKeyIv: row.ai_key_iv,
+    headline: row.headline,
+    yearsExperience: row.years_experience,
+    bio: row.bio,
+    timezone: row.timezone,
   };
 }
 
@@ -260,6 +273,10 @@ function userPayload(user) {
     streak: { count: user.streakCount || 0, longest: user.streakLongest || 0, lastActiveDate: user.streakLastActive || null },
     aiProvider: user.aiProvider || "workers-ai",
     hasAiKey: !!user.aiKeyCiphertext,
+    headline: user.headline || "",
+    yearsExperience: typeof user.yearsExperience === "number" ? user.yearsExperience : null,
+    bio: user.bio || "",
+    timezone: user.timezone || "UTC",
   };
 }
 
@@ -269,8 +286,26 @@ function clampQuota(n) {
   return Math.min(50, Math.max(5, v));
 }
 
-function todayDateStr() {
-  return new Date().toISOString().slice(0, 10);
+// Everything keyed by "today" (the daily quota ledger, the daily test set,
+// AI usage caps) should reset at the user's own midnight, not an arbitrary
+// UTC one — defaults to UTC only if the stored timezone is missing/invalid.
+function todayDateStr(timezone) {
+  try {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: timezone || "UTC" }).format(new Date());
+  } catch {
+    return new Date().toISOString().slice(0, 10);
+  }
+}
+
+const VALID_TIMEZONE_FALLBACK = "UTC";
+function normalizeTimezone(tz) {
+  if (!tz || typeof tz !== "string") return VALID_TIMEZONE_FALLBACK;
+  try {
+    Intl.DateTimeFormat("en-CA", { timeZone: tz });
+    return tz.slice(0, 60);
+  } catch {
+    return VALID_TIMEZONE_FALLBACK;
+  }
 }
 
 const EXTRA_BATCH = 5;
@@ -293,6 +328,8 @@ async function handleSignup(request, env) {
   const password = (body.password || "").toString();
   const track = body.track ? String(body.track).trim().slice(0, 120) : null;
   const dailyQuota = clampQuota(body.dailyQuota);
+  const headline = body.headline ? String(body.headline).trim().slice(0, 140) : null;
+  const timezone = normalizeTimezone(body.timezone);
 
   if (!name) return json({ error: "Please enter your name." }, { status: 400 });
   if (!isValidEmail(email)) return json({ error: "Please enter a valid email." }, { status: 400 });
@@ -313,9 +350,9 @@ async function handleSignup(request, env) {
   const now = new Date().toISOString();
 
   await env.DB.prepare(
-    "INSERT INTO users (id, email, name, password_hash, salt, created_at, track, daily_quota) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO users (id, email, name, password_hash, salt, created_at, track, daily_quota, headline, timezone) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
   )
-    .bind(id, email, name, passwordHash, salt, now, track, dailyQuota)
+    .bind(id, email, name, passwordHash, salt, now, track, dailyQuota, headline, timezone)
     .run();
 
   await env.DB.prepare(
@@ -334,10 +371,16 @@ async function handleSignup(request, env) {
   );
   if (subs.length) await env.DB.batch(subs);
 
-  return startSession(env, id, {
-    id, email, name, createdAt: now, track, role: "user", dailyQuota,
-    streak: { count: 0, longest: 0, lastActiveDate: null },
-  });
+  return startSession(
+    env,
+    id,
+    userPayload({
+      id, email, name, createdAt: now, track, role: "user", dailyQuota,
+      streakCount: 0, streakLongest: 0, streakLastActive: null,
+      aiProvider: null, aiKeyCiphertext: null, aiKeyIv: null,
+      headline, yearsExperience: null, bio: null, timezone,
+    }),
+  );
 }
 
 async function handleLogin(request, env) {
@@ -349,7 +392,8 @@ async function handleLogin(request, env) {
 
   const user = await env.DB.prepare(
     `SELECT id, email, name, password_hash, salt, created_at, track, role, daily_quota,
-            streak_count, streak_longest, streak_last_active
+            streak_count, streak_longest, streak_last_active,
+            ai_provider, ai_key_ciphertext, ai_key_iv, headline, years_experience, bio, timezone
      FROM users WHERE email = ?`,
   )
     .bind(email)
@@ -362,16 +406,7 @@ async function handleLogin(request, env) {
     return json({ error: "Incorrect email or password." }, { status: 401 });
   }
 
-  return startSession(env, user.id, {
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    createdAt: user.created_at,
-    track: user.track,
-    role: user.role,
-    dailyQuota: user.daily_quota,
-    streak: { count: user.streak_count || 0, longest: user.streak_longest || 0, lastActiveDate: user.streak_last_active },
-  });
+  return startSession(env, user.id, userPayload(mapUserRow(user)));
 }
 
 async function startSession(env, userId, sessionUser) {
@@ -499,16 +534,7 @@ async function handleChangePassword(request, env, user) {
 
   // Rotate the session: issue a fresh token, drop the old one.
   await env.DB.prepare("DELETE FROM sessions WHERE token = ?").bind(user.token).run();
-  return startSession(env, user.id, {
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    createdAt: user.createdAt,
-    track: user.track,
-    role: user.role,
-    dailyQuota: user.dailyQuota,
-    streak: { count: user.streakCount || 0, longest: user.streakLongest || 0, lastActiveDate: user.streakLastActive },
-  });
+  return startSession(env, user.id, userPayload(user));
 }
 
 async function handleRevokeAllSessions(request, env, user) {
@@ -523,13 +549,7 @@ async function handleUpdateAccount(request, env, user) {
   if (!name) return json({ error: "Please enter your name." }, { status: 400 });
 
   await env.DB.prepare("UPDATE users SET name = ? WHERE id = ?").bind(name, user.id).run();
-  return json({
-    user: {
-      id: user.id, email: user.email, name, createdAt: user.createdAt, track: user.track,
-      role: user.role, dailyQuota: user.dailyQuota,
-      streak: { count: user.streakCount || 0, longest: user.streakLongest || 0, lastActiveDate: user.streakLastActive },
-    },
-  });
+  return json({ user: userPayload({ ...user, name }) });
 }
 
 const AI_PROVIDERS = ["workers-ai", "openai", "anthropic"];
@@ -540,6 +560,13 @@ async function handleUpdateProfile(request, env, user) {
   const body = parsed.body;
   const track = body.track !== undefined ? (body.track ? String(body.track).trim().slice(0, 120) : null) : user.track;
   const dailyQuota = body.dailyQuota !== undefined ? clampQuota(body.dailyQuota) : user.dailyQuota;
+  const headline = body.headline !== undefined ? (body.headline ? String(body.headline).trim().slice(0, 140) : null) : user.headline;
+  const bio = body.bio !== undefined ? (body.bio ? String(body.bio).trim().slice(0, 600) : null) : user.bio;
+  const yearsExperience =
+    body.yearsExperience !== undefined
+      ? (body.yearsExperience === null || body.yearsExperience === "" ? null : Math.max(0, Math.min(60, parseInt(body.yearsExperience, 10) || 0)))
+      : user.yearsExperience;
+  const timezone = body.timezone !== undefined ? normalizeTimezone(body.timezone) : user.timezone;
 
   let aiProvider = user.aiProvider;
   let aiKeyCiphertext = user.aiKeyCiphertext;
@@ -566,14 +593,15 @@ async function handleUpdateProfile(request, env, user) {
   }
 
   await env.DB.prepare(
-    "UPDATE users SET track = ?, daily_quota = ?, ai_provider = ?, ai_key_ciphertext = ?, ai_key_iv = ? WHERE id = ?",
+    `UPDATE users SET track = ?, daily_quota = ?, ai_provider = ?, ai_key_ciphertext = ?, ai_key_iv = ?,
+            headline = ?, bio = ?, years_experience = ?, timezone = ? WHERE id = ?`,
   )
-    .bind(track, dailyQuota, aiProvider, aiKeyCiphertext, aiKeyIv, user.id)
+    .bind(track, dailyQuota, aiProvider, aiKeyCiphertext, aiKeyIv, headline, bio, yearsExperience, timezone, user.id)
     .run();
 
   return json({
     user: userPayload({
-      ...user, track, dailyQuota, aiProvider, aiKeyCiphertext, aiKeyIv,
+      ...user, track, dailyQuota, aiProvider, aiKeyCiphertext, aiKeyIv, headline, bio, yearsExperience, timezone,
     }),
   });
 }
@@ -750,7 +778,7 @@ async function getTodayQueueQuestions(env, user, today) {
 }
 
 async function handleGetTodayQueue(request, env, user) {
-  const today = todayDateStr();
+  const today = todayDateStr(user.timezone);
   await ensureTodayQueueFilled(env, user, today);
   const ledger = await getOrCreateTodayLedger(env, user.id, user.dailyQuota, today);
   const questions = await getTodayQueueQuestions(env, user, today);
@@ -770,7 +798,7 @@ async function handleCompleteQuestion(request, env, user) {
   const questionId = (parsed.body.question_id || "").toString();
   if (!questionId) return json({ error: "Missing question_id." }, { status: 400 });
 
-  const today = todayDateStr();
+  const today = todayDateStr(user.timezone);
   const now = new Date().toISOString();
   await getOrCreateTodayLedger(env, user.id, user.dailyQuota, today);
 
@@ -819,7 +847,7 @@ async function handleCompleteQuestion(request, env, user) {
 }
 
 async function handleRequestMore(request, env, user) {
-  const today = todayDateStr();
+  const today = todayDateStr(user.timezone);
   const ledger = await getOrCreateTodayLedger(env, user.id, user.dailyQuota, today);
   const target = ledger.base_quota + ledger.extra_requested;
   if (ledger.completed < target) {
@@ -1181,7 +1209,7 @@ async function checkAndIncrementAiUsage(env, userId, today) {
 
 async function handleGetAiUsage(request, env, user) {
   if (usesByok(user)) return json({ unlimited: true, used: 0, cap: null });
-  const today = todayDateStr();
+  const today = todayDateStr(user.timezone);
   const row = await env.DB.prepare("SELECT count FROM ai_usage WHERE user_id = ? AND date = ?").bind(user.id, today).first();
   return json({ unlimited: false, used: (row && row.count) || 0, cap: FREE_AI_DAILY_CAP });
 }
@@ -1203,7 +1231,7 @@ async function callConfiguredAi(env, user, prompt, label) {
     }
   }
 
-  const usage = await checkAndIncrementAiUsage(env, user.id, todayDateStr());
+  const usage = await checkAndIncrementAiUsage(env, user.id, todayDateStr(user.timezone));
   if (!usage.allowed) {
     return { raw: null, generatedBy: "workers-ai", capped: true };
   }
@@ -1252,7 +1280,7 @@ async function getOrCreateMcqVariant(env, user, question) {
 // ---------- AI: personalized Stats insight (cached once per user/day) ----------
 
 async function handleGetStatsInsight(request, env, user) {
-  const today = todayDateStr();
+  const today = todayDateStr(user.timezone);
   const cached = await env.DB.prepare("SELECT insight, generated_by FROM ai_stats_insights WHERE user_id = ? AND date = ?")
     .bind(user.id, today)
     .first();
@@ -1288,12 +1316,19 @@ async function handleGetStatsInsight(request, env, user) {
     .sort((a, b) => b.rate - a.rate)
     .slice(0, 3);
 
-  const summary = `Current streak: ${user.streakCount || 0} days (longest ${user.streakLongest || 0}). Graded reviews so far: ${events.length}. Weakest topics: ${
+  const profileBits = [
+    user.track ? `preparing for: ${user.track}` : null,
+    user.headline ? `current role: ${user.headline}` : null,
+    typeof user.yearsExperience === "number" ? `${user.yearsExperience} years of experience` : null,
+    user.bio ? `background: ${user.bio}` : null,
+  ].filter(Boolean);
+
+  const summary = `${profileBits.length ? profileBits.join("; ") + ". " : ""}Current streak: ${user.streakCount || 0} days (longest ${user.streakLongest || 0}). Graded reviews so far: ${events.length}. Weakest topics: ${
     weakTopics.length
       ? weakTopics.map((t) => `${t.label} (marked "review again" on ${Math.round(t.rate * 100)}% of ${t.total} attempts)`).join("; ")
       : "none stand out yet"
   }.`;
-  const prompt = `You are a supportive interview-prep coach. Based on this user's stats, write a short, specific, encouraging insight (2-3 sentences, plain text, no markdown) and one concrete suggestion for what to focus on next.\n\nStats: ${summary}`;
+  const prompt = `You are a supportive interview-prep coach. Based on this user's profile and stats, write a short, specific, encouraging insight (2-3 sentences, plain text, no markdown) and one concrete suggestion for what to focus on next — tailor it to their stated role/experience/goal when given.\n\nProfile & stats: ${summary}`;
 
   const { raw, generatedBy, capped } = await callConfiguredAi(env, user, prompt, "stats insight");
   if (capped) {
@@ -1319,7 +1354,7 @@ async function handleGetStatsInsight(request, env, user) {
 // ---------- daily multiple-choice test ----------
 
 async function handleGetTodayTest(request, env, user) {
-  const today = todayDateStr();
+  const today = todayDateStr(user.timezone);
   const testQuery = `SELECT t.question_id as id, t.selected_index as selected_index, t.correct as correct,
             q.q as q, q.a as a, q.topic_label as topic_label
      FROM daily_test_results t JOIN questions q ON q.id = t.question_id
@@ -1379,7 +1414,7 @@ async function handleAnswerTest(request, env, user) {
     .first();
   if (!variant) return json({ error: "No test question found for this id." }, { status: 404 });
 
-  const today = todayDateStr();
+  const today = todayDateStr(user.timezone);
   const now = new Date().toISOString();
   const correct = selectedIndex === variant.correct_index ? 1 : 0;
 

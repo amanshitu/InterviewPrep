@@ -26,10 +26,27 @@ export function render() {
   view.appendChild(el(`
     <div class="card">
       <div class="section-title">Prep profile</div>
-      <p class="section-sub" style="margin-top:6px;">What you're preparing for, and how many questions you want per day.</p>
+      <p class="section-sub" style="margin-top:6px;">What you're preparing for, your background, and how many questions you want per day. The background fields are optional but help personalize your Stats coaching insight.</p>
       <label class="field" style="margin-top:16px;">
         <span>What are you preparing for?</span>
         <input type="text" id="settings-track" value="${escapeHtml(currentUser.track || "")}" placeholder="e.g. Engineering Management" />
+      </label>
+      <label class="field">
+        <span>Current role (optional)</span>
+        <input type="text" id="settings-headline" value="${escapeHtml(currentUser.headline || "")}" placeholder="e.g. Senior Backend Engineer" />
+      </label>
+      <label class="field">
+        <span>Years of experience (optional)</span>
+        <input type="number" id="settings-years" min="0" max="60" value="${currentUser.yearsExperience != null ? currentUser.yearsExperience : ""}" />
+      </label>
+      <label class="field">
+        <span>Short bio (optional)</span>
+        <textarea id="settings-bio" rows="3" placeholder="A sentence or two about your background and goals.">${escapeHtml(currentUser.bio || "")}</textarea>
+      </label>
+      <label class="field">
+        <span>Timezone</span>
+        <input type="text" id="settings-timezone" value="${escapeHtml(currentUser.timezone || "UTC")}" placeholder="e.g. America/New_York" />
+        <small>Used so your daily quota, test, and AI usage reset at your own midnight, not UTC. Auto-detected at signup — change it if you're traveling.</small>
       </label>
       <label class="field">
         <span>Questions per day</span>
@@ -114,11 +131,16 @@ export function render() {
     okBox.hidden = true;
     const track = $("#settings-track", view).value.trim();
     const dailyQuota = parseInt($("#settings-quota", view).value, 10) || 10;
+    const headline = $("#settings-headline", view).value.trim();
+    const bio = $("#settings-bio", view).value.trim();
+    const yearsInput = $("#settings-years", view).value.trim();
+    const yearsExperience = yearsInput === "" ? null : parseInt(yearsInput, 10);
+    const timezone = $("#settings-timezone", view).value.trim() || "UTC";
     try {
       const data = await api("/api/profile", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ track, dailyQuota }),
+        body: JSON.stringify({ track, dailyQuota, headline, bio, yearsExperience, timezone }),
       });
       state.currentUser = data.user;
       okBox.textContent = "Saved.";
