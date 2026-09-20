@@ -187,6 +187,27 @@ Solution: native ES modules (`<script type="module">` + dynamic `import()`), whi
 
 **Also answered, no code change**: how to grant `role='admin'` — currently a direct SQL update (`UPDATE users SET role='admin' WHERE email=...`), no self-service UI by design. Offered to build a "Manage admins" section in the Admin view if wanted; not yet requested.
 
+## Phase 3.5 — resume-tailored question prompt builder
+
+**Status: done, deployed.** Requested with an explicit ask to analyze and plan before changing anything — see the approved plan for the full reasoning; summarized here.
+
+| Item | Status |
+|---|---|
+| "Generate questions from your resume" card in Settings | Done — pure frontend, no new endpoint, no new migration, no AI call from this app |
+| Resume text input (pasted, not an uploaded file) | Done |
+| Target role, pre-filled from `track`/`headline` | Done |
+| Category checkboxes (5 official curriculum groups) + custom category add | Done |
+| Prompt builder (`buildResumePrompt`) → copy-to-clipboard, with a select-and-copy fallback if the Clipboard API throws | Done |
+| Local verification (Playwright: prefill, custom category, prompt content, clipboard) | Done |
+| **Critical check**: hand-crafted a CSV shaped exactly like what the prompt asks an external AI to produce (quoted comma-containing field included) and ran it through the existing "Import from CSV" flow — imported cleanly | Done |
+| Deploy | Done |
+
+**Locked decisions (from the approved plan, confirmed directly with the user):**
+- **Pasted resume text, not a file upload.** Real PDF/DOCX parsing needs a parsing library, which this project has declined more than once already for the same reason (see Phase 3.2's CSV-vs-XLSX call). Users copy text out of their PDF/Word doc instead.
+- **Prompt-assist only, for now — no direct in-app generation.** The user's own ChatGPT/Claude account does the actual generation; this app only builds the prompt and reuses the CSV importer already built in Phase 3.2. Zero new AI-call cost, zero interaction with `FREE_AI_DAILY_CAP` (which is sized for small MCQ-style calls, not 40-60 full Q&A pairs at once).
+- **Nothing is persisted or sent by this app.** The resume text lives only in the browser for the duration of building the prompt. A line in the UI says so explicitly, and that pasting the prompt into ChatGPT/Claude sends it there under the user's own account, not through this app.
+- **Direct in-app generation stays a documented option for later** — if there's real demand for skipping the copy/paste round trip, it would need its own usage-cap accounting (a resume-scale generation is a much bigger ask than one MCQ) and likely one AI call per category rather than one big call, to stay within smaller models' output limits.
+
 **Known trade-offs, not blocking:**
 - PWA icons are a flat brand-color square with a checkmark, generated programmatically — functional (satisfies installability requirements) but not real designed artwork. Swap `public/icons/*.png` for real icons later if desired; `scripts/generate-icons.js` isn't needed once you do.
 - The reject-reason prompt in the Admin view uses the browser's native `prompt()` rather than a custom modal — simplest thing that works for a low-traffic, admin-only interaction.

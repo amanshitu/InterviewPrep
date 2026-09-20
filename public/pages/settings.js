@@ -147,6 +147,7 @@ export function render() {
   `));
 
   view.appendChild(buildQuestionSetsCard());
+  view.appendChild(buildResumePromptCard());
   view.appendChild(buildSuggestionsCard());
 
   view.appendChild(el(`
@@ -241,6 +242,7 @@ export function render() {
   $("#export-progress-btn", view).addEventListener("click", exportProgress);
 
   wireQuestionSetsCard(view);
+  wireResumePromptCard(view);
   wireSuggestionsCard(view);
   wireAiProviderCard(view);
   renderSidebar();
@@ -670,6 +672,140 @@ function wireQuestionSetsCard(view) {
         errBox.hidden = false;
       }
     });
+  });
+}
+
+// ---------- Resume-tailored question prompt (prompt-assist, no AI call from this app) ----------
+// Everything here is client-side only — no resume text is ever sent to
+// our server. It builds a prompt the user pastes into their own ChatGPT/
+// Claude, then imports the CSV reply via the existing "Import from CSV"
+// flow above (parseCsv/csvRowsToSections), so the prompt's requested
+// output format must match that parser exactly.
+const DEFAULT_RESUME_CATEGORIES = [
+  "HR & Behavioral",
+  "Delivery & Program Management",
+  "People Management",
+  "Technical Architecture",
+  "AI Automation & Product",
+];
+
+function buildResumePromptCard() {
+  const currentUser = state.currentUser;
+  const defaultRole = currentUser.track || currentUser.headline || "";
+  return el(`
+    <div class="card">
+      <div class="section-title">Generate questions from your resume</div>
+      <p class="section-sub" style="margin-top:6px;">Paste your resume and target role to get a ready-to-use prompt for ChatGPT or Claude — it'll reply with categorized interview questions and detailed model answers you can import right below.</p>
+      <label class="field" style="margin-top:14px;">
+        <span>Resume text</span>
+        <textarea id="resume-text" rows="8" maxlength="8000" placeholder="Paste your resume text here (copy it out of your PDF or Word document)."></textarea>
+        <small>Stays in your browser — only used to build the prompt below. Pasting that prompt into ChatGPT/Claude sends it to that service under your own account, not through this app.</small>
+      </label>
+      <label class="field">
+        <span>Target role</span>
+        <input type="text" id="resume-target-role" value="${escapeHtml(defaultRole)}" placeholder="e.g. Engineering Manager" />
+      </label>
+      <div class="field">
+        <span>Categories</span>
+        <div id="resume-categories-list" class="resume-categories"></div>
+        <div class="q-actions" style="margin-top:8px;">
+          <input type="text" id="resume-new-category" class="resume-category-input" placeholder="Add a custom category" />
+          <button type="button" class="btn btn-ghost btn-small" id="resume-add-category-btn">+ Add category</button>
+        </div>
+      </div>
+      <label class="field">
+        <span>Questions per category</span>
+        <input type="number" id="resume-per-category" min="3" max="20" value="10" />
+      </label>
+      <button class="btn btn-primary" id="resume-generate-btn">Generate prompt</button>
+      <div id="resume-prompt-output" hidden style="margin-top:16px;">
+        <label class="field">
+          <span>Copy this into ChatGPT or Claude</span>
+          <textarea id="resume-prompt-text" rows="10" readonly></textarea>
+        </label>
+        <div class="q-actions">
+          <button type="button" class="btn btn-secondary" id="resume-copy-btn">Copy prompt</button>
+        </div>
+        <ol class="section-sub" style="margin-top:12px;padding-left:18px;line-height:1.7;">
+          <li>Copy the prompt above.</li>
+          <li>Paste it into ChatGPT or Claude (your own account).</li>
+          <li>Save its reply as a .csv file (paste into a plain text editor and save with a .csv extension, or paste into a spreadsheet and export as CSV).</li>
+          <li>Use "Import from CSV" above to bring the questions in.</li>
+        </ol>
+      </div>
+    </div>
+  `);
+}
+
+function addResumeCategoryCheckbox(container, label, checked) {
+  const row = el(`
+    <label class="resume-category-item">
+      <input type="checkbox" value="${escapeHtml(label)}" ${checked ? "checked" : ""} />
+      <span>${escapeHtml(label)}</span>
+    </label>
+  `);
+  container.appendChild(row);
+}
+
+function buildResumePrompt({ resumeText, targetRole, categories, perCategory }) {
+  const categoryList = categories.join(", ");
+  return `You are an expert interview coach. Based on the resume and target role below, generate senior-level interview questions with detailed, specific model answers tailored to this person's background and the role they're targeting.
+
+Target role: ${targetRole}
+
+Resume:
+"""
+${resumeText}
+"""
+
+Generate exactly ${perCategory} questions for EACH of these categories: ${categoryList}.
+
+Output ONLY a CSV — no commentary, no markdown code fences, nothing before or after it. Use exactly this header row:
+section,question,answer
+
+Rules:
+- "section" must be exactly one of: ${categoryList}.
+- Each answer must be a detailed, senior-level model answer (3-6 sentences) that references relevant, specific aspects of the resume and target role — not generic advice.
+- If a field contains a comma, wrap the whole field in double quotes. If a field contains a double quote, escape it by doubling it ("").
+- Do not add row numbers, extra columns, or blank lines.`;
+}
+
+function wireResumePromptCard(view) {
+  const categoriesList = $("#resume-categories-list", view);
+  DEFAULT_RESUME_CATEGORIES.forEach((c) => addResumeCategoryCheckbox(categoriesList, c, true));
+
+  $("#resume-add-category-btn", view).addEventListener("click", () => {
+    const input = $("#resume-new-category", view);
+    const value = input.value.trim();
+    if (!value) return;
+    addResumeCategoryCheckbox(categoriesList, value, true);
+    input.value = "";
+  });
+
+  $("#resume-generate-btn", view).addEventListener("click", () => {
+    const resumeText = $("#resume-text", view).value.trim();
+    const targetRole = $("#resume-target-role", view).value.trim();
+    const perCategory = parseInt($("#resume-per-category", view).value, 10) || 10;
+    const categories = $all("#resume-categories-list input[type=checkbox]:checked", view).map((cb) => cb.value);
+
+    if (!resumeText) { toast("Paste your resume text first."); return; }
+    if (!targetRole) { toast("Enter a target role."); return; }
+    if (categories.length === 0) { toast("Pick at least one category."); return; }
+
+    const prompt = buildResumePrompt({ resumeText, targetRole, categories, perCategory });
+    $("#resume-prompt-text", view).value = prompt;
+    $("#resume-prompt-output", view).hidden = false;
+  });
+
+  $("#resume-copy-btn", view).addEventListener("click", async () => {
+    const textarea = $("#resume-prompt-text", view);
+    try {
+      await navigator.clipboard.writeText(textarea.value);
+      toast("Prompt copied to clipboard.");
+    } catch {
+      textarea.select();
+      toast("Couldn't access the clipboard — the text is selected, press Ctrl/Cmd+C to copy.");
+    }
   });
 }
 
