@@ -240,6 +240,8 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").catch(() => { /* best-effort */ });
 }
 
+$all(".footer-year").forEach((node) => { node.textContent = new Date().getFullYear(); });
+
 (async function init() {
   setupAuthScreen();
   const params = new URLSearchParams(location.search);
