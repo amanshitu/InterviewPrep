@@ -175,8 +175,9 @@ function buildAiProviderCard() {
   return el(`
     <div class="card">
       <div class="section-title">AI provider</div>
-      <p class="section-sub" style="margin-top:6px;">Used to generate the daily multiple-choice test. Defaults to Cloudflare's free Workers AI — set your own key to use a different provider instead.</p>
+      <p class="section-sub" style="margin-top:6px;">Used to generate the daily multiple-choice test and your Stats coaching insight. Defaults to Cloudflare's free Workers AI (shared, capped per day) — set your own key for unlimited use.</p>
       <p class="section-sub" style="margin-top:10px;">Currently using: <strong>${escapeHtml(AI_PROVIDER_LABELS[provider] || provider)}</strong>${currentUser.hasAiKey ? " (your key)" : ""}</p>
+      <p class="section-sub" id="ai-usage-line" style="margin-top:4px;">Checking today's AI usage…</p>
       <label class="field" style="margin-top:14px;">
         <span>Provider</span>
         <select id="ai-provider-select">
@@ -196,12 +197,26 @@ function buildAiProviderCard() {
   `);
 }
 
+async function loadAiUsage(view) {
+  const line = $("#ai-usage-line", view);
+  if (!line) return;
+  try {
+    const data = await api("/api/ai-usage");
+    line.textContent = data.unlimited
+      ? "Today's usage: unlimited (using your own key)."
+      : `Today's shared AI usage: ${data.used}/${data.cap} generations.`;
+  } catch {
+    line.textContent = "";
+  }
+}
+
 function wireAiProviderCard(view) {
   const select = $("#ai-provider-select", view);
   const keyField = $("#ai-key-field", view);
   select.addEventListener("change", () => {
     keyField.hidden = select.value === "workers-ai";
   });
+  loadAiUsage(view);
 
   $("#save-ai-btn", view).addEventListener("click", async () => {
     const errBox = $("#ai-error", view);
@@ -249,10 +264,82 @@ function buildQuestionSetsCard() {
       <div class="section-title">My question sets</div>
       <p class="section-sub" style="margin-top:6px;">Upload your own set of questions, grouped into sections. New sets start private to you; sharing them with other users needs admin approval.</p>
       <div id="my-sets-list" style="margin-top:14px;"></div>
-      <button class="btn btn-secondary" id="new-set-btn" style="margin-top:14px;">Upload a question set</button>
+      <div class="q-actions" style="margin-top:14px;">
+        <button class="btn btn-secondary" id="new-set-btn">Upload a question set</button>
+        <button class="btn btn-secondary" id="import-csv-btn">Import from CSV</button>
+        <button class="btn btn-ghost" id="csv-template-btn">Download CSV template</button>
+      </div>
+      <input type="file" id="csv-file-input" accept=".csv,text/csv" hidden />
       <div id="new-set-form-wrap" hidden style="margin-top:16px;"></div>
     </div>
   `);
+}
+
+// ---------- CSV import ----------
+// Expects a header row with section,question,answer columns (any order,
+// case-insensitive); everything downstream reuses the same
+// {title, track, sections:[{label, questions:[{q,a}]}]} shape the manual
+// upload form builds, so it goes through the same POST /api/question-sets.
+function parseCsv(text) {
+  const rows = [];
+  let row = [];
+  let field = "";
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++; } else { inQuotes = false; }
+      } else {
+        field += c;
+      }
+    } else if (c === '"') {
+      inQuotes = true;
+    } else if (c === ",") {
+      row.push(field); field = "";
+    } else if (c === "\n") {
+      row.push(field); rows.push(row); row = []; field = "";
+    } else if (c !== "\r") {
+      field += c;
+    }
+  }
+  if (field.length || row.length) { row.push(field); rows.push(row); }
+  return rows.filter((r) => r.some((c) => c.trim() !== ""));
+}
+
+function csvRowsToSections(rows) {
+  if (rows.length === 0) return { error: "The CSV file is empty." };
+  const header = rows[0].map((h) => h.trim().toLowerCase());
+  const secIdx = header.indexOf("section");
+  const qIdx = header.indexOf("question");
+  const aIdx = header.indexOf("answer");
+  if (secIdx === -1 || qIdx === -1 || aIdx === -1) {
+    return { error: 'The first row must be a header with "section", "question", and "answer" columns.' };
+  }
+  const sectionsMap = new Map();
+  let skipped = 0;
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    const label = (r[secIdx] || "").trim();
+    const q = (r[qIdx] || "").trim();
+    const a = (r[aIdx] || "").trim();
+    if (!label || !q || !a) { skipped++; continue; }
+    if (!sectionsMap.has(label)) sectionsMap.set(label, []);
+    sectionsMap.get(label).push({ q, a });
+  }
+  const sections = Array.from(sectionsMap.entries()).map(([label, questions]) => ({ label, questions }));
+  if (sections.length === 0) return { error: "No complete section/question/answer rows found." };
+  return { sections, skipped };
+}
+
+function downloadCsvTemplate() {
+  const csv = [
+    "section,question,answer",
+    '"Behavioral","Tell me about a time you disagreed with a teammate.","Frame it as a structured disagreement with a resolution, not a conflict story."',
+    '"Behavioral","Tell me about a project that failed.","Own the failure briefly, then focus on what changed afterward."',
+    '"System Design","How would you design a URL shortener?","Cover the hashing scheme, storage, and read/write scaling trade-offs."',
+  ].join("\n");
+  downloadBlob("question-set-template.csv", csv, "text/csv");
 }
 
 function renderSetStatusPill(set) {
@@ -358,22 +445,97 @@ function buildNewSetForm() {
   return wrap;
 }
 
+function buildCsvPreviewForm(sections, skipped, defaultTitle) {
+  const questionCount = sections.reduce((n, s) => n + s.questions.length, 0);
+  const wrap = el(`
+    <div>
+      <p class="section-sub">Found ${sections.length} section${sections.length === 1 ? "" : "s"}, ${questionCount} question${questionCount === 1 ? "" : "s"}${skipped ? ` (${skipped} incomplete row${skipped === 1 ? "" : "s"} skipped)` : ""}.</p>
+      <label class="field" style="margin-top:10px;">
+        <span>Set title</span>
+        <input type="text" id="csv-set-title" value="${escapeHtml(defaultTitle)}" />
+      </label>
+      <label class="field">
+        <span>Track (optional)</span>
+        <input type="text" id="csv-set-track" placeholder="e.g. tech" />
+      </label>
+      <p class="form-error" id="csv-set-error" hidden></p>
+      <div class="q-actions" style="margin-top:10px;">
+        <button type="button" class="btn btn-primary" id="csv-submit-btn">Import</button>
+        <button type="button" class="btn btn-ghost" id="csv-cancel-btn">Cancel</button>
+      </div>
+    </div>
+  `);
+  return wrap;
+}
+
 function wireQuestionSetsCard(view) {
   const listEl = $("#my-sets-list", view);
   loadMySets(listEl);
 
   const newSetBtn = $("#new-set-btn", view);
+  const importCsvBtn = $("#import-csv-btn", view);
+  const csvFileInput = $("#csv-file-input", view);
+  const csvTemplateBtn = $("#csv-template-btn", view);
   const formWrap = $("#new-set-form-wrap", view);
+
+  csvTemplateBtn.addEventListener("click", downloadCsvTemplate);
+  importCsvBtn.addEventListener("click", () => csvFileInput.click());
+
+  csvFileInput.addEventListener("change", async () => {
+    const file = csvFileInput.files[0];
+    csvFileInput.value = "";
+    if (!file) return;
+    const text = await file.text();
+    const { sections, error, skipped } = csvRowsToSections(parseCsv(text));
+    if (error) { toast(error); return; }
+
+    const defaultTitle = file.name.replace(/\.csv$/i, "");
+    formWrap.innerHTML = "";
+    formWrap.appendChild(buildCsvPreviewForm(sections, skipped, defaultTitle));
+    formWrap.hidden = false;
+    newSetBtn.hidden = true;
+    importCsvBtn.hidden = true;
+
+    $("#csv-cancel-btn", formWrap).addEventListener("click", () => {
+      formWrap.hidden = true;
+      newSetBtn.hidden = false;
+      importCsvBtn.hidden = false;
+    });
+
+    $("#csv-submit-btn", formWrap).addEventListener("click", async () => {
+      const errBox = $("#csv-set-error", formWrap);
+      errBox.hidden = true;
+      const title = $("#csv-set-title", formWrap).value.trim();
+      const track = $("#csv-set-track", formWrap).value.trim();
+      try {
+        await api("/api/question-sets", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ title, track, sections }),
+        });
+        toast("Question set imported.");
+        formWrap.hidden = true;
+        newSetBtn.hidden = false;
+        importCsvBtn.hidden = false;
+        loadMySets(listEl);
+      } catch (err) {
+        errBox.textContent = err.message;
+        errBox.hidden = false;
+      }
+    });
+  });
 
   newSetBtn.addEventListener("click", () => {
     formWrap.innerHTML = "";
     formWrap.appendChild(buildNewSetForm());
     formWrap.hidden = false;
     newSetBtn.hidden = true;
+    importCsvBtn.hidden = true;
 
     $("#cancel-set-btn", formWrap).addEventListener("click", () => {
       formWrap.hidden = true;
       newSetBtn.hidden = false;
+      importCsvBtn.hidden = false;
     });
 
     $("#submit-set-btn", formWrap).addEventListener("click", async () => {
@@ -398,6 +560,7 @@ function wireQuestionSetsCard(view) {
         toast("Question set uploaded.");
         formWrap.hidden = true;
         newSetBtn.hidden = false;
+        importCsvBtn.hidden = false;
         loadMySets(listEl);
       } catch (err) {
         errBox.textContent = err.message;

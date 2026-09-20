@@ -41,6 +41,38 @@ export async function render() {
     toast(err.message);
   }
   paint(events);
+  loadInsight();
+}
+
+function buildInsightCard() {
+  return el(`
+    <div class="card">
+      <div class="group-days">AI-generated</div>
+      <div class="section-title" style="font-size:16px;margin-top:2px;">Your coaching insight</div>
+      <div id="insight-body" style="margin-top:10px;"><p class="section-sub">Generating your insight…</p></div>
+    </div>
+  `);
+}
+
+async function loadInsight() {
+  const body = $("#insight-body");
+  if (!body) return;
+  try {
+    const data = await api("/api/stats/insight");
+    if (data.limited) {
+      body.innerHTML = "";
+      body.appendChild(el(`<p class="section-sub">${escapeHtml(data.message)}</p>`));
+      return;
+    }
+    body.innerHTML = "";
+    body.appendChild(el(`<p style="font-size:14px;line-height:1.6;">${escapeHtml(data.insight)}</p>`));
+    if (data.generatedBy) {
+      body.appendChild(el(`<p class="section-sub" style="margin-top:8px;">via ${escapeHtml(data.generatedBy)}${data.cached ? " · today's insight, cached" : ""}</p>`));
+    }
+  } catch (err) {
+    body.innerHTML = "";
+    body.appendChild(el(`<p class="form-error">${escapeHtml(err.message)}</p>`));
+  }
 }
 
 function paint(events) {
@@ -63,6 +95,8 @@ function paint(events) {
       <div class="stat-tile"><div class="stat-tile-value">${events.length}</div><div class="stat-tile-label">Logged actions</div></div>
     </div>
   `));
+
+  view.appendChild(buildInsightCard());
 
   const reviewEvents = events.filter((e) => e.event_type === "review" && e.result).slice().reverse();
 

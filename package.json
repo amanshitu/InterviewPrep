@@ -15,6 +15,8 @@
     "db:migrate:remote:0003": "wrangler d1 execute interview-prep-db --remote --file=./migrations/0003_relational_content.sql",
     "db:seed:local": "wrangler d1 execute interview-prep-db --local --file=./migrations/seed_official_bank.sql",
     "db:seed:remote": "wrangler d1 execute interview-prep-db --remote --file=./migrations/seed_official_bank.sql",
+    "db:migrate:local:0004": "wrangler d1 execute interview-prep-db --local --file=./migrations/0004_ai_usage_insights.sql",
+    "db:migrate:remote:0004": "wrangler d1 execute interview-prep-db --remote --file=./migrations/0004_ai_usage_insights.sql",
     "tail": "wrangler tail"
   },
   "devDependencies": {

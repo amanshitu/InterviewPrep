@@ -912,7 +912,9 @@ async function handleGetReview(request, env, user) {
 // ---------- user-submitted question sets ----------
 
 async function handleCreateQuestionSet(request, env, user) {
-  const parsed = await readJsonBody(request, 80000);
+  // Raised from 80000 so a CSV-imported set (client-parsed into this same
+  // JSON shape) with a few hundred rows still fits.
+  const parsed = await readJsonBody(request, 300000);
   if (!parsed.ok) return json({ error: parsed.error }, { status: parsed.status });
   const body = parsed.body;
   const title = (body.title || "").toString().trim();
@@ -1151,26 +1153,73 @@ async function callAnthropic(apiKey, prompt) {
   return data.content && data.content[0] && data.content[0].text;
 }
 
+// ---------- AI usage capping ----------
+// The shared Workers AI free tier is one pool for the whole account, so
+// one user completing hundreds of brand-new questions in a day could
+// eat everyone else's quota. BYOK users pay for (and are limited by)
+// their own key, so the cap only applies when using the shared default.
+const FREE_AI_DAILY_CAP = 20;
+
+function usesByok(user) {
+  return !!(user.aiProvider && user.aiProvider !== "workers-ai" && user.aiKeyCiphertext);
+}
+
+// Atomically increments today's usage counter iff it's under the cap —
+// the conditional UPDATE either changes a row or it doesn't, so this is
+// race-safe under concurrent requests (unlike a read-then-write check).
+async function checkAndIncrementAiUsage(env, userId, today) {
+  await env.DB.prepare("INSERT INTO ai_usage (user_id, date, count) VALUES (?, ?, 0) ON CONFLICT(user_id, date) DO NOTHING")
+    .bind(userId, today)
+    .run();
+  const result = await env.DB.prepare("UPDATE ai_usage SET count = count + 1 WHERE user_id = ? AND date = ? AND count < ?")
+    .bind(userId, today, FREE_AI_DAILY_CAP)
+    .run();
+  const allowed = !!(result.meta && result.meta.changes > 0);
+  const row = await env.DB.prepare("SELECT count FROM ai_usage WHERE user_id = ? AND date = ?").bind(userId, today).first();
+  return { allowed, used: (row && row.count) || 0, cap: FREE_AI_DAILY_CAP };
+}
+
+async function handleGetAiUsage(request, env, user) {
+  if (usesByok(user)) return json({ unlimited: true, used: 0, cap: null });
+  const today = todayDateStr();
+  const row = await env.DB.prepare("SELECT count FROM ai_usage WHERE user_id = ? AND date = ?").bind(user.id, today).first();
+  return json({ unlimited: false, used: (row && row.count) || 0, cap: FREE_AI_DAILY_CAP });
+}
+
+// Calls whichever provider the user is configured for. When using the
+// shared Workers AI default, this first spends one unit of the daily
+// cap — if the cap is already used up, returns null without calling
+// anything (the caller falls back to a generic response and, for
+// cacheable results, must NOT persist that fallback permanently).
+async function callConfiguredAi(env, user, prompt, label) {
+  if (usesByok(user)) {
+    try {
+      const apiKey = await decryptSecret(env, user.aiKeyCiphertext, user.aiKeyIv);
+      const raw = user.aiProvider === "anthropic" ? await callAnthropic(apiKey, prompt) : await callOpenAi(apiKey, prompt);
+      return { raw, generatedBy: user.aiProvider, capped: false };
+    } catch (err) {
+      console.error(`[${label}] provider=${user.aiProvider} error=${err && err.message ? err.message : err}`);
+      return { raw: null, generatedBy: user.aiProvider, capped: false };
+    }
+  }
+
+  const usage = await checkAndIncrementAiUsage(env, user.id, todayDateStr());
+  if (!usage.allowed) {
+    return { raw: null, generatedBy: "workers-ai", capped: true };
+  }
+  try {
+    const raw = await callWorkersAi(env, prompt);
+    return { raw, generatedBy: "workers-ai", capped: false };
+  } catch (err) {
+    console.error(`[${label}] provider=workers-ai error=${err && err.message ? err.message : err}`);
+    return { raw: null, generatedBy: "workers-ai", capped: false };
+  }
+}
+
 async function generateMcq(env, user, question, answer) {
   const prompt = buildMcqPrompt(question, answer);
-  let raw = null;
-  let generatedBy = "workers-ai";
-  try {
-    if (user.aiProvider && user.aiKeyCiphertext && user.aiProvider !== "workers-ai") {
-      const apiKey = await decryptSecret(env, user.aiKeyCiphertext, user.aiKeyIv);
-      generatedBy = user.aiProvider;
-      raw = user.aiProvider === "anthropic" ? await callAnthropic(apiKey, prompt) : await callOpenAi(apiKey, prompt);
-    } else {
-      raw = await callWorkersAi(env, prompt);
-    }
-  } catch (err) {
-    // Swallow and fall back — an AI hiccup shouldn't break the daily test.
-    // If MCQs are unexpectedly low quality in production, `wrangler tail`
-    // will show "[mcq generation] provider=... error=..." lines from here.
-    console.error(`[mcq generation] provider=${generatedBy} error=${err && err.message ? err.message : err}`);
-    raw = null;
-  }
-  return { ...(parseMcqJson(raw) || fallbackMcq(answer)), generatedBy };
+  const { raw, generatedBy, capped } = await callConfiguredAi(env, user, prompt, "mcq generation");
+  return { ...(parseMcqJson(raw) || fallbackMcq(answer)), generatedBy, ephemeral: capped };
 }
 
 async function getOrCreateMcqVariant(env, user, question) {
@@ -1180,6 +1229,13 @@ async function getOrCreateMcqVariant(env, user, question) {
   if (existing) return { options: JSON.parse(existing.options_json), correctIndex: existing.correct_index };
 
   const generated = await generateMcq(env, user, question.q, question.a);
+  if (generated.ephemeral) {
+    // Rate-limited, not a real (if low-quality) AI answer — don't cache
+    // this permanently, so a later, uncapped request can generate it
+    // properly instead of every future user being stuck with a filler.
+    return { options: generated.options, correctIndex: generated.correctIndex };
+  }
+
   await env.DB.prepare(
     "INSERT INTO mcq_variants (question_id, options_json, correct_index, generated_by, generated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(question_id) DO NOTHING",
   )
@@ -1191,6 +1247,73 @@ async function getOrCreateMcqVariant(env, user, question) {
     .bind(question.id)
     .first();
   return { options: JSON.parse(row.options_json), correctIndex: row.correct_index };
+}
+
+// ---------- AI: personalized Stats insight (cached once per user/day) ----------
+
+async function handleGetStatsInsight(request, env, user) {
+  const today = todayDateStr();
+  const cached = await env.DB.prepare("SELECT insight, generated_by FROM ai_stats_insights WHERE user_id = ? AND date = ?")
+    .bind(user.id, today)
+    .first();
+  if (cached) return json({ insight: cached.insight, generatedBy: cached.generated_by, cached: true });
+
+  const rows = await env.DB.prepare(
+    `SELECT topic_id, result FROM activity_log
+     WHERE user_id = ? AND event_type = 'review' AND result IS NOT NULL
+     ORDER BY occurred_at DESC LIMIT 300`,
+  )
+    .bind(user.id)
+    .all();
+  const events = rows.results || [];
+
+  if (events.length < 3) {
+    return json({
+      insight: "Not enough review history yet for a personalized insight — keep completing daily reviews and check back.",
+      generatedBy: null,
+      cached: false,
+    });
+  }
+
+  const topicAgg = {};
+  events.forEach((e) => {
+    if (!e.topic_id) return;
+    topicAgg[e.topic_id] = topicAgg[e.topic_id] || { total: 0, again: 0 };
+    topicAgg[e.topic_id].total++;
+    if (e.result === "again") topicAgg[e.topic_id].again++;
+  });
+  const weakTopics = Object.entries(topicAgg)
+    .map(([label, v]) => ({ label, rate: v.again / v.total, total: v.total }))
+    .filter((x) => x.total >= 2)
+    .sort((a, b) => b.rate - a.rate)
+    .slice(0, 3);
+
+  const summary = `Current streak: ${user.streakCount || 0} days (longest ${user.streakLongest || 0}). Graded reviews so far: ${events.length}. Weakest topics: ${
+    weakTopics.length
+      ? weakTopics.map((t) => `${t.label} (marked "review again" on ${Math.round(t.rate * 100)}% of ${t.total} attempts)`).join("; ")
+      : "none stand out yet"
+  }.`;
+  const prompt = `You are a supportive interview-prep coach. Based on this user's stats, write a short, specific, encouraging insight (2-3 sentences, plain text, no markdown) and one concrete suggestion for what to focus on next.\n\nStats: ${summary}`;
+
+  const { raw, generatedBy, capped } = await callConfiguredAi(env, user, prompt, "stats insight");
+  if (capped) {
+    return json({
+      insight: null,
+      limited: true,
+      cap: FREE_AI_DAILY_CAP,
+      message: "You've used today's free AI insight/test-generation allowance — try again tomorrow, or set your own AI key in Settings for unlimited use.",
+    });
+  }
+
+  const insight = (raw && raw.trim().slice(0, 600)) || "Keep at it — steady daily review is what moves the needle most, and there isn't a clear weak spot yet to call out.";
+  await env.DB.prepare(
+    `INSERT INTO ai_stats_insights (user_id, date, insight, generated_by, generated_at) VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(user_id, date) DO UPDATE SET insight = excluded.insight, generated_by = excluded.generated_by, generated_at = excluded.generated_at`,
+  )
+    .bind(user.id, today, insight, generatedBy, new Date().toISOString())
+    .run();
+
+  return json({ insight, generatedBy, cached: false });
 }
 
 // ---------- daily multiple-choice test ----------
@@ -1358,6 +1481,12 @@ export default {
         }
         if (url.pathname === "/api/question-sets/mine" && request.method === "GET") {
           return applySecurityHeaders(await handleListMySets(request, env, user));
+        }
+        if (url.pathname === "/api/ai-usage" && request.method === "GET") {
+          return applySecurityHeaders(await handleGetAiUsage(request, env, user));
+        }
+        if (url.pathname === "/api/stats/insight" && request.method === "GET") {
+          return applySecurityHeaders(await handleGetStatsInsight(request, env, user));
         }
         if (url.pathname === "/api/question-sets/suggestions" && request.method === "GET") {
           return applySecurityHeaders(await handleListSuggestions(request, env, user));

@@ -82,8 +82,36 @@ function renderIcon(size) {
   return Buffer.concat([signature, chunk("IHDR", ihdr), chunk("IDAT", idat), chunk("IEND", Buffer.alloc(0))]);
 }
 
-[192, 512].forEach((size) => {
-  const outPath = path.join(OUT_DIR, `icon-${size}.png`);
-  fs.writeFileSync(outPath, renderIcon(size));
-  console.log(`Wrote ${outPath}`);
-});
+// A classic favicon.ico is still what some browsers/crawlers probe for
+// directly regardless of <link rel="icon">. ICO's format allows embedding
+// a plain PNG as one "image" entry (supported since Vista-era Windows and
+// every modern browser) — much simpler than hand-rolling BMP/DIB data.
+function buildIco(pngBuffer, size) {
+  const header = Buffer.alloc(6);
+  header.writeUInt16LE(0, 0); // reserved
+  header.writeUInt16LE(1, 2); // type: icon
+  header.writeUInt16LE(1, 4); // image count
+
+  const entry = Buffer.alloc(16);
+  entry[0] = size >= 256 ? 0 : size; // width (0 means 256)
+  entry[1] = size >= 256 ? 0 : size; // height
+  entry[2] = 0; // color count (0 = PNG/no palette)
+  entry[3] = 0; // reserved
+  entry.writeUInt16LE(1, 4); // planes
+  entry.writeUInt16LE(32, 6); // bit count
+  entry.writeUInt32LE(pngBuffer.length, 8); // bytes in resource
+  entry.writeUInt32LE(header.length + entry.length, 12); // offset
+
+  return Buffer.concat([header, entry, pngBuffer]);
+}
+
+const png32 = renderIcon(32);
+const png192 = renderIcon(192);
+const png512 = renderIcon(512);
+
+fs.writeFileSync(path.join(OUT_DIR, "icon-32.png"), png32);
+fs.writeFileSync(path.join(OUT_DIR, "icon-192.png"), png192);
+fs.writeFileSync(path.join(OUT_DIR, "icon-512.png"), png512);
+fs.writeFileSync(path.join(__dirname, "..", "public", "favicon.ico"), buildIco(png32, 32));
+
+console.log("Wrote icons/icon-32.png, icons/icon-192.png, icons/icon-512.png, favicon.ico");
