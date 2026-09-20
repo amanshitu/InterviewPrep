@@ -799,11 +799,29 @@ async function ensureTodayQueueFilled(env, user, today) {
 
 async function getTodayQueueQuestions(env, user, today) {
   const rows = await env.DB.prepare(
-    `SELECT q.id as id, q.q as q, q.a as a, q.topic_label as topic_label, q.set_id as set_id
+    `SELECT q.id as id, q.q as q, q.a as a, q.topic_label as topic_label, q.set_id as set_id,
+            p.status as status, p.last_result as last_result
      FROM user_question_progress p
      JOIN questions q ON q.id = p.question_id
      WHERE p.user_id = ? AND p.queued_for_date = ? AND p.status != 'done'
      ORDER BY q.topic_order ASC, q.sort_order ASC`,
+  )
+    .bind(user.id, today)
+    .all();
+  return rows.results || [];
+}
+
+// Today's already-completed questions, kept alongside the active list so
+// the UI can show a browsable "Completed today" section that survives a
+// page reload — otherwise a done question just vanishes from the queue
+// entirely, with no way to glance back at it without opening Daily Review.
+async function getTodayCompletedQuestions(env, user, today) {
+  const rows = await env.DB.prepare(
+    `SELECT q.id as id, q.q as q, q.a as a, q.topic_label as topic_label, p.last_shown_at as last_shown_at
+     FROM user_question_progress p
+     JOIN questions q ON q.id = p.question_id
+     WHERE p.user_id = ? AND p.queued_for_date = ? AND p.status = 'done'
+     ORDER BY p.last_shown_at DESC`,
   )
     .bind(user.id, today)
     .all();
@@ -815,6 +833,7 @@ async function handleGetTodayQueue(request, env, user) {
   await ensureTodayQueueFilled(env, user, today);
   const ledger = await getOrCreateTodayLedger(env, user.id, user.dailyQuota, today);
   const questions = await getTodayQueueQuestions(env, user, today);
+  const completedQuestions = await getTodayCompletedQuestions(env, user, today);
   const target = ledger.base_quota + ledger.extra_requested;
   return json({
     date: today,
@@ -822,6 +841,7 @@ async function handleGetTodayQueue(request, env, user) {
     completed: ledger.completed,
     remaining: Math.max(0, target - ledger.completed),
     questions,
+    completedQuestions,
   });
 }
 
@@ -872,6 +892,49 @@ async function handleCompleteQuestion(request, env, user) {
   const topicRow = await env.DB.prepare("SELECT topic_label FROM questions WHERE id = ?").bind(questionId).first();
   await env.DB.prepare(
     "INSERT INTO activity_log (user_id, occurred_at, event_type, topic_id, question_id, result) VALUES (?, ?, 'reveal', ?, ?, NULL)",
+  )
+    .bind(user.id, now, topicRow ? topicRow.topic_label : null, questionId)
+    .run();
+
+  return json({ ok: true });
+}
+
+// The "Review again soon" counterpart to completing a question — used on
+// the Today page for a question the user has looked at but doesn't want
+// to mark done yet. Deliberately does NOT touch status='done', the daily
+// ledger, or the streak: the question stays in today's active queue (and
+// naturally carries over to tomorrow via the existing backlog-priority
+// rule in ensureTodayQueueFilled) rather than counting as finished. Reuses
+// the same last_result='again' signal the Daily Review page's "Review
+// again soon" already writes, so it also feeds weakest-topic/accuracy
+// stats identically.
+async function handleFlagQuestionForReview(request, env, user) {
+  const parsed = await readJsonBody(request, 2000);
+  if (!parsed.ok) return json({ error: parsed.error }, { status: parsed.status });
+  const questionId = (parsed.body.question_id || "").toString();
+  if (!questionId) return json({ error: "Missing question_id." }, { status: 400 });
+
+  const today = todayDateStr(user.timezone);
+  const now = new Date().toISOString();
+  await getOrCreateTodayLedger(env, user.id, user.dailyQuota, today);
+
+  await env.DB.prepare(
+    `INSERT INTO user_question_progress (user_id, question_id, status, queued_for_date, first_shown_at, last_shown_at, times_shown, correct_streak, last_result)
+     VALUES (?, ?, 'shown', ?, ?, ?, 1, 0, 'again')
+     ON CONFLICT(user_id, question_id) DO UPDATE SET
+       status = 'shown',
+       first_shown_at = COALESCE(user_question_progress.first_shown_at, excluded.first_shown_at),
+       last_shown_at = excluded.last_shown_at,
+       times_shown = user_question_progress.times_shown + 1,
+       correct_streak = 0,
+       last_result = 'again'`,
+  )
+    .bind(user.id, questionId, today, now, now)
+    .run();
+
+  const topicRow = await env.DB.prepare("SELECT topic_label FROM questions WHERE id = ?").bind(questionId).first();
+  await env.DB.prepare(
+    "INSERT INTO activity_log (user_id, occurred_at, event_type, topic_id, question_id, result) VALUES (?, ?, 'review', ?, ?, 'again')",
   )
     .bind(user.id, now, topicRow ? topicRow.topic_label : null, questionId)
     .run();
@@ -1839,6 +1902,9 @@ export default {
         }
         if (url.pathname === "/api/questions/complete" && request.method === "POST") {
           return applySecurityHeaders(await handleCompleteQuestion(request, env, user));
+        }
+        if (url.pathname === "/api/questions/flag-review" && request.method === "POST") {
+          return applySecurityHeaders(await handleFlagQuestionForReview(request, env, user));
         }
         if (url.pathname === "/api/questions/request-more" && request.method === "POST") {
           return applySecurityHeaders(await handleRequestMore(request, env, user));

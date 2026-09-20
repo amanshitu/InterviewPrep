@@ -357,7 +357,7 @@ Solution: native ES modules (`<script type="module">` + dynamic `import()`), whi
 
 ## Phase 4.3 — typed toasts (success / error / warning)
 
-**Status: done, deployed.**
+**Status: implemented and locally verified; committed but deliberately left undeployed (user's choice) as of 2026-09-21.**
 
 | Item | Status |
 |---|---|
@@ -366,8 +366,28 @@ Solution: native ES modules (`<script type="module">` + dynamic `import()`), whi
 | Swept every existing `toast(...)` call site across the app (home, review, test, stats, admin, settings — about.js has none) and classified each: server/network failures → error, completed actions (imported, uploaded, approved, exported, subscribed, copied…) → success, and soft/non-blocking nudges (missing input before a click, AI quota exhausted with a working fallback, clipboard access failing but text still selected) → warning | Done |
 | Removed the now-unused plain `toast` import from every file where every call site got a specific type | Done |
 | Local verification (Playwright): triggered one of each type (export progress → success, empty-resume click → warning, malformed CSV import → error, AI-fallback path → warning, manual set upload → success) and confirmed both the CSS class and message text on `#toast` each time; screenshotted the success (green) and warning (amber) pills to confirm the colors actually render correctly in both the base and dark-mode CSS paths | Done |
-| Deploy | Done |
+| Deploy | Not yet — pending |
 
 **Design notes:**
 - The dark-mode/system-default override rule for `.toast` (`:root:not([data-theme="light"]) .toast { ... }`) isn't inside a `prefers-color-scheme` media query in this file — it's unconditional whenever `data-theme` isn't explicitly `"light"`, which was already true before this phase and not something this change altered. Because that rule's selector specificity (three combined selectors) is higher than a plain `.toast-success` class alone, the type-modifier rules had to be duplicated under that same `:root:not([data-theme="light"])` prefix to actually win the cascade in the default/dark state — a plain lower-specificity `.toast-success` rule placed after it in source order would have silently lost.
 - "Rejected." (in the admin approve/reject flow) is styled as `toastSuccess`, not a negative color, since the color communicates "this action completed without error," not "this is good news for the submitter" — kept consistent with "Approved" using the same styling logic.
+
+## Phase 4.4 — explicit "Got it" / "Review again soon" on Today's queue, persisted "Completed today" section
+
+**Status: implemented and locally verified; not yet deployed.**
+
+| Item | Status |
+|---|---|
+| Revealing a question's model answer on the Today page no longer auto-marks it complete — it now shows two explicit actions: "Got it" (marks done) and "Review again soon" (keeps it active) | Done |
+| "Review again soon" doesn't touch `status='done'`, the daily ledger, or the streak — the question stays in today's active list (and naturally carries over to tomorrow via the existing backlog-priority rule if still unresolved) rather than counting as finished | Done |
+| New `POST /api/questions/flag-review` endpoint sets `status='shown'` and `last_result='again'` (the same signal the Daily Review page's own "Review again soon" already writes), logging a `review`/`again` activity row so it also feeds the existing weakest-topic/accuracy stats identically to a spaced-repetition miss | Done |
+| A flagged question shows a small "Needs review" tag and, on a later page load, is already revealed (no need to re-click "Show model answer") — giving the previously-unused `'shown'` status column real meaning for the first time | Done |
+| New persisted "Completed today" section: `GET /api/queue/today` now also returns `completedQuestions` (today's `status='done'` rows), rendered as a collapsible card below the active list — so completed questions don't just vanish from the page, they're still browsable (with their answer already shown) until midnight, surviving a reload | Done |
+| A flagged-for-review question can still later be marked "Got it" — the two actions aren't mutually exclusive across time, they're just "what to do right now" | Done |
+| Local verification (Playwright, both desktop and mobile viewports): revealed a question, flagged it for review, confirmed the tag and both buttons persist after reload with the answer already visible; revealed a second question, marked it complete, confirmed it moved into a "Completed today (1)" collapsible section that also survives reload; confirmed the completed item shows a green "Done" pill and its full answer, and that the active list's still-untouched questions are unaffected | Done |
+| Deploy | Not yet — pending |
+
+**Design notes:**
+- Deliberately did *not* add a way to pull a question back out of "Completed today" into "needs review" — that would require decrementing `daily_quota_ledger.completed` and the user's streak bump to stay consistent, and re-reading the request, "so I can review them if required" reads more plausibly as "so I can browse back and re-check the answer" than "so I can un-complete it." The completed section is read-only by design; revisiting that trade-off is a reasonable follow-up if actually wanted.
+- The Daily Review page's spaced-repetition pool only draws from `status='done'` rows, so a question flagged "Review again soon" on the Today page (which deliberately stays `status != 'done'`) won't show up there until it's eventually marked "Got it" — it's meant to resurface in *today's own list* first, exactly as asked, not skip straight into the separate spaced-repetition feature.
+- Reused the exact same visual language (`btn-success`/`btn-warn`, "Got it"/"Review again soon") as the pre-existing Daily Review page instead of inventing new terminology, so the concept reads as one consistent mechanic across both places rather than two similar-but-differently-worded features.
