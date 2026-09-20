@@ -208,6 +208,25 @@ Solution: native ES modules (`<script type="module">` + dynamic `import()`), whi
 - **Nothing is persisted or sent by this app.** The resume text lives only in the browser for the duration of building the prompt. A line in the UI says so explicitly, and that pasting the prompt into ChatGPT/Claude sends it there under the user's own account, not through this app.
 - **Direct in-app generation stays a documented option for later** — if there's real demand for skipping the copy/paste round trip, it would need its own usage-cap accounting (a resume-scale generation is a much bigger ask than one MCQ) and likely one AI call per category rather than one big call, to stay within smaller models' output limits.
 
+## Phase 3.6 — AI-suggested target role, larger resume input
+
+**Status: done, deployed.** Two follow-ups to Phase 3.5's resume prompt builder.
+
+| Item | Status |
+|---|---|
+| Resume textarea: `maxlength` 8000 → 24000 (tripled, as requested) | Done |
+| `POST /api/resume/suggest-role` — small AI call, resume text → suggested target role | Done |
+| Settings: "Suggest from resume" button next to the target role field, always editable | Done |
+| Local verification (curl: empty-input 400, cap-exceeded 429 with friendly message, AI-error 502 fallback; Playwright: button states, graceful error display, role field stays editable) | Done |
+| Real Workers AI call verified live in production | Done |
+| Deploy | Done |
+
+**This reintroduces an AI call from the app for one small piece — not the deferred "generate 40-60 Q&A" path.** Phase 3.5 locked in "prompt-assist only, no AI call from this app" for the *bulk question generation* specifically, because that's a large, expensive, multi-question call that would need its own usage-cap accounting. Suggesting a single role from a resume is a tiny, cheap, one-line-output call — the same scale as MCQ generation or the Stats insight — so it reuses the existing `callConfiguredAi`/`FREE_AI_DAILY_CAP`/BYOK infra directly with no new design needed. The bulk generation itself is still prompt-assist only; this just makes the "target role" input smarter, with the user always free to override it.
+
+**Design notes:**
+- Resume text passed to this endpoint is not persisted — it exists only for the duration of the request, same as the client-side prompt builder.
+- A capped or failed suggestion degrades gracefully (clear inline error, button re-enabled) rather than blocking the flow — the target role field is always just a normal editable text input, so the user can type one manually regardless of whether the suggestion succeeded.
+
 **Known trade-offs, not blocking:**
 - PWA icons are a flat brand-color square with a checkmark, generated programmatically — functional (satisfies installability requirements) but not real designed artwork. Swap `public/icons/*.png` for real icons later if desired; `scripts/generate-icons.js` isn't needed once you do.
 - The reject-reason prompt in the Admin view uses the browser's native `prompt()` rather than a custom modal — simplest thing that works for a low-traffic, admin-only interaction.

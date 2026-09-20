@@ -698,12 +698,17 @@ function buildResumePromptCard() {
       <p class="section-sub" style="margin-top:6px;">Paste your resume and target role to get a ready-to-use prompt for ChatGPT or Claude — it'll reply with categorized interview questions and detailed model answers you can import right below.</p>
       <label class="field" style="margin-top:14px;">
         <span>Resume text</span>
-        <textarea id="resume-text" rows="8" maxlength="8000" placeholder="Paste your resume text here (copy it out of your PDF or Word document)."></textarea>
-        <small>Stays in your browser — only used to build the prompt below. Pasting that prompt into ChatGPT/Claude sends it to that service under your own account, not through this app.</small>
+        <textarea id="resume-text" rows="16" maxlength="24000" placeholder="Paste your resume text here (copy it out of your PDF or Word document)."></textarea>
+        <small>Stays in your browser except for the one "Suggest target role" request below (which sends only the resume text, not stored) — building the prompt itself is local, and pasting that prompt into ChatGPT/Claude sends it there under your own account, not through this app.</small>
       </label>
       <label class="field">
         <span>Target role</span>
-        <input type="text" id="resume-target-role" value="${escapeHtml(defaultRole)}" placeholder="e.g. Engineering Manager" />
+        <div class="q-actions" style="margin-top:0;">
+          <input type="text" id="resume-target-role" value="${escapeHtml(defaultRole)}" placeholder="e.g. Engineering Manager" style="flex:1;min-width:160px;" />
+          <button type="button" class="btn btn-secondary btn-small" id="resume-suggest-role-btn">Suggest from resume</button>
+        </div>
+        <small>AI-suggested from your resume if you use the button — always editable, so you can type a different target role instead.</small>
+        <p class="form-error" id="resume-role-error" hidden></p>
       </label>
       <div class="field">
         <span>Categories</span>
@@ -780,6 +785,33 @@ function wireResumePromptCard(view) {
     if (!value) return;
     addResumeCategoryCheckbox(categoriesList, value, true);
     input.value = "";
+  });
+
+  $("#resume-suggest-role-btn", view).addEventListener("click", async () => {
+    const btn = $("#resume-suggest-role-btn", view);
+    const errBox = $("#resume-role-error", view);
+    errBox.hidden = true;
+    const resumeText = $("#resume-text", view).value.trim();
+    if (!resumeText) { toast("Paste your resume text first."); return; }
+
+    btn.disabled = true;
+    const originalLabel = btn.textContent;
+    btn.textContent = "Thinking…";
+    try {
+      const data = await api("/api/resume/suggest-role", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ resumeText }),
+      });
+      $("#resume-target-role", view).value = data.role;
+      toast("Suggested a target role from your resume — edit it if you'd like something else.");
+    } catch (err) {
+      errBox.textContent = err.message;
+      errBox.hidden = false;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = originalLabel;
+    }
   });
 
   $("#resume-generate-btn", view).addEventListener("click", () => {

@@ -1384,6 +1384,52 @@ async function handleGetStatsInsight(request, env, user) {
   return json({ insight, generatedBy, cached: false });
 }
 
+// ---------- AI: suggest a target role from resume text ----------
+// A small, cheap call (one short line of output) — unlike the deferred
+// "generate 40-60 Q&A from a resume" idea, this fits comfortably within
+// the existing FREE_AI_DAILY_CAP/BYOK infra with no new accounting.
+// Resume text itself is never persisted — it only passes through this
+// one request.
+
+function buildRoleSuggestionPrompt(resumeText) {
+  return `Based on the resume below, suggest the single best-suited next job target role/title for this person — their most logical next step, given their background and trajectory.
+
+Resume:
+"""
+${resumeText}
+"""
+
+Respond with ONLY the role title itself (e.g. "Senior Engineering Manager"), nothing else — no explanation, no quotes, no punctuation beyond the title, no markdown.`;
+}
+
+async function handleSuggestTargetRole(request, env, user) {
+  const parsed = await readJsonBody(request, 30000);
+  if (!parsed.ok) return json({ error: parsed.error }, { status: parsed.status });
+  const resumeText = (parsed.body.resumeText || "").toString().trim().slice(0, 24000);
+  if (!resumeText) return json({ error: "Paste your resume text first." }, { status: 400 });
+
+  const prompt = buildRoleSuggestionPrompt(resumeText);
+  const { raw, capped } = await callConfiguredAi(env, user, prompt, "role suggestion");
+  if (capped) {
+    return json(
+      { error: "You've used today's free AI allowance — try again tomorrow, set your own AI key in Settings, or just type a target role.", limited: true },
+      { status: 429 },
+    );
+  }
+  if (!raw) {
+    return json({ error: "Couldn't generate a suggestion right now — try again, or just type a target role." }, { status: 502 });
+  }
+
+  const role = raw
+    .toString()
+    .trim()
+    .replace(/^["'“”]+|["'“”.]+$/g, "")
+    .slice(0, 120);
+  if (!role) return json({ error: "Couldn't determine a role — try again or enter one manually." }, { status: 502 });
+
+  return json({ role });
+}
+
 // ---------- daily multiple-choice test ----------
 
 async function handleGetTodayTest(request, env, user) {
@@ -1555,6 +1601,9 @@ export default {
         }
         if (url.pathname === "/api/stats/insight" && request.method === "GET") {
           return applySecurityHeaders(await handleGetStatsInsight(request, env, user));
+        }
+        if (url.pathname === "/api/resume/suggest-role" && request.method === "POST") {
+          return applySecurityHeaders(await handleSuggestTargetRole(request, env, user));
         }
         if (url.pathname === "/api/question-sets/suggestions" && request.method === "GET") {
           return applySecurityHeaders(await handleListSuggestions(request, env, user));
