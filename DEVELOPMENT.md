@@ -329,3 +329,21 @@ Solution: native ES modules (`<script type="module">` + dynamic `import()`), whi
 - `approved_by`/`rejected_by` are two separate nullable columns rather than one shared "decided_by" column, matching the existing `approved_at`/`rejected_reason` pattern already on the table — the history query reconciles them with `COALESCE(approved_by, rejected_by)` when it needs "whoever acted" as a single value to join against `users`.
 - Fetched question lists are cached client-side per set id (`questionsCache` in `admin.js`) so toggling a review panel open/closed repeatedly, or re-expanding the same set from both the pending list and history, doesn't re-fetch every time.
 - The review-questions endpoint isn't restricted to pending sets — an admin can call it for any set id, since re-inspecting an already-decided set's content from the history view is exactly the kind of thing this feature exists for.
+
+## Phase 4.2 — AI-generated resume prompt
+
+**Status: implemented and locally verified; not yet deployed.**
+
+| Item | Status |
+|---|---|
+| "Generate prompt" on the resume-prompt card now calls a new `POST /api/resume/generate-prompt` endpoint instead of building the prompt from a pure client-side template — the AI writes a tailored introduction referencing the resume's actual companies, technologies, and seniority signals, so the questions/answers a user later gets back from pasting it into ChatGPT/Claude are genuinely specific rather than generic | Done |
+| Uses the same shared-quota/BYOK accounting as every other AI feature (`callConfiguredAi`) — no new cap or budget | Done |
+| The CSV-import contract (exact `section,question,answer` header, quoting rules, category list, count per category) stays deterministic, never AI-generated: the model is instructed to reproduce it verbatim, and the server checks for the literal header string in the reply and appends the rules block itself if it's missing, so a hallucinated or truncated reply can never produce an unimportable prompt | Done |
+| Graceful fallback: any failure calling the endpoint (AI capped for the day, or the call failing outright) falls back to the original deterministic client-side template (`buildResumePrompt`, kept in `settings.js` for exactly this) rather than leaving the button broken — strictly a superset of the old behavior, never a regression | Done |
+| Local verification (Playwright): confirmed the button shows a "Generating…" loading state, and — since Workers AI isn't reachable from local dev — confirmed the fallback path produces a working prompt with the correct CSV header and the resume's own detail embedded, with the button correctly re-enabled afterward | Done |
+| Live verification of the actual AI-generated path (Workers AI isn't available in local dev) | Pending deploy |
+| Deploy | Pending |
+
+**Design notes:**
+- Deliberately narrow scope for what's AI-generated: only the framing/analysis portion of the prompt, never the machine-readable output contract. This was a conscious reversal of the original Phase 3.5 decision to keep prompt-building "pure frontend, zero AI calls" — the user explicitly asked for AI-generated prompt content, and the risk (a broken CSV contract) is mitigated by the deterministic verbatim-reproduction instruction plus the server-side string-check-and-repair, rather than by avoiding AI involvement entirely.
+- Reuses the exact same cap/BYOK plumbing as `handleSuggestTargetRole` right above it in `worker.js` — one more short-output AI call, no new accounting needed.

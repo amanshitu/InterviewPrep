@@ -792,7 +792,7 @@ function buildResumePromptCard() {
       <label class="field" style="margin-top:14px;">
         <span>Resume text</span>
         <textarea id="resume-text" rows="16" maxlength="24000" placeholder="Paste your resume text here (copy it out of your PDF or Word document)."></textarea>
-        <small>Stays in your browser except for the one "Suggest target role" request below (which sends only the resume text, not stored) — building the prompt itself is local, and pasting that prompt into ChatGPT/Claude sends it there under your own account, not through this app.</small>
+        <small>Sent to generate a target-role suggestion and the tailored prompt below (never stored) — pasting that prompt into ChatGPT/Claude then sends it there under your own account, not through this app.</small>
       </label>
       <label class="field">
         <span>Target role</span>
@@ -907,7 +907,8 @@ function wireResumePromptCard(view) {
     }
   });
 
-  $("#resume-generate-btn", view).addEventListener("click", () => {
+  $("#resume-generate-btn", view).addEventListener("click", async () => {
+    const btn = $("#resume-generate-btn", view);
     const resumeText = $("#resume-text", view).value.trim();
     const targetRole = $("#resume-target-role", view).value.trim();
     const perCategory = parseInt($("#resume-per-category", view).value, 10) || 10;
@@ -917,9 +918,31 @@ function wireResumePromptCard(view) {
     if (!targetRole) { toast("Enter a target role."); return; }
     if (categories.length === 0) { toast("Pick at least one category."); return; }
 
-    const prompt = buildResumePrompt({ resumeText, targetRole, categories, perCategory });
-    $("#resume-prompt-text", view).value = prompt;
-    $("#resume-prompt-output", view).hidden = false;
+    btn.disabled = true;
+    const originalLabel = btn.textContent;
+    btn.textContent = "Generating…";
+    try {
+      const data = await api("/api/resume/generate-prompt", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ resumeText, targetRole, categories, perCategory }),
+      });
+      $("#resume-prompt-text", view).value = data.prompt;
+      $("#resume-prompt-output", view).hidden = false;
+    } catch (err) {
+      // Whatever went wrong (quota exhausted, the AI call itself failing),
+      // fall back to the local, deterministic template rather than leaving
+      // the user stuck — this was the entire previous behavior anyway, so
+      // it's strictly an upgrade, never a regression.
+      const prompt = buildResumePrompt({ resumeText, targetRole, categories, perCategory });
+      $("#resume-prompt-text", view).value = prompt;
+      $("#resume-prompt-output", view).hidden = false;
+      const reason = err.data && err.data.limited ? "Today's free AI allowance is used up" : "Couldn't reach the AI right now";
+      toast(`${reason} — used the standard prompt template instead.`);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = originalLabel;
+    }
   });
 
   $("#resume-copy-btn", view).addEventListener("click", async () => {

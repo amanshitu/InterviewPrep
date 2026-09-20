@@ -1587,6 +1587,90 @@ async function handleSuggestTargetRole(request, env, user) {
   return json({ role });
 }
 
+// ---------- AI: resume-tailored question-generation prompt ----------
+// Also a small, cheap call — the AI writes the *instructions* (tailored
+// to this resume's actual companies/tech/seniority), not the 40-60 Q&A
+// pairs themselves, so this reuses the same cap/BYOK accounting as the
+// role suggestion above rather than needing its own budget.
+
+// The part of the prompt that makes the reply actually importable — kept
+// deterministic (never AI-generated) since the CSV importer depends on
+// this exact contract. Used both as instructions to the model (so it
+// knows what to end its own output with) and as a fallback appended
+// server-side if the model's reply somehow drops or mangles it.
+function resumePromptFormatRules(categories, perCategory) {
+  const categoryList = categories.join(", ");
+  return `Generate exactly ${perCategory} questions for EACH of these categories: ${categoryList}.
+
+Output ONLY a CSV — no commentary, no markdown code fences, nothing before or after it. Use exactly this header row:
+section,question,answer
+
+Rules:
+- "section" must be exactly one of: ${categoryList}.
+- Each answer must be a detailed, senior-level model answer (3-6 sentences) that references relevant, specific aspects of the resume and target role — not generic advice.
+- If a field contains a comma, wrap the whole field in double quotes. If a field contains a double quote, escape it by doubling it ("").
+- Do not add row numbers, extra columns, or blank lines.`;
+}
+
+function buildPromptGenerationMetaPrompt({ resumeText, targetRole, categories, perCategory }) {
+  const categoryList = categories.join(", ");
+  return `You are an expert interview coach writing a prompt that will be pasted into a separate AI assistant (ChatGPT or Claude) to generate senior-level interview questions and model answers.
+
+Write that prompt now, tailored specifically to this person's actual background — reference their real companies, technologies, seniority signals, and career trajectory from the resume below, so the questions and answers the other assistant produces end up genuinely specific to them and their target role instead of generic advice.
+
+Target role: ${targetRole}
+
+Resume:
+"""
+${resumeText}
+"""
+
+The prompt you write MUST end with the following output-format instructions, reproduced exactly as given here — do not paraphrase, shorten, or omit any part of them, since another program will parse the reply as a CSV file:
+
+${resumePromptFormatRules(categories, perCategory)}
+
+Respond with ONLY the finished prompt text itself — no commentary about what you wrote, no markdown code fences, nothing before or after it.`;
+}
+
+async function handleGenerateResumePrompt(request, env, user) {
+  const parsed = await readJsonBody(request, 30000);
+  if (!parsed.ok) return json({ error: parsed.error }, { status: parsed.status });
+  const resumeText = (parsed.body.resumeText || "").toString().trim().slice(0, 24000);
+  const targetRole = (parsed.body.targetRole || "").toString().trim().slice(0, 120);
+  const categories = Array.isArray(parsed.body.categories)
+    ? parsed.body.categories.map((c) => String(c).trim()).filter(Boolean).slice(0, 15)
+    : [];
+  const perCategory = Math.max(3, Math.min(20, parseInt(parsed.body.perCategory, 10) || 10));
+
+  if (!resumeText) return json({ error: "Paste your resume text first." }, { status: 400 });
+  if (!targetRole) return json({ error: "Enter a target role." }, { status: 400 });
+  if (categories.length === 0) return json({ error: "Pick at least one category." }, { status: 400 });
+
+  const metaPrompt = buildPromptGenerationMetaPrompt({ resumeText, targetRole, categories, perCategory });
+  const { raw, capped } = await callConfiguredAi(env, user, metaPrompt, "resume prompt generation");
+  if (capped) {
+    return json(
+      { error: "You've used today's free AI allowance — try again tomorrow, or set your own AI key in Settings.", limited: true },
+      { status: 429 },
+    );
+  }
+  if (!raw) {
+    return json({ error: "Couldn't generate a prompt right now — try again." }, { status: 502 });
+  }
+
+  let prompt = raw
+    .toString()
+    .trim()
+    .replace(/^```[a-z]*\n?/i, "")
+    .replace(/```$/, "")
+    .trim();
+  if (!prompt.includes("section,question,answer")) {
+    prompt += `\n\n${resumePromptFormatRules(categories, perCategory)}`;
+  }
+
+  return json({ prompt: prompt.slice(0, 12000) });
+}
+
 // ---------- daily multiple-choice test ----------
 
 async function handleGetTodayTest(request, env, user) {
@@ -1767,6 +1851,9 @@ export default {
         }
         if (url.pathname === "/api/resume/suggest-role" && request.method === "POST") {
           return applySecurityHeaders(await handleSuggestTargetRole(request, env, user));
+        }
+        if (url.pathname === "/api/resume/generate-prompt" && request.method === "POST") {
+          return applySecurityHeaders(await handleGenerateResumePrompt(request, env, user));
         }
         if (url.pathname === "/api/question-sets/suggestions" && request.method === "GET") {
           return applySecurityHeaders(await handleListSuggestions(request, env, user));
