@@ -221,7 +221,8 @@ async function getUserFromRequest(request, env) {
             u.created_at as created_at, u.track as track, u.role as role, u.daily_quota as daily_quota,
             u.streak_count as streak_count, u.streak_longest as streak_longest, u.streak_last_active as streak_last_active,
             u.ai_provider as ai_provider, u.ai_key_ciphertext as ai_key_ciphertext, u.ai_key_iv as ai_key_iv,
-            u.headline as headline, u.years_experience as years_experience, u.bio as bio, u.timezone as timezone
+            u.headline as headline, u.years_experience as years_experience, u.bio as bio, u.timezone as timezone,
+            u.workers_ai_model as workers_ai_model
      FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ?`,
   )
     .bind(token)
@@ -258,6 +259,7 @@ function mapUserRow(row) {
     yearsExperience: row.years_experience,
     bio: row.bio,
     timezone: row.timezone,
+    workersAiModel: row.workers_ai_model,
   };
 }
 
@@ -277,6 +279,7 @@ function userPayload(user) {
     yearsExperience: typeof user.yearsExperience === "number" ? user.yearsExperience : null,
     bio: user.bio || "",
     timezone: user.timezone || "UTC",
+    workersAiModel: WORKERS_AI_MODEL_IDS.includes(user.workersAiModel) ? user.workersAiModel : DEFAULT_WORKERS_AI_MODEL,
   };
 }
 
@@ -393,7 +396,7 @@ async function handleLogin(request, env) {
   const user = await env.DB.prepare(
     `SELECT id, email, name, password_hash, salt, created_at, track, role, daily_quota,
             streak_count, streak_longest, streak_last_active,
-            ai_provider, ai_key_ciphertext, ai_key_iv, headline, years_experience, bio, timezone
+            ai_provider, ai_key_ciphertext, ai_key_iv, headline, years_experience, bio, timezone, workers_ai_model
      FROM users WHERE email = ?`,
   )
     .bind(email)
@@ -567,6 +570,10 @@ async function handleUpdateProfile(request, env, user) {
       ? (body.yearsExperience === null || body.yearsExperience === "" ? null : Math.max(0, Math.min(60, parseInt(body.yearsExperience, 10) || 0)))
       : user.yearsExperience;
   const timezone = body.timezone !== undefined ? normalizeTimezone(body.timezone) : user.timezone;
+  const workersAiModel =
+    body.workersAiModel !== undefined
+      ? (WORKERS_AI_MODEL_IDS.includes(body.workersAiModel) ? body.workersAiModel : DEFAULT_WORKERS_AI_MODEL)
+      : user.workersAiModel;
 
   let aiProvider = user.aiProvider;
   let aiKeyCiphertext = user.aiKeyCiphertext;
@@ -594,14 +601,14 @@ async function handleUpdateProfile(request, env, user) {
 
   await env.DB.prepare(
     `UPDATE users SET track = ?, daily_quota = ?, ai_provider = ?, ai_key_ciphertext = ?, ai_key_iv = ?,
-            headline = ?, bio = ?, years_experience = ?, timezone = ? WHERE id = ?`,
+            headline = ?, bio = ?, years_experience = ?, timezone = ?, workers_ai_model = ? WHERE id = ?`,
   )
-    .bind(track, dailyQuota, aiProvider, aiKeyCiphertext, aiKeyIv, headline, bio, yearsExperience, timezone, user.id)
+    .bind(track, dailyQuota, aiProvider, aiKeyCiphertext, aiKeyIv, headline, bio, yearsExperience, timezone, workersAiModel, user.id)
     .run();
 
   return json({
     user: userPayload({
-      ...user, track, dailyQuota, aiProvider, aiKeyCiphertext, aiKeyIv, headline, bio, yearsExperience, timezone,
+      ...user, track, dailyQuota, aiProvider, aiKeyCiphertext, aiKeyIv, headline, bio, yearsExperience, timezone, workersAiModel,
     }),
   });
 }
@@ -1085,9 +1092,29 @@ async function handleRejectSet(request, env, user, setId) {
 // ---------- AI: MCQ generation (once per question, cached forever) ----------
 
 const TEST_SIZE = 10;
-// @cf/meta/llama-3.1-8b-instruct (without -fp8) is deprecated as of 2026-05-30 —
-// verified live against this account's catalog via `wrangler ai models`.
-const WORKERS_AI_MODEL = "@cf/meta/llama-3.1-8b-instruct-fp8";
+
+// A curated, verified-live (via `wrangler ai models` against this account's
+// actual catalog) set of general-purpose text models spanning a few
+// different vendors/architectures — not just size variants of one family —
+// so a deprecation like @cf/meta/llama-3.1-8b-instruct's (without -fp8, on
+// 2026-05-30, which silently broke MCQ generation until caught in
+// production) doesn't take out every option at once. Users can switch in
+// Settings if their current pick starts erroring; this list is the
+// server-side allowlist, so keep public/pages/settings.js's copy in sync.
+const WORKERS_AI_MODELS = [
+  { id: "@cf/meta/llama-3.1-8b-instruct-fp8", label: "Llama 3.1 8B (default)" },
+  { id: "@cf/meta/llama-3.2-3b-instruct", label: "Llama 3.2 3B (smaller, faster)" },
+  { id: "@cf/mistral/mistral-7b-instruct-v0.2-lora", label: "Mistral 7B" },
+  { id: "@cf/google/gemma-2b-it-lora", label: "Gemma 2B (fastest)" },
+  { id: "@cf/zai-org/glm-4.7-flash", label: "GLM 4.7 Flash" },
+  { id: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", label: "Llama 3.3 70B (higher quality, costs more of your daily cap)" },
+];
+const WORKERS_AI_MODEL_IDS = WORKERS_AI_MODELS.map((m) => m.id);
+const DEFAULT_WORKERS_AI_MODEL = WORKERS_AI_MODELS[0].id;
+
+function resolveWorkersAiModel(user) {
+  return WORKERS_AI_MODEL_IDS.includes(user.workersAiModel) ? user.workersAiModel : DEFAULT_WORKERS_AI_MODEL;
+}
 
 function buildMcqPrompt(question, answer) {
   return `You are creating a multiple-choice quiz question from an interview question and its model answer.
@@ -1139,8 +1166,8 @@ function fallbackMcq(answer) {
   };
 }
 
-async function callWorkersAi(env, prompt) {
-  const result = await env.AI.run(WORKERS_AI_MODEL, {
+async function callWorkersAi(env, prompt, model) {
+  const result = await env.AI.run(model || DEFAULT_WORKERS_AI_MODEL, {
     messages: [{ role: "user", content: prompt }],
     temperature: 0.4,
   });
@@ -1235,19 +1262,25 @@ async function callConfiguredAi(env, user, prompt, label) {
   if (!usage.allowed) {
     return { raw: null, generatedBy: "workers-ai", capped: true };
   }
+  const model = resolveWorkersAiModel(user);
   try {
-    const raw = await callWorkersAi(env, prompt);
-    return { raw, generatedBy: "workers-ai", capped: false };
+    const raw = await callWorkersAi(env, prompt, model);
+    return { raw, generatedBy: "workers-ai", model, capped: false };
   } catch (err) {
-    console.error(`[${label}] provider=workers-ai error=${err && err.message ? err.message : err}`);
-    return { raw: null, generatedBy: "workers-ai", capped: false };
+    console.error(`[${label}] provider=workers-ai model=${model} error=${err && err.message ? err.message : err}`);
+    return { raw: null, generatedBy: "workers-ai", model, capped: false };
   }
 }
 
 async function generateMcq(env, user, question, answer) {
   const prompt = buildMcqPrompt(question, answer);
-  const { raw, generatedBy, capped } = await callConfiguredAi(env, user, prompt, "mcq generation");
-  return { ...(parseMcqJson(raw) || fallbackMcq(answer)), generatedBy, ephemeral: capped };
+  const { raw, generatedBy, model, capped } = await callConfiguredAi(env, user, prompt, "mcq generation");
+  // Record the specific model alongside the provider (e.g.
+  // "workers-ai:@cf/meta/llama-3.1-8b-instruct-fp8") so a future admin
+  // tool could identify and regenerate MCQs from a model that's since
+  // been deprecated, without needing to redo everything.
+  const generatedByDetailed = model ? `${generatedBy}:${model}` : generatedBy;
+  return { ...(parseMcqJson(raw) || fallbackMcq(answer)), generatedBy: generatedByDetailed, ephemeral: capped };
 }
 
 async function getOrCreateMcqVariant(env, user, question) {

@@ -2,6 +2,64 @@
 // sets (upload + suggestions), and data export.
 import { $, $all, el, escapeHtml, toast, formatDate, downloadBlob, api, state, renderShell, renderSidebar } from "../app.js";
 
+// Curated rather than the full ~400-zone IANA list — one representative
+// city per major region/business hub, ordered west to east. Labels are
+// hand-written (not derived from Intl's "short" timeZoneName) because
+// that's not guaranteed to produce a recognizable abbreviation like "IST"
+// consistently across engines — it often falls back to a raw GMT offset.
+const TIMEZONE_OPTIONS = [
+  { tz: "UTC", label: "UTC — Coordinated Universal Time" },
+  { tz: "Pacific/Honolulu", label: "HST — Hawaii" },
+  { tz: "America/Anchorage", label: "AKT — Alaska" },
+  { tz: "America/Los_Angeles", label: "PT — Pacific Time (US & Canada)" },
+  { tz: "America/Denver", label: "MT — Mountain Time (US & Canada)" },
+  { tz: "America/Chicago", label: "CT — Central Time (US & Canada)" },
+  { tz: "America/New_York", label: "ET — Eastern Time (US & Canada)" },
+  { tz: "America/Sao_Paulo", label: "BRT — Brasília Time" },
+  { tz: "Europe/London", label: "GMT/BST — United Kingdom" },
+  { tz: "Europe/Paris", label: "CET — Central Europe" },
+  { tz: "Europe/Athens", label: "EET — Eastern Europe" },
+  { tz: "Europe/Moscow", label: "MSK — Moscow" },
+  { tz: "Africa/Cairo", label: "EET — Egypt" },
+  { tz: "Africa/Johannesburg", label: "SAST — South Africa" },
+  { tz: "Asia/Dubai", label: "GST — UAE / Gulf" },
+  { tz: "Asia/Karachi", label: "PKT — Pakistan" },
+  { tz: "Asia/Kolkata", label: "IST — India" },
+  { tz: "Asia/Dhaka", label: "BST — Bangladesh" },
+  { tz: "Asia/Bangkok", label: "ICT — Thailand / Indochina" },
+  { tz: "Asia/Shanghai", label: "CST — China" },
+  { tz: "Asia/Singapore", label: "SGT — Singapore" },
+  { tz: "Asia/Tokyo", label: "JST — Japan" },
+  { tz: "Asia/Seoul", label: "KST — Korea" },
+  { tz: "Australia/Perth", label: "AWST — Western Australia" },
+  { tz: "Australia/Sydney", label: "AEST/AEDT — Eastern Australia" },
+  { tz: "Pacific/Auckland", label: "NZST/NZDT — New Zealand" },
+];
+
+// IANA has legacy aliases for the same zone (e.g. Asia/Calcutta ==
+// Asia/Kolkata) — a browser's auto-detected name and our curated list's
+// name can differ as strings while meaning the same thing. Canonicalize
+// both sides via Intl before comparing, so the friendly label still
+// matches instead of falling back to a raw, redundant-looking option.
+function canonicalTz(tz) {
+  try {
+    return new Intl.DateTimeFormat("en-US", { timeZone: tz }).resolvedOptions().timeZone;
+  } catch {
+    return tz;
+  }
+}
+
+function buildTimezoneOptionsHtml(currentTz) {
+  const canonicalCurrent = canonicalTz(currentTz);
+  const known = TIMEZONE_OPTIONS.some((o) => canonicalTz(o.tz) === canonicalCurrent);
+  const options = known
+    ? TIMEZONE_OPTIONS
+    : [...TIMEZONE_OPTIONS, { tz: currentTz, label: `${currentTz} (current)` }];
+  return options
+    .map((o) => `<option value="${escapeHtml(o.tz)}" ${canonicalTz(o.tz) === canonicalCurrent ? "selected" : ""}>${escapeHtml(o.label)}</option>`)
+    .join("");
+}
+
 export function render() {
   state.currentView = "settings";
   const currentUser = state.currentUser;
@@ -45,7 +103,7 @@ export function render() {
       </label>
       <label class="field">
         <span>Timezone</span>
-        <input type="text" id="settings-timezone" value="${escapeHtml(currentUser.timezone || "UTC")}" placeholder="e.g. America/New_York" />
+        <select id="settings-timezone">${buildTimezoneOptionsHtml(currentUser.timezone || "UTC")}</select>
         <small>Used so your daily quota, test, and AI usage reset at your own midnight, not UTC. Auto-detected at signup — change it if you're traveling.</small>
       </label>
       <label class="field">
@@ -191,9 +249,25 @@ export function render() {
 // ---------- AI provider (BYOK) ----------
 const AI_PROVIDER_LABELS = { "workers-ai": "Workers AI (free, default)", openai: "OpenAI", anthropic: "Anthropic" };
 
+// Must match the server-side allowlist (WORKERS_AI_MODELS in src/worker.js)
+// — a request naming a model outside this list falls back to the default
+// there regardless, but keeping the two in sync avoids a confusing mismatch
+// between what's shown here and what's actually used.
+const WORKERS_AI_MODEL_OPTIONS = [
+  { id: "@cf/meta/llama-3.1-8b-instruct-fp8", label: "Llama 3.1 8B (default)" },
+  { id: "@cf/meta/llama-3.2-3b-instruct", label: "Llama 3.2 3B (smaller, faster)" },
+  { id: "@cf/mistral/mistral-7b-instruct-v0.2-lora", label: "Mistral 7B" },
+  { id: "@cf/google/gemma-2b-it-lora", label: "Gemma 2B (fastest)" },
+  { id: "@cf/zai-org/glm-4.7-flash", label: "GLM 4.7 Flash" },
+  { id: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", label: "Llama 3.3 70B (higher quality, costs more of your daily cap)" },
+];
+
 function buildAiProviderCard() {
   const currentUser = state.currentUser;
   const provider = currentUser.aiProvider || "workers-ai";
+  const modelOptionsHtml = WORKERS_AI_MODEL_OPTIONS.map(
+    (m) => `<option value="${escapeHtml(m.id)}" ${m.id === currentUser.workersAiModel ? "selected" : ""}>${escapeHtml(m.label)}</option>`,
+  ).join("");
   return el(`
     <div class="card">
       <div class="section-title">AI provider</div>
@@ -207,6 +281,11 @@ function buildAiProviderCard() {
           <option value="openai" ${provider === "openai" ? "selected" : ""}>OpenAI</option>
           <option value="anthropic" ${provider === "anthropic" ? "selected" : ""}>Anthropic</option>
         </select>
+      </label>
+      <label class="field" id="workers-ai-model-field" ${provider === "workers-ai" ? "" : "hidden"}>
+        <span>Workers AI model</span>
+        <select id="workers-ai-model-select">${modelOptionsHtml}</select>
+        <small>If generation seems to be failing (falling back to generic distractors/insights), try a different model here.</small>
       </label>
       <label class="field" id="ai-key-field" ${provider === "workers-ai" ? "hidden" : ""}>
         <span>API key</span>
@@ -235,8 +314,10 @@ async function loadAiUsage(view) {
 function wireAiProviderCard(view) {
   const select = $("#ai-provider-select", view);
   const keyField = $("#ai-key-field", view);
+  const modelField = $("#workers-ai-model-field", view);
   select.addEventListener("change", () => {
     keyField.hidden = select.value === "workers-ai";
+    modelField.hidden = select.value !== "workers-ai";
   });
   loadAiUsage(view);
 
@@ -247,7 +328,7 @@ function wireAiProviderCard(view) {
     okBox.hidden = true;
     const aiProvider = select.value;
     const keyInput = $("#ai-api-key", view);
-    const body = { aiProvider };
+    const body = { aiProvider, workersAiModel: $("#workers-ai-model-select", view).value };
     if (aiProvider === "workers-ai") {
       body.aiApiKey = "";
     } else if (keyInput.value.trim()) {

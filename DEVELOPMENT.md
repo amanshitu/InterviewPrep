@@ -166,6 +166,27 @@ Solution: native ES modules (`<script type="module">` + dynamic `import()`), whi
 - Timezone is auto-detected via `Intl.DateTimeFormat().resolvedOptions().timeZone` in the browser and sent silently at signup; users only need to touch the field manually if traveling or if detection was wrong.
 - `mcq_variants`, `daily_test_results`, etc. are still all UTC-agnostic identifiers already (`date` is just a plain `YYYY-MM-DD` string) — the timezone-awareness lives entirely in *which* string gets computed as "today" for a given user, not in the schema.
 
+## Phase 3.4 — timezone dropdown, selectable Workers AI model
+
+**Status: done, deployed.** Two small follow-ups requested directly by the user.
+
+| Item | Status |
+|---|---|
+| Timezone: free-text input → curated `<select>` with friendly labels (e.g. "IST — India") | Done — 26 major-region entries, west to east; if a user's stored/detected zone isn't in the list, it's injected as an extra option instead of silently overwritten |
+| Migration `0006_workers_ai_model_choice.sql` (`users.workers_ai_model`) | Done |
+| Per-user selectable Workers AI model, 6 options across different vendors (Meta, Mistral, Google, Z.ai) | Done — direct response to the earlier model-deprecation incident: if one model breaks, a user can self-serve switch instead of waiting on a code fix |
+| Settings: "Workers AI model" dropdown, shown only when provider = Workers AI | Done |
+| Local verification (curl: default/switch/invalid-model fallback; Playwright: dropdown behavior, provider-switch show/hide, save+reload persistence) | Done |
+| Apply `0006` + deploy | Done |
+
+**Design notes:**
+- **Timezone alias handling**: IANA has legacy aliases for the same zone (`Asia/Calcutta` == `Asia/Kolkata`) — a browser's auto-detected name and the curated list's name can differ as strings while meaning the same thing. Both sides are canonicalized via `Intl.DateTimeFormat(...).resolvedOptions().timeZone` before comparing, so the friendly label still matches instead of falling back to a redundant raw-string option. Caught this exact case in testing (a dev machine reporting `Asia/Calcutta`) and fixed it before shipping.
+- **Model list is a server-side allowlist** (`WORKERS_AI_MODELS` in `src/worker.js`) — a request naming anything outside it falls back to the default regardless of what the client sends. `public/pages/settings.js` keeps its own copy in sync for the dropdown UI; a comment in each file points at the other.
+- **Model choice only applies to the shared Workers AI path**, not BYOK — OpenAI/Anthropic already have their own fixed model choice hardcoded per provider. The picker hides automatically when a BYOK provider is selected.
+- `mcq_variants.generated_by` now records the specific model too (e.g. `workers-ai:@cf/meta/llama-3.1-8b-instruct-fp8`), not just the provider name — so a future admin tool could identify and regenerate MCQs that came from a model that's since been deprecated. The Stats insight's `generated_by` stays provider-only, since that one is shown directly to the user and the extra detail wouldn't mean anything to them.
+
+**Also answered, no code change**: how to grant `role='admin'` — currently a direct SQL update (`UPDATE users SET role='admin' WHERE email=...`), no self-service UI by design. Offered to build a "Manage admins" section in the Admin view if wanted; not yet requested.
+
 **Known trade-offs, not blocking:**
 - PWA icons are a flat brand-color square with a checkmark, generated programmatically — functional (satisfies installability requirements) but not real designed artwork. Swap `public/icons/*.png` for real icons later if desired; `scripts/generate-icons.js` isn't needed once you do.
 - The reject-reason prompt in the Admin view uses the browser's native `prompt()` rather than a custom modal — simplest thing that works for a low-traffic, admin-only interaction.
