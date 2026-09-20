@@ -310,3 +310,22 @@ Solution: native ES modules (`<script type="module">` + dynamic `import()`), whi
 **Design notes:**
 - "Yours" and "total" reuse the same `user_question_sets` join pattern the queue-builder and `/api/stats/progress` already use for "what can this user see," rather than introducing a new visibility rule — kept as its own lightweight endpoint (two `COUNT(*)` queries, no joins beyond the one) rather than folding it into `/api/stats/progress`, since the header needs this on every page, not just Stats.
 - The pill is fetched once at boot and cached in `state.bankStats`, not re-fetched on every route change — it only changes when someone adds/subscribes to content, which is rare enough that an explicit `refreshBankStats()` call from those three action sites is simpler and cheaper than polling or re-fetching per navigation.
+
+## Phase 4.1 — admin question review + approval/rejection history
+
+**Status: done, deployed.**
+
+| Item | Status |
+|---|---|
+| Admin can expand "Review questions" on any pending set before deciding — shows every question and its model answer, grouped by topic, via a new `GET /api/admin/question-sets/:id/questions` endpoint | Done |
+| New "Review history" section on the Admin page listing every past decision (both approved and rejected sets): submitter, question count, who acted, when, and — for rejections — the reason | Done |
+| New `GET /api/admin/approval-history` endpoint backing it, self-joining `question_sets` to `users` twice (once for the submitter, once for whichever admin acted) | Done |
+| Migration `0008_set_review_audit.sql` adds `rejected_at`/`rejected_by` to `question_sets`, mirroring the `approved_at`/`approved_by` columns that already existed — `handleRejectSet` now records who rejected a set, not just why | Done |
+| "Review questions" is also available on each history row, not just pending ones, so an admin can re-check what a set actually contained after the fact | Done |
+| Local verification (Playwright): submitted a set, reviewed its questions before approving, confirmed it moved into history with the correct approver name/date; submitted and rejected a second set, confirmed the reason and rejecting admin's name appear in history; confirmed history sorts most-recent-decision-first and pre-existing rows from before this migration degrade gracefully (show "Rejected by unknown" rather than erroring, since old rejections never recorded an actor) | Done |
+| Deploy | Done |
+
+**Design notes:**
+- `approved_by`/`rejected_by` are two separate nullable columns rather than one shared "decided_by" column, matching the existing `approved_at`/`rejected_reason` pattern already on the table — the history query reconciles them with `COALESCE(approved_by, rejected_by)` when it needs "whoever acted" as a single value to join against `users`.
+- Fetched question lists are cached client-side per set id (`questionsCache` in `admin.js`) so toggling a review panel open/closed repeatedly, or re-expanding the same set from both the pending list and history, doesn't re-fetch every time.
+- The review-questions endpoint isn't restricted to pending sets — an admin can call it for any set id, since re-inspecting an already-decided set's content from the history view is exactly the kind of thing this feature exists for.

@@ -323,6 +323,7 @@ img { max-width: 100%; }
 .pill-not_started { background: var(--surface-2); color: var(--text-muted); }
 .pill-in_progress { background: var(--warn-soft); color: var(--warn); }
 .pill-done { background: var(--success-soft); color: var(--success); }
+.pill-rejected { background: var(--danger-soft); color: var(--danger); }
 
 .group-days { color: var(--text-muted); font-size: 12.5px; font-weight: 600; }
 
@@ -344,6 +345,7 @@ img { max-width: 100%; }
 .q-answer { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border); color: var(--text); font-size: 14px; line-height: 1.6; }
 .q-topic-tag { font-size: 11.5px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: .02em; }
 .q-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+.admin-review-panel { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 0; }
 
 .empty-state { text-align: center; padding: 40px 20px; color: var(--text-muted); }
 .empty-state svg { color: var(--border); margin-bottom: 10px; }

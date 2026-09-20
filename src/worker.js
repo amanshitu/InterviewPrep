@@ -1112,7 +1112,8 @@ async function handleApproveSet(request, env, user, setId) {
   const row = await env.DB.prepare("SELECT visibility FROM question_sets WHERE id = ?").bind(setId).first();
   if (!row || row.visibility !== "pending") return json({ error: "This set isn't pending review." }, { status: 400 });
   await env.DB.prepare(
-    "UPDATE question_sets SET visibility = 'shared', approved_at = ?, approved_by = ?, rejected_reason = NULL WHERE id = ?",
+    `UPDATE question_sets SET visibility = 'shared', approved_at = ?, approved_by = ?,
+            rejected_reason = NULL, rejected_at = NULL, rejected_by = NULL WHERE id = ?`,
   )
     .bind(new Date().toISOString(), user.id, setId)
     .run();
@@ -1125,10 +1126,44 @@ async function handleRejectSet(request, env, user, setId) {
   const reason = (parsed.body.reason || "").toString().trim().slice(0, 300) || "No reason given.";
   const row = await env.DB.prepare("SELECT visibility FROM question_sets WHERE id = ?").bind(setId).first();
   if (!row || row.visibility !== "pending") return json({ error: "This set isn't pending review." }, { status: 400 });
-  await env.DB.prepare("UPDATE question_sets SET visibility = 'rejected', rejected_reason = ? WHERE id = ?")
-    .bind(reason, setId)
+  await env.DB.prepare(
+    "UPDATE question_sets SET visibility = 'rejected', rejected_reason = ?, rejected_at = ?, rejected_by = ? WHERE id = ?",
+  )
+    .bind(reason, new Date().toISOString(), user.id, setId)
     .run();
   return json({ ok: true });
+}
+
+// Lets an admin inspect a set's actual questions before deciding — used
+// both from the pending queue (review before approving) and from the
+// history view (re-check what an already-decided set contained).
+async function handleAdminGetSetQuestions(request, env, user, setId) {
+  const rows = await env.DB.prepare(
+    "SELECT q, a, topic_label FROM questions WHERE set_id = ? ORDER BY topic_order ASC, sort_order ASC",
+  )
+    .bind(setId)
+    .all();
+  return json({ questions: rows.results || [] });
+}
+
+// Audit trail: every set that's been decided one way or the other, who
+// decided it, and how many questions were in it at that time.
+async function handleAdminApprovalHistory(request, env, user) {
+  const rows = await env.DB.prepare(
+    `SELECT qs.id as id, qs.title as title, qs.track as track, qs.visibility as visibility,
+            qs.created_at as created_at, qs.approved_at as approved_at, qs.rejected_at as rejected_at,
+            qs.rejected_reason as rejected_reason,
+            owner.name as owner_name, owner.email as owner_email,
+            actor.name as actor_name, actor.email as actor_email,
+            (SELECT COUNT(*) FROM questions WHERE set_id = qs.id) as question_count
+     FROM question_sets qs
+     LEFT JOIN users owner ON owner.id = qs.owner_user_id
+     LEFT JOIN users actor ON actor.id = COALESCE(qs.approved_by, qs.rejected_by)
+     WHERE qs.visibility IN ('shared', 'rejected') AND qs.owner_user_id IS NOT NULL
+     ORDER BY COALESCE(qs.approved_at, qs.rejected_at, qs.created_at) DESC
+     LIMIT 200`,
+  ).all();
+  return json({ history: rows.results || [] });
 }
 
 // ---------- AI: MCQ generation (once per question, cached forever) ----------
@@ -1754,6 +1789,15 @@ export default {
         if (url.pathname === "/api/admin/pending-sets" && request.method === "GET") {
           if (user.role !== "admin") return applySecurityHeaders(json({ error: "Forbidden." }, { status: 403 }));
           return applySecurityHeaders(await handleAdminPendingSets(request, env, user));
+        }
+        if (url.pathname === "/api/admin/approval-history" && request.method === "GET") {
+          if (user.role !== "admin") return applySecurityHeaders(json({ error: "Forbidden." }, { status: 403 }));
+          return applySecurityHeaders(await handleAdminApprovalHistory(request, env, user));
+        }
+        const adminSetQuestions = url.pathname.match(/^\/api\/admin\/question-sets\/([^/]+)\/questions$/);
+        if (adminSetQuestions && request.method === "GET") {
+          if (user.role !== "admin") return applySecurityHeaders(json({ error: "Forbidden." }, { status: 403 }));
+          return applySecurityHeaders(await handleAdminGetSetQuestions(request, env, user, adminSetQuestions[1]));
         }
 
         if (url.pathname === "/api/test/today" && request.method === "GET") {
