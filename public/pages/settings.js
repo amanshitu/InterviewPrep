@@ -1,6 +1,6 @@
 // Account, prep profile, AI provider (BYOK), password/sessions, question
 // sets (upload + suggestions), and data export.
-import { $, $all, el, escapeHtml, toast, formatDate, downloadBlob, api, state, renderShell, renderNav, renderAvatar } from "../app.js";
+import { $, $all, el, escapeHtml, toast, formatDate, downloadBlob, api, state, renderShell, renderNav, renderAvatar, refreshBankStats } from "../app.js";
 
 // Client-side resize keeps the uploaded picture small (well under the
 // server's MAX_AVATAR_DATA_URL_LENGTH backstop) without needing any file
@@ -364,7 +364,7 @@ function buildAiProviderCard() {
   return el(`
     <div class="card">
       <div class="section-title">AI provider</div>
-      <p class="section-sub" style="margin-top:6px;">Used to generate the daily multiple-choice test and your Stats coaching insight. Defaults to Cloudflare's free Workers AI (shared, capped per day) — set your own key for unlimited use.</p>
+      <p class="section-sub" style="margin-top:6px;">Used to generate the daily multiple-choice test and your Stats coaching insight. Defaults to our built-in AI (shared, capped per day) — set your own key for unlimited use.</p>
       <p class="section-sub" style="margin-top:10px;">Currently using: <strong>${escapeHtml(AI_PROVIDER_LABELS[provider] || provider)}</strong>${currentUser.hasAiKey ? " (your key)" : ""}</p>
       <p class="section-sub" id="ai-usage-line" style="margin-top:4px;">Checking today's AI usage…</p>
       <label class="field" style="margin-top:14px;">
@@ -714,6 +714,7 @@ function wireQuestionSetsCard(view) {
         newSetBtn.hidden = false;
         importCsvBtn.hidden = false;
         loadMySets(listEl);
+        refreshBankStats();
       } catch (err) {
         errBox.textContent = err.message;
         errBox.hidden = false;
@@ -758,6 +759,7 @@ function wireQuestionSetsCard(view) {
         newSetBtn.hidden = false;
         importCsvBtn.hidden = false;
         loadMySets(listEl);
+        refreshBankStats();
       } catch (err) {
         errBox.textContent = err.message;
         errBox.hidden = false;
@@ -968,6 +970,7 @@ async function loadSuggestions(container) {
           await api(`/api/question-sets/${btn.dataset.subscribe}/subscribe`, { method: "POST" });
           toast("Subscribed — it'll start showing up in your daily queue.");
           loadSuggestions(container);
+          refreshBankStats();
         } catch (err) {
           toast(err.message);
         }

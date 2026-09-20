@@ -12,6 +12,7 @@ export const state = {
   currentUser: null,
   currentView: "home",
   todayQueue: null, // { date, target, completed, remaining, questions } from /api/queue/today
+  bankStats: null, // { yours, total } from /api/questions/bank-count
 };
 
 // ---------- utils ----------
@@ -111,6 +112,21 @@ export function renderTopStats() {
   $("#streak-count").textContent = (state.currentUser.streak && state.currentUser.streak.count) || 0;
   if (state.todayQueue) {
     $("#progress-count").textContent = `${state.todayQueue.completed}/${state.todayQueue.target}`;
+  }
+  if (state.bankStats) {
+    $("#bank-count").textContent = `${state.bankStats.yours}/${state.bankStats.total}`;
+  }
+}
+
+// Called once at boot and again after anything that adds questions to the
+// bank (a CSV import, a manual upload) so the header pill doesn't need a
+// full page reload to reflect the new count.
+export async function refreshBankStats() {
+  try {
+    state.bankStats = await api("/api/questions/bank-count");
+    renderTopStats();
+  } catch {
+    /* best-effort — leave the pill showing its last known counts */
   }
 }
 
@@ -339,6 +355,7 @@ async function boot(user) {
   initTheme();
   wireProfileMenu();
   renderShell();
+  refreshBankStats(); // fire-and-forget — pill pops in once loaded, doesn't block first render
   await dispatchRoute(location.pathname);
 }
 

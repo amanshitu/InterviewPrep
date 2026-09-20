@@ -292,3 +292,21 @@ Solution: native ES modules (`<script type="module">` + dynamic `import()`), whi
 
 **Known trade-offs, not blocking:**
 - The old local dev D1 state had drifted from its own migration-tracking table (only `0001`/`0002` were recorded despite the schema already reflecting everything through `0006` from earlier ad hoc testing this session) — worked around locally by backfilling the missing tracking rows rather than re-running already-applied SQL. Local-only; does not affect the production database or this feature's migration file.
+
+## Phase 4.0 — question-bank header stat, CSV import size fix, branding cleanup
+
+**Status: done, deployed.**
+
+| Item | Status |
+|---|---|
+| New header stat pill showing `yours/total` question counts — questions this user can see (official + subscribed + own sets) vs. every question anyone has ever added to the platform | Done |
+| New `GET /api/questions/bank-count` endpoint (`handleGetBankCount` in `src/worker.js`) backing it; fetched once at boot into `state.bankStats` and re-fetched via `refreshBankStats()` after a CSV import, a manual upload, or subscribing to a suggested set — no full page reload needed | Done |
+| Fixed "Request body too large" on CSV import: `handleCreateQuestionSet`'s body-size cap was 300,000 bytes, but a few hundred detailed Q&A rows re-serialized as JSON routinely exceeds that (JSON's per-field quoting adds real overhead over the raw CSV size) — raised to 2,000,000 bytes | Done |
+| Removed the "About this app" link from both site-wide footers (auth screen and app shell) | Done |
+| Removed "Cloudflare" from the two user-facing AI-provider explanations (About page's "About the AI features" card and Settings' AI provider card) — both now say "our built-in AI" instead of naming the underlying platform | Done |
+| Local verification (Playwright): signed up, confirmed the pill shows real counts (`360/376`), re-imported the full 360-question CSV (~600KB) with zero import errors and the pill updating to `720/736`, confirmed the footer no longer mentions About and neither About nor Settings mention Cloudflare | Done |
+| Deploy | Done |
+
+**Design notes:**
+- "Yours" and "total" reuse the same `user_question_sets` join pattern the queue-builder and `/api/stats/progress` already use for "what can this user see," rather than introducing a new visibility rule — kept as its own lightweight endpoint (two `COUNT(*)` queries, no joins beyond the one) rather than folding it into `/api/stats/progress`, since the header needs this on every page, not just Stats.
+- The pill is fetched once at boot and cached in `state.bankStats`, not re-fetched on every route change — it only changes when someone adds/subscribes to content, which is rare enough that an explicit `refreshBankStats()` call from those three action sites is simpler and cheaper than polling or re-fetching per navigation.

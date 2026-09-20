@@ -67,7 +67,7 @@ function buildAboutView() {
       <ul class="about-list">
         <li><strong>Daily question queue</strong> — set how many questions a day you want; anything left unfinished from a prior day gets priority the next day (capped, so a few missed days never turns into an overwhelming pile), and you can request more once you finish.</li>
         <li><strong>Spaced-repetition review</strong> — a daily batch weighted toward questions you've marked "review again", drawn from everything you've completed.</li>
-        <li><strong>AI-generated daily test</strong> — 10 multiple-choice questions from what you've completed, using Cloudflare's free Workers AI by default (with a daily per-user cap) or your own OpenAI/Anthropic key for unlimited use.</li>
+        <li><strong>AI-generated daily test</strong> — 10 multiple-choice questions from what you've completed, using our built-in AI by default (with a daily per-user cap) or your own OpenAI/Anthropic key for unlimited use.</li>
         <li><strong>Bring your own questions</strong> — a manual upload form, CSV import, or paste your resume for an AI-crafted prompt you run in ChatGPT/Claude and import the results from.</li>
         <li><strong>Shared content</strong> — submit a set for admin review; approved sets show up as suggestions other users can subscribe to.</li>
         <li><strong>Stats</strong> — streaks, an accuracy trend chart, your weakest topics/questions, and an AI coaching insight tailored to your profile.</li>
@@ -92,7 +92,7 @@ function buildAboutView() {
   view.appendChild(el(`
     <div class="card">
       <div class="section-title" style="font-size:17px;">About the AI features</div>
-      <p class="section-sub" style="margin-top:8px;">By default, AI generation uses Cloudflare's free Workers AI, shared across users with a daily per-user cap. You can set your own OpenAI or Anthropic key in Settings for unlimited use, and to pick a different model if one starts acting up. If you paste your resume to help build a question-generation prompt, that text is never stored — it only exists in your browser and the one request needed to suggest a target role.</p>
+      <p class="section-sub" style="margin-top:8px;">By default, AI generation uses our built-in AI, shared across users with a daily per-user cap. You can set your own OpenAI or Anthropic key in Settings for unlimited use, and to pick a different model if one starts acting up. If you paste your resume to help build a question-generation prompt, that text is never stored — it only exists in your browser and the one request needed to suggest a target role.</p>
     </div>
   `));
 

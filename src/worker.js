@@ -973,9 +973,12 @@ async function handleGetReview(request, env, user) {
 // ---------- user-submitted question sets ----------
 
 async function handleCreateQuestionSet(request, env, user) {
-  // Raised from 80000 so a CSV-imported set (client-parsed into this same
-  // JSON shape) with a few hundred rows still fits.
-  const parsed = await readJsonBody(request, 300000);
+  // Raised from 80000, then 300000 — a CSV-imported set (client-parsed into
+  // this same JSON shape) with several hundred detailed rows can run well
+  // past 300KB once re-serialized as JSON (per-field quoting/escaping adds
+  // real overhead over the raw CSV size), which is what "Request body too
+  // large" on import traced back to.
+  const parsed = await readJsonBody(request, 2000000);
   if (!parsed.ok) return json({ error: parsed.error }, { status: parsed.status });
   const body = parsed.body;
   const title = (body.title || "").toString().trim();
@@ -1033,6 +1036,19 @@ async function handleListMySets(request, env, user) {
     .bind(user.id)
     .all();
   return json({ sets: rows.results || [] });
+}
+
+// Powers the header's book-icon stat pill — "yours" is everything this user
+// can see (official + subscribed shared sets + their own), "total" is every
+// question anyone on the platform has ever added, regardless of visibility.
+async function handleGetBankCount(request, env, user) {
+  const yoursRow = await env.DB.prepare(
+    `SELECT COUNT(*) as c FROM questions q JOIN user_question_sets uqs ON uqs.set_id = q.set_id AND uqs.user_id = ?`,
+  )
+    .bind(user.id)
+    .first();
+  const totalRow = await env.DB.prepare("SELECT COUNT(*) as c FROM questions").first();
+  return json({ yours: yoursRow.c, total: totalRow.c });
 }
 
 async function handleSubmitSet(request, env, user, setId) {
@@ -1701,6 +1717,9 @@ export default {
         }
         if (url.pathname === "/api/question-sets/mine" && request.method === "GET") {
           return applySecurityHeaders(await handleListMySets(request, env, user));
+        }
+        if (url.pathname === "/api/questions/bank-count" && request.method === "GET") {
+          return applySecurityHeaders(await handleGetBankCount(request, env, user));
         }
         if (url.pathname === "/api/ai-usage" && request.method === "GET") {
           return applySecurityHeaders(await handleGetAiUsage(request, env, user));
