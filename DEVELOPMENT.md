@@ -410,3 +410,21 @@ Follow-up to Phase 4.4: the "Completed today" section was deliberately read-only
 **Design notes:**
 - One endpoint (`flag-review`) now serves both "don't mark this done yet" (called from the active list) and "actually, un-complete this" (called from the Completed section) — the only difference the handler cares about is whether the row was already `status='done'` when the request came in, which is exactly the condition that decides whether the ledger needs adjusting.
 - `.stat-grid` was already `grid-template-columns: repeat(auto-fit, minmax(130px, 1fr))`, so adding two more tiles needed no CSS changes — it wraps cleanly at any width, mobile included.
+
+## Phase 4.6 — round-robin category mixing for the daily queue
+
+**Status: implemented and locally verified; not yet deployed.**
+
+**Bug:** `ensureTodayQueueFilled`'s fresh-question fill picked strictly `ORDER BY topic_order ASC, sort_order ASC LIMIT <fillCount>` — so a user only ever saw questions from the first category (by `topic_order`) until every question in it had been queued at least once, then moved to the second category, and so on. With ~15-20 questions per category and a daily quota well under that, this meant weeks of "Career Story & Self-Presentation" before any other category appeared.
+
+**Fix:** fetch all not-yet-queued question ids (still ordered by `topic_order`/`sort_order`, bounded at 5000 as a safety cap), group them by `topic_order` in memory, then round-robin across the topic groups — one question from each category in turn, cycling back around — until `fillCount` is reached. Within each category, `sort_order` is still respected (round-robin only interleaves *across* categories, it doesn't shuffle within one).
+
+| Item | Status |
+|---|---|
+| Fresh daily-queue fill now interleaves across every category with unqueued questions instead of draining one category first | Done |
+| Verified locally: daily quota 15, 15 available categories → the resulting queue contained all 15 categories, one question each, in a single fetch | Done |
+| Deploy | Not yet — pending |
+
+**Design notes:**
+- The backlog/"carry-over" half of the fill (`priorityIds`, for questions still unresolved from a prior day) is untouched — it already orders by `queued_for_date`, which is unrelated to this category-skew bug.
+- Deliberately round-robin, not fully random (`ORDER BY RANDOM()`), so the mix is predictable and even — every category gets equal representation each pass, rather than random chance letting one category dominate a given day by luck.

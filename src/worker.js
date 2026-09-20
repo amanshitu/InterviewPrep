@@ -770,16 +770,30 @@ async function ensureTodayQueueFilled(env, user, today) {
   const fillCount = needed - priorityIds.length;
   let freshIds = [];
   if (fillCount > 0) {
+    // Pull every not-yet-queued question (bounded generously) and round-robin
+    // across topics rather than draining topic_order 1 first — otherwise a
+    // user only ever sees the first category until it's fully exhausted.
     const freshRows = await env.DB.prepare(
-      `SELECT q.id as id FROM questions q
+      `SELECT q.id as id, q.topic_order as topic_order FROM questions q
        JOIN user_question_sets uqs ON uqs.set_id = q.set_id AND uqs.user_id = ?
        LEFT JOIN user_question_progress p ON p.user_id = ? AND p.question_id = q.id
        WHERE p.question_id IS NULL
-       ORDER BY q.topic_order ASC, q.sort_order ASC LIMIT ?`,
+       ORDER BY q.topic_order ASC, q.sort_order ASC LIMIT 5000`,
     )
-      .bind(user.id, user.id, fillCount)
+      .bind(user.id, user.id)
       .all();
-    freshIds = (freshRows.results || []).map((r) => r.id);
+    const byTopic = new Map();
+    for (const r of freshRows.results || []) {
+      if (!byTopic.has(r.topic_order)) byTopic.set(r.topic_order, []);
+      byTopic.get(r.topic_order).push(r.id);
+    }
+    const topicQueues = Array.from(byTopic.values());
+    let i = 0;
+    while (freshIds.length < fillCount && topicQueues.some((q) => q.length > 0)) {
+      const queue = topicQueues[i % topicQueues.length];
+      if (queue.length > 0) freshIds.push(queue.shift());
+      i += 1;
+    }
   }
 
   const allIds = priorityIds.concat(freshIds);
