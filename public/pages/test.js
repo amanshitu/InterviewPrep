@@ -1,5 +1,5 @@
 // Daily AI-generated multiple-choice test.
-import { $, $all, el, escapeHtml, toast, api, state, renderSidebar, navigate } from "../app.js";
+import { $, $all, el, escapeHtml, toast, api, state, renderNav, navigate } from "../app.js";
 
 let testBatch = [];
 
@@ -8,7 +8,7 @@ export async function render() {
   const main = $("#main");
   main.innerHTML = "";
   main.appendChild(el(`<div class="view"><div class="card empty-state"><p>Loading today's test — generating questions can take a few seconds the first time.</p></div></div>`));
-  renderSidebar();
+  renderNav();
   try {
     const data = await api("/api/test/today");
     testBatch = data.questions;
@@ -75,7 +75,7 @@ function paint() {
 
   main.appendChild(view);
   $("#back-home-btn", view).addEventListener("click", () => navigate("/"));
-  renderSidebar();
+  renderNav();
 }
 
 async function answerTest(idx, optIdx) {

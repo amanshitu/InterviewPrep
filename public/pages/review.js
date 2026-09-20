@@ -1,5 +1,5 @@
 // Spaced-repetition review, drawn from everything the user has completed.
-import { $, $all, el, escapeHtml, toast, api, state, renderSidebar, navigate } from "../app.js";
+import { $, $all, el, escapeHtml, toast, api, state, renderNav, navigate } from "../app.js";
 
 const DEFAULT_REVIEW_COUNT = 15;
 
@@ -10,7 +10,7 @@ export async function render(count) {
   const main = $("#main");
   main.innerHTML = "";
   main.appendChild(el(`<div class="view"><div class="card empty-state"><p>Loading review batch…</p></div></div>`));
-  renderSidebar();
+  renderNav();
   try {
     const data = await api(`/api/review?count=${count || DEFAULT_REVIEW_COUNT}`);
     reviewBatch = data.questions.map((q) => ({ ...q, revealed: false, graded: false }));
@@ -87,7 +87,7 @@ function paint() {
     btn.addEventListener("click", () => markReviewResult(parseInt(btn.dataset.again, 10), "again"));
   });
 
-  renderSidebar();
+  renderNav();
 }
 
 async function markReviewResult(idx, result) {

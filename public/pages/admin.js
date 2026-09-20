@@ -1,12 +1,12 @@
 // Question-set approval queue — only reachable/visible for role='admin'.
-import { $, $all, el, escapeHtml, toast, api, state, renderSidebar } from "../app.js";
+import { $, $all, el, escapeHtml, toast, api, state, renderNav } from "../app.js";
 
 export async function render() {
   state.currentView = "admin";
   const main = $("#main");
   main.innerHTML = "";
   main.appendChild(el(`<div class="view"><div class="card empty-state"><p>Loading pending sets…</p></div></div>`));
-  renderSidebar();
+  renderNav();
 
   let sets = [];
   try {
@@ -50,7 +50,7 @@ function paint(sets) {
   main.appendChild(view);
   $all("[data-approve]", view).forEach((btn) => btn.addEventListener("click", () => approveSet(btn.dataset.approve)));
   $all("[data-reject]", view).forEach((btn) => btn.addEventListener("click", () => rejectSet(btn.dataset.reject)));
-  renderSidebar();
+  renderNav();
 }
 
 async function approveSet(id) {

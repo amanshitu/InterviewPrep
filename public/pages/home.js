@@ -1,5 +1,5 @@
 // Today's queue — the default/home view.
-import { $, $all, el, escapeHtml, toast, api, state, renderSidebar, renderTopStats, navigate } from "../app.js";
+import { $, $all, el, escapeHtml, toast, api, state, renderNav, renderTopStats, navigate } from "../app.js";
 
 const TEST_SIZE = 10;
 const DEFAULT_REVIEW_COUNT = 15;
@@ -11,7 +11,7 @@ export async function render() {
   const main = $("#main");
   main.innerHTML = "";
   main.appendChild(el(`<div class="view"><div class="card empty-state"><p>Loading today's questions…</p></div></div>`));
-  renderSidebar();
+  renderNav();
 
   try {
     state.todayQueue = await api("/api/queue/today");
@@ -125,7 +125,7 @@ function paint() {
   $("#start-review-btn", view).addEventListener("click", () => navigate("/review", parseInt(rangeInput.value, 10)));
   $("#start-test-btn", view).addEventListener("click", () => navigate("/test"));
 
-  renderSidebar();
+  renderNav();
 }
 
 async function revealQuestion(qid) {

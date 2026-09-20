@@ -1,6 +1,6 @@
 // Account, prep profile, AI provider (BYOK), password/sessions, question
 // sets (upload + suggestions), and data export.
-import { $, $all, el, escapeHtml, toast, formatDate, downloadBlob, api, state, renderShell, renderSidebar } from "../app.js";
+import { $, $all, el, escapeHtml, toast, formatDate, downloadBlob, api, state, renderShell, renderNav } from "../app.js";
 
 // Curated rather than the full ~400-zone IANA list — one representative
 // city per major region/business hub, ordered west to east. Labels are
@@ -245,7 +245,7 @@ export function render() {
   wireResumePromptCard(view);
   wireSuggestionsCard(view);
   wireAiProviderCard(view);
-  renderSidebar();
+  renderNav();
 }
 
 // ---------- AI provider (BYOK) ----------

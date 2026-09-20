@@ -247,3 +247,24 @@ Solution: native ES modules (`<script type="module">` + dynamic `import()`), whi
 - PWA icons are a flat brand-color square with a checkmark, generated programmatically — functional (satisfies installability requirements) but not real designed artwork. Swap `public/icons/*.png` for real icons later if desired; `scripts/generate-icons.js` isn't needed once you do.
 - The reject-reason prompt in the Admin view uses the browser's native `prompt()` rather than a custom modal — simplest thing that works for a low-traffic, admin-only interaction.
 - `mcq_variants`' global (not per-user) caching, noted back in the Phase 1 planning review, is now visibly relevant here too: a user-submitted set's MCQs get generated using whichever AI provider the *first* person to reach a "done" question on that set happens to have configured.
+
+## Phase 3.8 — top-nav restructure, profile menu, theme selector, About footer fix
+
+**Status: done, deployed.**
+
+| Item | Status |
+|---|---|
+| Removed the near-empty left sidebar; `Today`/`Stats`/`Admin`/`About` moved into the topbar as `.nav-link` buttons, `.main` is now a direct flex child of `.app` (no `.layout` wrapper) | Done |
+| New top-right profile widget: initials avatar (`getInitials()`) + name + caret, opens a Settings/Sign-out dropdown on hover (desktop mouse) *and* on click/tap (mobile, touch, keyboard) — `wireProfileMenu()` in `app.js` | Done |
+| Theme selector (`#theme-select`: System/Light/Dark) in the topbar, backed by `localStorage`, plus a synchronous inline `<head>` script in `index.html` that replays the saved choice before first paint (no flash) | Done |
+| Fixed reported bug: the standalone (pre-login) About screen never rendered a footer at all — `renderStandalone()` in `about.js` now appends one after rebuilding `#about-standalone-wrap` on every render | Done |
+| `renderSidebar` renamed to `renderNav` across `app.js` and all 7 page modules (mechanical rename, same element IDs, no other logic changes) | Done |
+| New/rewritten CSS: `.topbar-nav`, `.nav-link`, `.theme-select`, `.profile-menu`/`.profile-trigger`/`.profile-avatar`/`.profile-dropdown` (opacity/visibility + `.is-open` class, not the `hidden` attribute — see note below), plus a responsive block for the topbar at mobile widths; removed dead `.layout`/`.sidebar`/`.nav-group*`/`.nav-topic*`/`.status-dot*` rules | Done |
+| Local verification (Playwright): sidebar/`.layout` gone, avatar+name populated, dropdown opens on hover and on click, closes on outside-click and Escape, theme defaults to System, toggling to Dark/Light applies and survives reload, About nav active-state in both desktop and mobile viewports, both About footers (standalone + authenticated) render | Done |
+| Deploy | Done |
+
+**Design notes:**
+- The dropdown deliberately avoids the HTML `hidden` attribute: this app's global reset rule `[hidden] { display: none !important; }` would override a CSS `:hover`-based reveal. Instead `.profile-dropdown` is always in the DOM with `opacity: 0; visibility: hidden`, made visible via `.profile-menu:hover`/`:focus-within` (desktop) or a JS-toggled `.is-open` class (click/tap, with outside-click and Escape to close) — both mechanisms just add/remove the same visual state, so they don't fight each other.
+- No separate "Profile" page was built — the dropdown's "Settings" item routes to the existing Settings page (which already has Account/Prep-profile cards), and "Sign out" calls the existing logout flow. Avatars are initials-only; there's no photo upload since no R2 bucket (or any file storage) is configured for this app yet.
+- The theme selector lives only in the post-login app-shell topbar, not on the pre-login auth/About screens — scoped that way since those screens are simpler and shorter-lived; can be added later if wanted.
+- **Caught during verification, not by the user:** the new inline `<head>` script (for flash-free theme init) was silently blocked by the app's own `Content-Security-Policy: script-src 'self'` header — CSP has no notion of "same-origin inline," so any inline `<script>` needs either `'unsafe-inline'` (too broad) or an exact hash. Fixed by allowlisting the script's exact SHA-256 hash in `CONTENT_SECURITY_POLICY` in `src/worker.js`; that hash must be recomputed if this specific script's text ever changes (it's static, so this is expected to be rare).

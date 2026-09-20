@@ -1,6 +1,6 @@
 // Accuracy trend, weakest topics/questions, streaks — derived from
 // /api/activity (the append-only history table).
-import { $, el, escapeHtml, toast, api, state, renderSidebar } from "../app.js";
+import { $, el, escapeHtml, toast, api, state, renderNav } from "../app.js";
 
 function buildBarChartSvg(data) {
   const width = Math.max(320, data.length * 34);
@@ -31,7 +31,7 @@ export async function render() {
   const main = $("#main");
   main.innerHTML = "";
   main.appendChild(el(`<div class="view"><div class="card empty-state"><p>Loading stats…</p></div></div>`));
-  renderSidebar();
+  renderNav();
 
   let events = [];
   try {
@@ -191,5 +191,5 @@ function paint(events) {
   view.appendChild(weakQCard);
 
   main.appendChild(view);
-  renderSidebar();
+  renderNav();
 }

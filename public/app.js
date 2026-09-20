@@ -80,10 +80,19 @@ export function navigate(path, param) {
 window.addEventListener("popstate", () => dispatchRoute(location.pathname));
 
 // ---------- shell ----------
+function getInitials(name) {
+  const parts = (name || "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  const first = parts[0][0] || "";
+  const last = parts.length > 1 ? parts[parts.length - 1][0] || "" : "";
+  return (first + last).toUpperCase();
+}
+
 export function renderShell() {
   $("#user-name-label").textContent = state.currentUser.name;
+  $("#profile-avatar").textContent = getInitials(state.currentUser.name);
   renderTopStats();
-  renderSidebar();
+  renderNav();
 }
 
 export function renderTopStats() {
@@ -93,7 +102,7 @@ export function renderTopStats() {
   }
 }
 
-export function renderSidebar() {
+export function renderNav() {
   $("#nav-home-btn").classList.toggle("is-active", state.currentView === "home");
   $("#nav-stats-btn").classList.toggle("is-active", state.currentView === "stats");
   $("#nav-about-btn").classList.toggle("is-active", state.currentView === "about");
@@ -221,6 +230,70 @@ function setupAuthScreen() {
   });
 }
 
+// ---------- theme (System / Light / Dark) ----------
+// The CSS already defines light tokens on :root, dark tokens both under
+// a prefers-color-scheme media query (for "System") and under
+// :root[data-theme="dark"] (for an explicit choice) — see styles.css.
+// This just toggles which one wins. Applied twice: synchronously in
+// index.html's inline <head> script (before first paint, to avoid a
+// flash) and here (to keep the <select> in sync and handle changes).
+const THEME_KEY = "theme";
+
+function applyTheme(value) {
+  if (value === "light" || value === "dark") {
+    document.documentElement.setAttribute("data-theme", value);
+  } else {
+    document.documentElement.removeAttribute("data-theme");
+  }
+}
+
+function initTheme() {
+  let saved = "system";
+  try {
+    saved = localStorage.getItem(THEME_KEY) || "system";
+  } catch {
+    /* localStorage unavailable — default to system, don't persist */
+  }
+  const select = $("#theme-select");
+  select.value = saved;
+  applyTheme(saved);
+  select.addEventListener("change", () => {
+    try {
+      localStorage.setItem(THEME_KEY, select.value);
+    } catch {
+      /* best-effort */
+    }
+    applyTheme(select.value);
+  });
+}
+
+// ---------- profile dropdown ----------
+function wireProfileMenu() {
+  const menu = $("#profile-menu");
+  const trigger = $("#profile-trigger");
+  const dropdown = $("#profile-dropdown");
+
+  function close() {
+    dropdown.classList.remove("is-open");
+    trigger.setAttribute("aria-expanded", "false");
+  }
+
+  trigger.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const opening = !dropdown.classList.contains("is-open");
+    dropdown.classList.toggle("is-open", opening);
+    trigger.setAttribute("aria-expanded", String(opening));
+  });
+  document.addEventListener("click", (e) => {
+    if (!menu.contains(e.target)) close();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") close();
+  });
+  $("#settings-btn").addEventListener("click", close);
+  $("#logout-btn").addEventListener("click", close);
+}
+
 // ---------- boot ----------
 async function boot(user) {
   state.currentUser = user;
@@ -235,6 +308,8 @@ async function boot(user) {
   $("#nav-admin-btn").addEventListener("click", () => navigate("/admin"));
   $("#nav-about-btn").addEventListener("click", () => navigate("/about"));
   $("#settings-btn").addEventListener("click", () => navigate("/settings"));
+  initTheme();
+  wireProfileMenu();
   renderShell();
   await dispatchRoute(location.pathname);
 }

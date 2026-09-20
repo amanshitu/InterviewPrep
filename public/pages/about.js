@@ -3,7 +3,7 @@
 // and logged out (a standalone screen, so prospective users can read it
 // before creating an account). buildAboutView() is the single source of
 // content for both contexts.
-import { $, el, state, renderSidebar } from "../app.js";
+import { $, el, state, renderNav } from "../app.js";
 
 export function render() {
   if (state.currentUser) {
@@ -18,7 +18,7 @@ function renderAuthenticated() {
   const main = $("#main");
   main.innerHTML = "";
   main.appendChild(buildAboutView());
-  renderSidebar();
+  renderNav();
 }
 
 function renderStandalone() {
@@ -26,9 +26,19 @@ function renderStandalone() {
   $("#app").hidden = true;
   const screen = $("#about-screen");
   const wrap = $("#about-standalone-wrap");
+  // wrap.innerHTML is fully rebuilt on every render, so unlike the auth
+  // screen and app shell (which have a static <footer> in index.html),
+  // this one has to be re-added here each time rather than living in the
+  // markup — that's the bug that was reported: this screen simply never
+  // had a footer at all.
   wrap.innerHTML = "";
   wrap.appendChild(buildAboutView());
   wrap.appendChild(el(`<button class="btn btn-ghost" id="about-back-btn" style="align-self:center;">Back to sign in</button>`));
+  wrap.appendChild(el(`
+    <footer class="site-footer">
+      <p>&copy; ${new Date().getFullYear()} Xynora. All rights reserved. Designed and developed by <a href="https://www.xynora.in" target="_blank" rel="noopener noreferrer">Xynora</a> &middot; <a href="https://www.xynoramedia.com" target="_blank" rel="noopener noreferrer">Xynora Media</a></p>
+    </footer>
+  `));
   screen.hidden = false;
 
   $("#about-back-btn", wrap).addEventListener("click", () => {
