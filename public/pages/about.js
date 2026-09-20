@@ -3,7 +3,7 @@
 // and logged out (a standalone screen, so prospective users can read it
 // before creating an account). buildAboutView() is the single source of
 // content for both contexts.
-import { $, el, state, renderNav } from "../app.js";
+import { $, el, escapeHtml, state, renderNav } from "../app.js";
 
 export function render() {
   if (state.currentUser) {
@@ -58,6 +58,9 @@ function buildAboutView() {
     </div>
   `));
 
+  view.appendChild(buildFlowSection());
+  view.appendChild(buildTrendGraphic());
+
   view.appendChild(el(`
     <div class="card">
       <div class="section-title" style="font-size:17px;">Key features</div>
@@ -94,4 +97,80 @@ function buildAboutView() {
   `));
 
   return view;
+}
+
+const FLOW_STEPS = [
+  {
+    title: "Set your target",
+    desc: "Tell it your role, track, and pace — or paste your resume for an AI-suggested target role.",
+    icon: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="4.5" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>`,
+  },
+  {
+    title: "Daily queue",
+    desc: "A fresh, right-sized batch of questions every day — unfinished ones roll forward first.",
+    icon: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>`,
+  },
+  {
+    title: "Spaced review",
+    desc: "Questions you marked \"review again\" resurface on a schedule, so recall actually sticks.",
+    icon: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 12a8 8 0 0 1 13.7-5.7M20 12a8 8 0 0 1-13.7 5.7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M17.5 3v4h-4M6.5 21v-4h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  },
+  {
+    title: "Test & coach",
+    desc: "An AI-generated multiple-choice test plus a coaching insight tailored to your profile.",
+    icon: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 11l2 2 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.7"/></svg>`,
+  },
+  {
+    title: "Track progress",
+    desc: "Stats shows your streak, accuracy trend, and exactly which topics need more attention.",
+    icon: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 20V10M11 20V4M18 20v-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`,
+  },
+];
+
+const FLOW_ARROW = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
+function buildFlowSection() {
+  const card = el(`
+    <div class="card">
+      <div class="section-title" style="font-size:17px;">How it works</div>
+      <p class="section-sub" style="margin-top:6px;">One loop, repeated daily — each pass sharpens your weak spots a little more.</p>
+    </div>
+  `);
+  const row = el(`<div class="flow-row"></div>`);
+  FLOW_STEPS.forEach((step, idx) => {
+    row.appendChild(el(`
+      <div class="flow-step">
+        <div class="flow-step-icon">${step.icon}</div>
+        <div class="flow-step-title">${escapeHtml(step.title)}</div>
+        <div class="flow-step-desc">${escapeHtml(step.desc)}</div>
+      </div>
+    `));
+    if (idx < FLOW_STEPS.length - 1) row.appendChild(el(`<div class="flow-arrow">${FLOW_ARROW}</div>`));
+  });
+  card.appendChild(row);
+  return card;
+}
+
+// Purely illustrative (no real user data — this page is shown pre-login
+// too) — reinforces why the spaced-repetition loop above is worth doing.
+function buildTrendGraphic() {
+  const points = [[0, 40], [1, 34], [2, 36], [3, 25], [4, 27], [5, 15], [6, 17], [7, 6]];
+  const w = 220, h = 60, pad = 6;
+  const xStep = (w - pad * 2) / (points.length - 1);
+  const path = points.map(([, y], i) => `${i === 0 ? "M" : "L"}${(pad + i * xStep).toFixed(1)},${(pad + y * 0.55).toFixed(1)}`).join(" ");
+  const svg = `
+    <svg width="${w}" height="${h + pad * 2}" viewBox="0 0 ${w} ${h + pad * 2}" aria-hidden="true">
+      <path d="${path}" fill="none" stroke="var(--primary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      ${points.map(([x, y]) => `<circle cx="${(pad + x * xStep).toFixed(1)}" cy="${(pad + y * 0.55).toFixed(1)}" r="2.5" fill="var(--primary)"/>`).join("")}
+    </svg>
+  `;
+  return el(`
+    <div class="card">
+      <div class="section-title" style="font-size:17px;">Why spaced repetition works</div>
+      <div class="about-graphic">
+        ${svg}
+        <p class="about-graphic-caption">Recall error rate typically drops fast once a question resurfaces two or three times on a schedule instead of being crammed once and forgotten. That's the whole idea behind the daily review batch above — miss it once and it comes right back tomorrow.</p>
+      </div>
+    </div>
+  `);
 }

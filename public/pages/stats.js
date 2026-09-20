@@ -34,14 +34,74 @@ export async function render() {
   renderNav();
 
   let events = [];
-  try {
-    const data = await api("/api/activity?limit=2000");
-    events = data.events || [];
-  } catch (err) {
-    toast(err.message);
-  }
-  paint(events);
+  let progress = null;
+  const [activityResult, progressResult] = await Promise.allSettled([
+    api("/api/activity?limit=2000"),
+    api("/api/stats/progress"),
+  ]);
+  if (activityResult.status === "fulfilled") events = activityResult.value.events || [];
+  else toast(activityResult.reason.message);
+  if (progressResult.status === "fulfilled") progress = progressResult.value;
+
+  paint(events, progress);
   loadInsight();
+}
+
+function buildFocusCard(focusAreas) {
+  const card = el(`
+    <div class="card">
+      <div class="section-title" style="font-size:16px;">Focus areas</div>
+      <p class="section-sub" style="margin-top:4px;">Where to spend your next study session, ranked worst-first.</p>
+    </div>
+  `);
+  if (!focusAreas || focusAreas.length === 0) {
+    card.appendChild(el(`<p class="section-sub" style="margin-top:10px;">Not enough data yet — complete a few more questions and this will fill in.</p>`));
+    return card;
+  }
+  const list = el(`<div class="focus-list"></div>`);
+  focusAreas.forEach((t, idx) => {
+    const bits = [`${t.completed}/${t.total} done (${t.completionPct}%)`];
+    if (t.accuracyPct !== null) bits.push(`${t.accuracyPct}% accuracy`);
+    list.appendChild(el(`
+      <div class="focus-item">
+        <span class="focus-item-rank">${idx + 1}</span>
+        <div class="focus-item-body">
+          <div class="focus-item-title">${escapeHtml(t.topic)}</div>
+          <div class="focus-item-sub">${escapeHtml(bits.join(" · "))}</div>
+        </div>
+      </div>
+    `));
+  });
+  card.appendChild(list);
+  return card;
+}
+
+function buildProgressByTopicCard(topics) {
+  const card = el(`
+    <div class="card">
+      <div class="section-title" style="font-size:16px;">Progress by topic</div>
+      <p class="section-sub" style="margin-top:4px;">Completion and accuracy across everything in your curriculum.</p>
+    </div>
+  `);
+  if (!topics || topics.length === 0) {
+    card.appendChild(el(`<p class="section-sub" style="margin-top:10px;">No topics yet.</p>`));
+    return card;
+  }
+  const list = el(`<div class="weak-list"></div>`);
+  topics.forEach((t) => {
+    const fillClass = t.completionPct >= 80 ? "is-success" : t.completionPct >= 40 ? "" : "is-danger";
+    const accuracyBit = t.accuracyPct !== null ? `<span class="weak-row-sub">${t.accuracyPct}% accuracy over ${t.attempts} attempt${t.attempts === 1 ? "" : "s"}</span>` : "";
+    list.appendChild(el(`
+      <div class="weak-row">
+        <span class="weak-row-label">${escapeHtml(t.topic)}</span>
+        <div class="weak-row-bar"><div class="weak-row-fill ${fillClass}" style="width:${t.completionPct}%"></div></div>
+        <span class="weak-row-pct">${t.completed}/${t.total} · ${t.completionPct}%</span>
+        ${accuracyBit}
+      </div>
+    `));
+  });
+  card.appendChild(list);
+  return card;
 }
 
 function buildInsightCard() {
@@ -75,7 +135,7 @@ async function loadInsight() {
   }
 }
 
-function paint(events) {
+function paint(events, progress) {
   const currentUser = state.currentUser;
   const main = $("#main");
   main.innerHTML = "";
@@ -93,9 +153,11 @@ function paint(events) {
       <div class="stat-tile"><div class="stat-tile-value">${(currentUser.streak && currentUser.streak.count) || 0}</div><div class="stat-tile-label">Current streak</div></div>
       <div class="stat-tile"><div class="stat-tile-value">${(currentUser.streak && currentUser.streak.longest) || 0}</div><div class="stat-tile-label">Longest streak</div></div>
       <div class="stat-tile"><div class="stat-tile-value">${events.length}</div><div class="stat-tile-label">Logged actions</div></div>
+      <div class="stat-tile"><div class="stat-tile-value">${progress ? progress.overall.completionPct + "%" : "—"}</div><div class="stat-tile-label">Overall completion</div></div>
     </div>
   `));
 
+  view.appendChild(buildFocusCard(progress ? progress.focusAreas : null));
   view.appendChild(buildInsightCard());
 
   const reviewEvents = events.filter((e) => e.event_type === "review" && e.result).slice().reverse();
@@ -127,14 +189,10 @@ function paint(events) {
   }
   view.appendChild(chartCard);
 
-  const topicAgg = {};
+  view.appendChild(buildProgressByTopicCard(progress ? progress.topics : null));
+
   const questionAgg = {};
   reviewEvents.forEach((e) => {
-    if (e.topic_id) {
-      topicAgg[e.topic_id] = topicAgg[e.topic_id] || { total: 0, again: 0 };
-      topicAgg[e.topic_id].total++;
-      if (e.result === "again") topicAgg[e.topic_id].again++;
-    }
     if (e.question_id) {
       const key = e.question_id;
       questionAgg[key] = questionAgg[key] || { total: 0, again: 0, text: e.question_text };
@@ -142,30 +200,6 @@ function paint(events) {
       if (e.result === "again") questionAgg[key].again++;
     }
   });
-
-  const weakTopics = Object.keys(topicAgg)
-    .map((label) => ({ label, ...topicAgg[label], rate: topicAgg[label].again / topicAgg[label].total }))
-    .filter((x) => x.total >= 2)
-    .sort((a, b) => b.rate - a.rate)
-    .slice(0, 5);
-
-  const weakCard = el(`<div class="card"><div class="section-title" style="font-size:16px;">Weakest topics</div></div>`);
-  if (weakTopics.length === 0) {
-    weakCard.appendChild(el(`<p class="section-sub" style="margin-top:8px;">Not enough review history yet.</p>`));
-  } else {
-    const list = el(`<div class="weak-list"></div>`);
-    weakTopics.forEach((t) => {
-      list.appendChild(el(`
-        <div class="weak-row">
-          <span class="weak-row-label">${escapeHtml(t.label)}</span>
-          <div class="weak-row-bar"><div class="weak-row-fill" style="width:${Math.round(t.rate * 100)}%"></div></div>
-          <span class="weak-row-pct">${Math.round(t.rate * 100)}% review-again</span>
-        </div>
-      `));
-    });
-    weakCard.appendChild(list);
-  }
-  view.appendChild(weakCard);
 
   const weakQuestions = Object.keys(questionAgg)
     .map((qid) => ({ qid, ...questionAgg[qid], rate: questionAgg[qid].again / questionAgg[qid].total }))

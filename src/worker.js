@@ -226,7 +226,7 @@ async function getUserFromRequest(request, env) {
             u.streak_count as streak_count, u.streak_longest as streak_longest, u.streak_last_active as streak_last_active,
             u.ai_provider as ai_provider, u.ai_key_ciphertext as ai_key_ciphertext, u.ai_key_iv as ai_key_iv,
             u.headline as headline, u.years_experience as years_experience, u.bio as bio, u.timezone as timezone,
-            u.workers_ai_model as workers_ai_model
+            u.workers_ai_model as workers_ai_model, u.avatar_data as avatar_data
      FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ?`,
   )
     .bind(token)
@@ -264,6 +264,7 @@ function mapUserRow(row) {
     bio: row.bio,
     timezone: row.timezone,
     workersAiModel: row.workers_ai_model,
+    avatarData: row.avatar_data,
   };
 }
 
@@ -284,6 +285,7 @@ function userPayload(user) {
     bio: user.bio || "",
     timezone: user.timezone || "UTC",
     workersAiModel: WORKERS_AI_MODEL_IDS.includes(user.workersAiModel) ? user.workersAiModel : DEFAULT_WORKERS_AI_MODEL,
+    avatarData: user.avatarData || null,
   };
 }
 
@@ -400,7 +402,8 @@ async function handleLogin(request, env) {
   const user = await env.DB.prepare(
     `SELECT id, email, name, password_hash, salt, created_at, track, role, daily_quota,
             streak_count, streak_longest, streak_last_active,
-            ai_provider, ai_key_ciphertext, ai_key_iv, headline, years_experience, bio, timezone, workers_ai_model
+            ai_provider, ai_key_ciphertext, ai_key_iv, headline, years_experience, bio, timezone, workers_ai_model,
+            avatar_data
      FROM users WHERE email = ?`,
   )
     .bind(email)
@@ -549,14 +552,33 @@ async function handleRevokeAllSessions(request, env, user) {
   return json({ ok: true }, { headers: { "Set-Cookie": clearCookieHeader() } });
 }
 
+// Client-side canvas resizing (settings.js) keeps real uploads far below
+// this — it's a hard backstop against an oversized data URL landing in D1.
+const MAX_AVATAR_DATA_URL_LENGTH = 400000;
+
 async function handleUpdateAccount(request, env, user) {
-  const parsed = await readJsonBody(request);
+  const parsed = await readJsonBody(request, MAX_AVATAR_DATA_URL_LENGTH + 2000);
   if (!parsed.ok) return json({ error: parsed.error }, { status: parsed.status });
   const name = (parsed.body.name || "").toString().trim();
   if (!name) return json({ error: "Please enter your name." }, { status: 400 });
 
-  await env.DB.prepare("UPDATE users SET name = ? WHERE id = ?").bind(name, user.id).run();
-  return json({ user: userPayload({ ...user, name }) });
+  let avatarData = user.avatarData || null;
+  if (Object.prototype.hasOwnProperty.call(parsed.body, "avatarData")) {
+    const raw = parsed.body.avatarData;
+    if (raw === null) {
+      avatarData = null;
+    } else if (typeof raw === "string" && /^data:image\/(png|jpeg|webp);base64,/.test(raw)) {
+      if (raw.length > MAX_AVATAR_DATA_URL_LENGTH) {
+        return json({ error: "Image is too large. Please choose a smaller picture." }, { status: 400 });
+      }
+      avatarData = raw;
+    } else {
+      return json({ error: "Invalid image data." }, { status: 400 });
+    }
+  }
+
+  await env.DB.prepare("UPDATE users SET name = ?, avatar_data = ? WHERE id = ?").bind(name, avatarData, user.id).run();
+  return json({ user: userPayload({ ...user, name, avatarData }) });
 }
 
 const AI_PROVIDERS = ["workers-ai", "openai", "anthropic"];
@@ -1388,6 +1410,86 @@ async function handleGetStatsInsight(request, env, user) {
   return json({ insight, generatedBy, cached: false });
 }
 
+// ---------- Stats: per-topic progress + accuracy (for "target areas") ----------
+// Completion counts come from the relational content model (every set a
+// user can see has a row in user_question_sets, per the signup/subscribe
+// flow) joined against their per-question progress; accuracy reuses the
+// same activity_log aggregation handleGetStatsInsight does, just exposed
+// as raw per-topic numbers instead of folded into an AI prompt.
+
+async function handleGetStatsProgress(request, env, user) {
+  const totalsRows = await env.DB.prepare(
+    `SELECT q.topic_label as topic, COUNT(*) as total,
+            SUM(CASE WHEN p.status = 'done' THEN 1 ELSE 0 END) as completed,
+            MIN(q.topic_order) as minOrder
+     FROM questions q
+     JOIN user_question_sets uqs ON uqs.set_id = q.set_id AND uqs.user_id = ?
+     LEFT JOIN user_question_progress p ON p.user_id = ? AND p.question_id = q.id
+     GROUP BY q.topic_label
+     ORDER BY minOrder ASC`,
+  )
+    .bind(user.id, user.id)
+    .all();
+
+  const accuracyRows = await env.DB.prepare(
+    `SELECT topic_id as topic, COUNT(*) as attempts,
+            SUM(CASE WHEN result = 'again' THEN 1 ELSE 0 END) as againCount
+     FROM activity_log
+     WHERE user_id = ? AND event_type = 'review' AND result IS NOT NULL AND topic_id IS NOT NULL
+     GROUP BY topic_id`,
+  )
+    .bind(user.id)
+    .all();
+
+  const accuracyByTopic = {};
+  (accuracyRows.results || []).forEach((r) => {
+    accuracyByTopic[r.topic] = { attempts: r.attempts, againCount: r.againCount };
+  });
+
+  let totalQuestions = 0;
+  let totalCompleted = 0;
+  const topics = (totalsRows.results || []).map((r) => {
+    const total = r.total || 0;
+    const completed = r.completed || 0;
+    totalQuestions += total;
+    totalCompleted += completed;
+    const acc = accuracyByTopic[r.topic];
+    const accuracyPct = acc && acc.attempts >= 2 ? Math.round(((acc.attempts - acc.againCount) / acc.attempts) * 100) : null;
+    return {
+      topic: r.topic,
+      total,
+      completed,
+      completionPct: total ? Math.round((completed / total) * 100) : 0,
+      attempts: acc ? acc.attempts : 0,
+      accuracyPct,
+    };
+  });
+
+  // "Focus areas" — topics that are either mostly untouched or where the
+  // user struggles once they do attempt them, ranked worst-first. Needs
+  // at least a little signal (some completion or some attempts) so a
+  // brand-new topic with 0/0 doesn't dominate the list ahead of real gaps.
+  const focusAreas = topics
+    .filter((t) => t.total > 0 && (t.completed > 0 || t.completionPct < 100))
+    .map((t) => {
+      const completionGap = 1 - t.completed / t.total;
+      const accuracyGap = t.accuracyPct === null ? 0 : 1 - t.accuracyPct / 100;
+      return { ...t, focusScore: completionGap * 0.6 + accuracyGap * 0.4 };
+    })
+    .sort((a, b) => b.focusScore - a.focusScore)
+    .slice(0, 3);
+
+  return json({
+    topics,
+    overall: {
+      totalQuestions,
+      totalCompleted,
+      completionPct: totalQuestions ? Math.round((totalCompleted / totalQuestions) * 100) : 0,
+    },
+    focusAreas,
+  });
+}
+
 // ---------- AI: suggest a target role from resume text ----------
 // A small, cheap call (one short line of output) — unlike the deferred
 // "generate 40-60 Q&A from a resume" idea, this fits comfortably within
@@ -1602,6 +1704,9 @@ export default {
         }
         if (url.pathname === "/api/ai-usage" && request.method === "GET") {
           return applySecurityHeaders(await handleGetAiUsage(request, env, user));
+        }
+        if (url.pathname === "/api/stats/progress" && request.method === "GET") {
+          return applySecurityHeaders(await handleGetStatsProgress(request, env, user));
         }
         if (url.pathname === "/api/stats/insight" && request.method === "GET") {
           return applySecurityHeaders(await handleGetStatsInsight(request, env, user));

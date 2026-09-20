@@ -268,3 +268,27 @@ Solution: native ES modules (`<script type="module">` + dynamic `import()`), whi
 - No separate "Profile" page was built — the dropdown's "Settings" item routes to the existing Settings page (which already has Account/Prep-profile cards), and "Sign out" calls the existing logout flow. Avatars are initials-only; there's no photo upload since no R2 bucket (or any file storage) is configured for this app yet.
 - The theme selector lives only in the post-login app-shell topbar, not on the pre-login auth/About screens — scoped that way since those screens are simpler and shorter-lived; can be added later if wanted.
 - **Caught during verification, not by the user:** the new inline `<head>` script (for flash-free theme init) was silently blocked by the app's own `Content-Security-Policy: script-src 'self'` header — CSP has no notion of "same-origin inline," so any inline `<script>` needs either `'unsafe-inline'` (too broad) or an exact hash. Fixed by allowlisting the script's exact SHA-256 hash in `CONTENT_SECURITY_POLICY` in `src/worker.js`; that hash must be recomputed if this specific script's text ever changes (it's static, so this is expected to be rare).
+
+## Phase 3.9 — avatar upload, modern theme toggle, dropdown hover fix, About/Stats depth
+
+**Status: done, deployed.**
+
+| Item | Status |
+|---|---|
+| Profile picture upload in Settings' Account card (`avatar-upload-row`), client-side cropped/resized to a 256×256 JPEG via canvas before upload — no R2 needed, stored as a `data:` URL in a new `users.avatar_data` column (migration `0007_avatar.sql`) | Done |
+| Topbar/Settings avatar renders the uploaded picture (`renderAvatar()` in `app.js`) instead of initials wherever it's set; "Remove" clears it back to initials | Done |
+| Theme selector replaced with a modern 3-icon segmented control (`.theme-toggle`/`.theme-option`), same System/Light/Dark behavior and persistence as before | Done |
+| Fixed reported bug: the profile dropdown closed before the pointer reached it on the way down from the trigger. Root cause: the dropdown had a `margin-top` gap that wasn't part of any element's hoverable box, so `.profile-menu:hover` dropped mid-transit. Fixed by moving that spacing into the dropdown's own `padding-top` instead | Done |
+| Logo/brand text in the topbar is now a button that navigates home | Done |
+| About page: new "How it works" flow diagram (5 connected steps) and a small illustrative "why spaced repetition works" trend graphic | Done |
+| Stats page: new server-computed `GET /api/stats/progress` (per-topic completion % + accuracy, joined from `questions`/`user_question_sets`/`user_question_progress`, plus a ranked "focus areas" shortlist) backs two new cards — "Focus areas" and "Progress by topic" (replacing the old client-only "Weakest topics" card, which only covered topics the user had already attempted and couldn't show completion at all); a 4th stat tile shows overall completion % | Done |
+| Local verification (Playwright): logo→home, segmented theme control, hover-transit across the dropdown gap + real click-through to Settings, avatar upload/persist-after-reload/remove round trip, About flow/graphic present, Stats focus-areas/progress-by-topic cards populated, mobile viewport check | Done |
+| Deploy | Done |
+
+**Design notes:**
+- Avatar images are center-cropped to a square and downscaled to at most 256px client-side before upload, so a real photo lands well under the server's `MAX_AVATAR_DATA_URL_LENGTH` (400,000 chars) backstop — no separate file storage, consistent with this app staying zero-infra beyond D1/Workers AI.
+- "Focus areas" ranks topics by a blended score (60% completion gap, 40% accuracy gap when there's enough attempt history to trust it) — on a near-empty account, several topics can tie at "fully untouched," which is expected; the ranking sharpens once there's real review history to weight the accuracy half.
+- `getUserFromRequest()` and `handleLogin`'s user-lookup query both had to be extended with the new `avatar_data` column — a reminder that this app hand-lists columns per query rather than `SELECT *`, so adding a user-table column means checking every such query, not just `mapUserRow`/`userPayload`.
+
+**Known trade-offs, not blocking:**
+- The old local dev D1 state had drifted from its own migration-tracking table (only `0001`/`0002` were recorded despite the schema already reflecting everything through `0006` from earlier ad hoc testing this session) — worked around locally by backfilling the missing tracking rows rather than re-running already-applied SQL. Local-only; does not affect the production database or this feature's migration file.

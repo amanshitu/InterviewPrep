@@ -88,9 +88,21 @@ function getInitials(name) {
   return (first + last).toUpperCase();
 }
 
+export function renderAvatar(node, user) {
+  if (user.avatarData) {
+    node.textContent = "";
+    node.style.backgroundImage = `url("${user.avatarData}")`;
+    node.style.backgroundSize = "cover";
+    node.style.backgroundPosition = "center";
+  } else {
+    node.style.backgroundImage = "";
+    node.textContent = getInitials(user.name);
+  }
+}
+
 export function renderShell() {
   $("#user-name-label").textContent = state.currentUser.name;
-  $("#profile-avatar").textContent = getInitials(state.currentUser.name);
+  renderAvatar($("#profile-avatar"), state.currentUser);
   renderTopStats();
   renderNav();
 }
@@ -247,6 +259,14 @@ function applyTheme(value) {
   }
 }
 
+function syncThemeToggle(value) {
+  $all(".theme-option").forEach((btn) => {
+    const active = btn.dataset.themeValue === value;
+    btn.classList.toggle("is-active", active);
+    btn.setAttribute("aria-checked", String(active));
+  });
+}
+
 function initTheme() {
   let saved = "system";
   try {
@@ -254,16 +274,19 @@ function initTheme() {
   } catch {
     /* localStorage unavailable — default to system, don't persist */
   }
-  const select = $("#theme-select");
-  select.value = saved;
   applyTheme(saved);
-  select.addEventListener("change", () => {
-    try {
-      localStorage.setItem(THEME_KEY, select.value);
-    } catch {
-      /* best-effort */
-    }
-    applyTheme(select.value);
+  syncThemeToggle(saved);
+  $all(".theme-option").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const value = btn.dataset.themeValue;
+      try {
+        localStorage.setItem(THEME_KEY, value);
+      } catch {
+        /* best-effort */
+      }
+      applyTheme(value);
+      syncThemeToggle(value);
+    });
   });
 }
 
@@ -276,6 +299,10 @@ function wireProfileMenu() {
   function close() {
     dropdown.classList.remove("is-open");
     trigger.setAttribute("aria-expanded", "false");
+    // :focus-within keeps the dropdown visible after a click on one of its
+    // buttons (browsers keep focus there post-click) — without this, the
+    // menu stays open-looking even though .is-open is already gone.
+    if (menu.contains(document.activeElement)) document.activeElement.blur();
   }
 
   trigger.addEventListener("click", (e) => {
@@ -303,6 +330,7 @@ async function boot(user) {
     await fetch("/api/logout", { method: "POST" });
     location.reload();
   });
+  $("#brand-home-btn").addEventListener("click", () => navigate("/"));
   $("#nav-home-btn").addEventListener("click", () => navigate("/"));
   $("#nav-stats-btn").addEventListener("click", () => navigate("/stats"));
   $("#nav-admin-btn").addEventListener("click", () => navigate("/admin"));

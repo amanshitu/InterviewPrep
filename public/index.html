@@ -128,10 +128,10 @@
 <!-- APP SHELL -->
 <div id="app" class="app" hidden>
   <header class="topbar">
-    <div class="topbar-brand">
+    <button type="button" class="topbar-brand" id="brand-home-btn">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2 3 6.5v6C3 17.2 6.9 21.3 12 22.5 17.1 21.3 21 17.2 21 12.5v-6L12 2Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8.5 12.2l2.3 2.3 4.7-4.9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <span>Interview Prep</span>
-    </div>
+    </button>
 
     <nav class="topbar-nav" id="topbar-nav" aria-label="Navigation">
       <button class="nav-link" id="nav-home-btn" data-view="home">Today</button>
@@ -152,11 +152,17 @@
       </div>
     </div>
 
-    <select class="theme-select" id="theme-select" title="Theme" aria-label="Theme">
-      <option value="system">System</option>
-      <option value="light">Light</option>
-      <option value="dark">Dark</option>
-    </select>
+    <div class="theme-toggle" id="theme-toggle" role="radiogroup" aria-label="Theme">
+      <button type="button" class="theme-option" data-theme-value="system" role="radio" aria-checked="true" title="Match system">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M8 21h8M12 17v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
+      <button type="button" class="theme-option" data-theme-value="light" role="radio" aria-checked="false" title="Light">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="4.5" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
+      <button type="button" class="theme-option" data-theme-value="dark" role="radio" aria-checked="false" title="Dark">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20.5 14.5A8.5 8.5 0 1 1 9.5 3.5a7 7 0 0 0 11 11Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
 
     <div class="profile-menu" id="profile-menu">
       <button class="profile-trigger" id="profile-trigger" aria-haspopup="true" aria-expanded="false">

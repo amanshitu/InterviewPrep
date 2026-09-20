@@ -1,6 +1,33 @@
 // Account, prep profile, AI provider (BYOK), password/sessions, question
 // sets (upload + suggestions), and data export.
-import { $, $all, el, escapeHtml, toast, formatDate, downloadBlob, api, state, renderShell, renderNav } from "../app.js";
+import { $, $all, el, escapeHtml, toast, formatDate, downloadBlob, api, state, renderShell, renderNav, renderAvatar } from "../app.js";
+
+// Client-side resize keeps the uploaded picture small (well under the
+// server's MAX_AVATAR_DATA_URL_LENGTH backstop) without needing any file
+// storage — the data URL is stored directly in the users table.
+function resizeImageToDataUrl(file, maxDim = 256, quality = 0.85) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Could not read that file."));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("That doesn't look like a valid image."));
+      img.onload = () => {
+        const cropSize = Math.min(img.width, img.height);
+        const sx = (img.width - cropSize) / 2;
+        const sy = (img.height - cropSize) / 2;
+        const outSize = Math.min(maxDim, cropSize);
+        const canvas = document.createElement("canvas");
+        canvas.width = outSize;
+        canvas.height = outSize;
+        canvas.getContext("2d").drawImage(img, sx, sy, cropSize, cropSize, 0, 0, outSize, outSize);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 // Curated rather than the full ~400-zone IANA list — one representative
 // city per major region/business hub, ordered west to east. Labels are
@@ -71,7 +98,18 @@ export function render() {
     <div class="card">
       <div class="section-title">Account</div>
       <p class="section-sub" style="margin-top:6px;">${escapeHtml(currentUser.email)} · member since ${formatDate(currentUser.createdAt)}</p>
-      <label class="field" style="margin-top:16px;">
+
+      <div class="avatar-upload-row" style="margin-top:16px;">
+        <span class="profile-avatar is-lg" id="avatar-preview"></span>
+        <div class="avatar-upload-actions">
+          <input type="file" id="avatar-file-input" accept="image/png,image/jpeg,image/webp" hidden />
+          <button type="button" class="btn btn-ghost btn-small" id="avatar-upload-btn">Change picture</button>
+          <button type="button" class="btn btn-ghost btn-small" id="avatar-remove-btn" ${currentUser.avatarData ? "" : "hidden"}>Remove</button>
+        </div>
+      </div>
+      <p class="form-error" id="avatar-error" hidden></p>
+
+      <label class="field">
         <span>Display name</span>
         <input type="text" id="settings-name" value="${escapeHtml(currentUser.name)}" />
       </label>
@@ -159,6 +197,59 @@ export function render() {
   `));
 
   main.appendChild(view);
+
+  renderAvatar($("#avatar-preview", view), currentUser);
+
+  $("#avatar-upload-btn", view).addEventListener("click", () => $("#avatar-file-input", view).click());
+
+  $("#avatar-file-input", view).addEventListener("change", async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    const errBox = $("#avatar-error", view);
+    errBox.hidden = true;
+    if (file.size > 8 * 1024 * 1024) {
+      errBox.textContent = "That image is too large — please choose one under 8MB.";
+      errBox.hidden = false;
+      return;
+    }
+    try {
+      const avatarData = await resizeImageToDataUrl(file);
+      const data = await api("/api/account", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: state.currentUser.name, avatarData }),
+      });
+      state.currentUser = data.user;
+      renderAvatar($("#avatar-preview", view), state.currentUser);
+      renderShell();
+      $("#avatar-remove-btn", view).hidden = false;
+      toast("Profile picture updated.");
+    } catch (err) {
+      errBox.textContent = err.message;
+      errBox.hidden = false;
+    }
+  });
+
+  $("#avatar-remove-btn", view).addEventListener("click", async () => {
+    const errBox = $("#avatar-error", view);
+    errBox.hidden = true;
+    try {
+      const data = await api("/api/account", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: state.currentUser.name, avatarData: null }),
+      });
+      state.currentUser = data.user;
+      renderAvatar($("#avatar-preview", view), state.currentUser);
+      renderShell();
+      $("#avatar-remove-btn", view).hidden = true;
+      toast("Profile picture removed.");
+    } catch (err) {
+      errBox.textContent = err.message;
+      errBox.hidden = false;
+    }
+  });
 
   $("#save-name-btn", view).addEventListener("click", async () => {
     const nameErr = $("#name-error", view);
