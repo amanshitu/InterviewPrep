@@ -63,6 +63,7 @@ const PAGE_LOADERS = {
   "/settings": () => import("./pages/settings.js"),
   "/stats": () => import("./pages/stats.js"),
   "/admin": () => import("./pages/admin.js"),
+  "/about": () => import("./pages/about.js"),
 };
 
 async function dispatchRoute(path, param) {
@@ -95,6 +96,7 @@ export function renderTopStats() {
 export function renderSidebar() {
   $("#nav-home-btn").classList.toggle("is-active", state.currentView === "home");
   $("#nav-stats-btn").classList.toggle("is-active", state.currentView === "stats");
+  $("#nav-about-btn").classList.toggle("is-active", state.currentView === "about");
   const adminBtn = $("#nav-admin-btn");
   adminBtn.hidden = state.currentUser.role !== "admin";
   adminBtn.classList.toggle("is-active", state.currentView === "admin");
@@ -231,6 +233,7 @@ async function boot(user) {
   $("#nav-home-btn").addEventListener("click", () => navigate("/"));
   $("#nav-stats-btn").addEventListener("click", () => navigate("/stats"));
   $("#nav-admin-btn").addEventListener("click", () => navigate("/admin"));
+  $("#nav-about-btn").addEventListener("click", () => navigate("/about"));
   $("#settings-btn").addEventListener("click", () => navigate("/settings"));
   renderShell();
   await dispatchRoute(location.pathname);
@@ -253,6 +256,9 @@ $all(".footer-year").forEach((node) => { node.textContent = new Date().getFullYe
   const user = await checkSession();
   if (user) {
     await boot(user);
+  } else if (location.pathname === "/about") {
+    // Reachable by prospective users too, before they've signed up.
+    await dispatchRoute("/about");
   } else {
     $("#auth-screen").hidden = false;
   }

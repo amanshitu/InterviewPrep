@@ -227,6 +227,22 @@ Solution: native ES modules (`<script type="module">` + dynamic `import()`), whi
 - Resume text passed to this endpoint is not persisted — it exists only for the duration of the request, same as the client-side prompt builder.
 - A capped or failed suggestion degrades gracefully (clear inline error, button re-enabled) rather than blocking the flow — the target role field is always just a normal editable text input, so the user can type one manually regardless of whether the suggestion succeeded.
 
+## Phase 3.7 — About page
+
+**Status: done, deployed.**
+
+| Item | Status |
+|---|---|
+| `public/pages/about.js` — new routed page explaining what the app does, key features, a getting-started walkthrough, and AI/privacy notes | Done |
+| Reachable pre-login (standalone `#about-screen`, so prospective users can read it before signing up) and post-login (sidebar nav item, rendered into `#main` like any other page) from one shared content function | Done |
+| "About this app" link in the footer on both screens | Done |
+| Local verification (Playwright: direct `/about` visit pre-login, footer link, "Back to sign in", authenticated sidebar nav + active state, sidebar chrome intact) | Done |
+| Deploy | Done |
+
+**Design notes:**
+- One `buildAboutView()` function is the single source of content; `render()` in `about.js` picks between rendering it into a standalone screen (`state.currentUser` is null) or into `#main` with the usual page chrome (logged in) — no content duplication between the two contexts.
+- The footer's "About this app" link is a plain `<a href="/about">`, not JS-wired — clicking it does a full page reload rather than an SPA transition. Given it's a low-frequency destination, that trade-off was fine to keep the footer (which appears on every screen, including pre-login) simple; the sidebar nav item gives a snappier SPA-routed path for logged-in users who want to revisit it.
+
 **Known trade-offs, not blocking:**
 - PWA icons are a flat brand-color square with a checkmark, generated programmatically — functional (satisfies installability requirements) but not real designed artwork. Swap `public/icons/*.png` for real icons later if desired; `scripts/generate-icons.js` isn't needed once you do.
 - The reject-reason prompt in the Admin view uses the browser's native `prompt()` rather than a custom modal — simplest thing that works for a low-traffic, admin-only interaction.
