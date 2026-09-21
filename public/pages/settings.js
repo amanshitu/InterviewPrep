@@ -293,6 +293,7 @@ export function render() {
         body: JSON.stringify({ track, dailyQuota, headline, bio, yearsExperience, timezone }),
       });
       state.currentUser = data.user;
+      renderShell();
       okBox.textContent = "Saved.";
       okBox.hidden = false;
     } catch (err) {

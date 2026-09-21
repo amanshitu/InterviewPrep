@@ -113,6 +113,14 @@ export function renderShell() {
   renderAvatar($("#profile-avatar"), state.currentUser);
   renderTopStats();
   renderNav();
+  updateDocumentTitle();
+}
+
+function updateDocumentTitle() {
+  const user = state.currentUser;
+  const firstName = (user.name || "").trim().split(/\s+/)[0] || user.name;
+  const track = (user.track || "").trim();
+  document.title = `Interview Prep — ${firstName}${track ? ` — ${track}` : ""}`;
 }
 
 export function renderTopStats() {

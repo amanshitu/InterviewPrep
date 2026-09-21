@@ -428,3 +428,19 @@ Follow-up to Phase 4.4: the "Completed today" section was deliberately read-only
 **Design notes:**
 - The backlog/"carry-over" half of the fill (`priorityIds`, for questions still unresolved from a prior day) is untouched — it already orders by `queued_for_date`, which is unrelated to this category-skew bug.
 - Deliberately round-robin, not fully random (`ORDER BY RANDOM()`), so the mix is predictable and even — every category gets equal representation each pass, rather than random chance letting one category dominate a given day by luck.
+
+## Phase 4.7 — personalized browser tab title
+
+**Status: implemented and locally verified; not yet deployed.**
+
+**Bug:** the `<title>` tag was a hardcoded `Interview Prep — Manoj` in `public/index.html` — every signed-in user, on every device, saw the same name in their browser tab regardless of who they actually were.
+
+**Fix:** the static fallback now just reads `Interview Prep` (shown briefly before JS runs, and on the logged-out auth screen). Once a user is signed in, a new `updateDocumentTitle()` in `app.js` sets `document.title` to `Interview Prep — <first name>` (plus `— <track>` when the user has set what they're preparing for) — e.g. `Interview Prep — Priya — Data Science`. It's called from `renderShell()`, which already runs at boot and after any profile-affecting update, so the tab title stays in sync automatically; the one settings save that changes `track` without already calling `renderShell()` (the "Prep profile" save in `settings.js`) now calls it too.
+
+| Item | Status |
+|---|---|
+| Static `<title>` no longer hardcodes a name | Done |
+| Signed-in title personalized as `Interview Prep — <first name>[ — <track>]` | Done |
+| Title refreshes live after changing name or track in Settings, no reload needed | Done |
+| Verified via API: confirmed the static title, and confirmed the user payload's `track` is always a string (never `null`) so the trim/template logic can't throw | Done |
+| Deploy | Not yet — pending |
