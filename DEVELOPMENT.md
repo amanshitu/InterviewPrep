@@ -464,3 +464,22 @@ A "Read aloud" button on each revealed question in the "Today's questions" list 
 **Design notes:**
 - Deliberately scoped to just the active Today's-questions list per explicit instruction, not the Completed section or the separate Daily Review page — those can be extended the same way later if wanted, since `renderReadAloudButton`/`toggleReadAloud` are already generic (keyed by question id + text, not page-specific).
 - The button's text isn't passed via an HTML data-attribute (which would need careful escaping for quotes/HTML entities in longer answers) — the click handler looks the answer text up from `state.todayQueue.questions` by id instead.
+
+## Phase 4.9 — voice/speed/pitch controls for Read aloud
+
+**Status: implemented; not yet deployed.**
+
+Follow-up to Phase 4.8: a new "Read aloud" card in Settings (only rendered when `isSpeechSupported()`) lets the user pick which system voice reads answers aloud, plus speed and pitch, with a "Preview voice" button to hear the current settings without leaving the page.
+
+| Item | Status |
+|---|---|
+| New `app.js` helpers: `getReadAloudPrefs()`/`setReadAloudPrefs()` (localStorage-backed, same pattern as the existing theme preference — per-browser, not account data) and `getVoiceOptions()` (wraps `speechSynthesis.getVoices()`) | Done |
+| `toggleReadAloud` now applies the saved `rate`/`pitch`/`voiceURI` to every utterance it creates, instead of a hardcoded rate | Done |
+| Settings → "Read aloud" card: a voice `<select>` (English voices sorted first, but every voice the device exposes is listed — some devices only have a handful), speed slider (0.5x–1.5x), pitch slider (0–2), and a "Preview voice" button that speaks a sample sentence using `toggleReadAloud` with a dedicated `"__preview__"` id | Done |
+| Handles async voice loading: `getVoiceOptions()` often returns `[]` on the very first call (notably in Chrome) until the voice list loads — the card also listens for `speechSynthesis.onvoiceschanged` and repopulates the `<select>` when it fires, preserving whatever was already selected/saved | Done |
+| Verified: confirmed served `app.js`/`settings.js` bundles parse and match source; confirmed all new imports/exports resolve. Actual voice/audio behavior not verifiable in this environment (no browser here) — recommend a quick manual check | Partially verified |
+| Deploy | Not yet — pending |
+
+**Design notes:**
+- Voice/speed/pitch preferences live in `localStorage`, not the `users` table — this is a "how my own browser sounds" setting, not account data that should follow the user to another device, so no new migration or `/api/profile` field was added.
+- The card only renders on Settings when the browser actually supports speech synthesis, rather than showing dead controls on one that doesn't.

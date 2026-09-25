@@ -102,6 +102,36 @@ export function stopSpeaking() {
   state.speakingId = null;
 }
 
+// Voice/speed/pitch are a per-browser preference, not account data — stored
+// in localStorage like the theme choice, not synced to the server.
+const READ_ALOUD_PREFS_KEY = "readAloudPrefs";
+const DEFAULT_READ_ALOUD_PREFS = { voiceURI: "", rate: 0.95, pitch: 1 };
+
+export function getReadAloudPrefs() {
+  try {
+    const raw = localStorage.getItem(READ_ALOUD_PREFS_KEY);
+    return raw ? { ...DEFAULT_READ_ALOUD_PREFS, ...JSON.parse(raw) } : { ...DEFAULT_READ_ALOUD_PREFS };
+  } catch {
+    return { ...DEFAULT_READ_ALOUD_PREFS };
+  }
+}
+
+export function setReadAloudPrefs(partial) {
+  const merged = { ...getReadAloudPrefs(), ...partial };
+  try {
+    localStorage.setItem(READ_ALOUD_PREFS_KEY, JSON.stringify(merged));
+  } catch {
+    /* best-effort — localStorage unavailable (private window, blocked, etc.) */
+  }
+}
+
+// getVoices() can return [] until the browser's voice list has loaded async
+// (notably Chrome) — callers that populate a <select> should also listen
+// for speechSynthesis.onvoiceschanged and re-call this.
+export function getVoiceOptions() {
+  return isSpeechSupported() ? window.speechSynthesis.getVoices() : [];
+}
+
 // Starts reading `text` aloud for `id`, or stops if `id` is already being
 // read. `onChange` fires once synchronously (so the caller can repaint the
 // button right away) and again when speech ends naturally — callers should
@@ -117,7 +147,13 @@ export function toggleReadAloud(id, text, onChange) {
   state.speakingId = id;
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
-  utterance.rate = 0.95;
+  const prefs = getReadAloudPrefs();
+  utterance.rate = prefs.rate;
+  utterance.pitch = prefs.pitch;
+  if (prefs.voiceURI) {
+    const voice = getVoiceOptions().find((v) => v.voiceURI === prefs.voiceURI);
+    if (voice) utterance.voice = voice;
+  }
   const finish = () => {
     if (state.speakingId === id) state.speakingId = null;
     if (onChange) onChange();

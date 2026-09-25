@@ -1,6 +1,6 @@
 // Account, prep profile, AI provider (BYOK), password/sessions, question
 // sets (upload + suggestions), and data export.
-import { $, $all, el, escapeHtml, toastSuccess, toastError, toastWarning, formatDate, downloadBlob, api, state, renderShell, renderNav, renderAvatar, refreshBankStats } from "../app.js";
+import { $, $all, el, escapeHtml, toastSuccess, toastError, toastWarning, formatDate, downloadBlob, api, state, renderShell, renderNav, renderAvatar, refreshBankStats, isSpeechSupported, getReadAloudPrefs, setReadAloudPrefs, getVoiceOptions, toggleReadAloud } from "../app.js";
 
 // Client-side resize keeps the uploaded picture small (well under the
 // server's MAX_AVATAR_DATA_URL_LENGTH backstop) without needing any file
@@ -155,6 +155,8 @@ export function render() {
   `));
 
   view.appendChild(buildAiProviderCard());
+
+  if (isSpeechSupported()) view.appendChild(buildReadAloudCard());
 
   view.appendChild(el(`
     <div class="card">
@@ -337,6 +339,7 @@ export function render() {
   wireResumePromptCard(view);
   wireSuggestionsCard(view);
   wireAiProviderCard(view);
+  if (isSpeechSupported()) wireReadAloudCard(view);
   renderNav();
 }
 
@@ -441,6 +444,81 @@ function wireAiProviderCard(view) {
       errBox.textContent = err.message;
       errBox.hidden = false;
     }
+  });
+}
+
+// ---------- Read aloud voice/speed/pitch ----------
+function buildReadAloudCard() {
+  const prefs = getReadAloudPrefs();
+  return el(`
+    <div class="card">
+      <div class="section-title">Read aloud</div>
+      <p class="section-sub" style="margin-top:6px;">Controls the "Read aloud" button on Today's questions. Saved to this browser — voice options depend on your device and OS.</p>
+      <label class="field" style="margin-top:14px;">
+        <span>Voice</span>
+        <select id="read-aloud-voice"><option value="">Browser default</option></select>
+      </label>
+      <div class="review-controls" style="margin-top:4px;">
+        <span class="range-label">Speed: <strong id="read-aloud-rate-label">${prefs.rate.toFixed(2)}x</strong></span>
+        <input type="range" id="read-aloud-rate" min="0.5" max="1.5" step="0.05" value="${prefs.rate}" />
+      </div>
+      <div class="review-controls" style="margin-top:14px;">
+        <span class="range-label">Pitch: <strong id="read-aloud-pitch-label">${prefs.pitch.toFixed(1)}</strong></span>
+        <input type="range" id="read-aloud-pitch" min="0" max="2" step="0.1" value="${prefs.pitch}" />
+      </div>
+      <button type="button" class="btn btn-secondary" id="read-aloud-preview-btn" style="margin-top:14px;">Preview voice</button>
+    </div>
+  `);
+}
+
+function wireReadAloudCard(view) {
+  const voiceSelect = $("#read-aloud-voice", view);
+  const prefs = getReadAloudPrefs();
+
+  function populateVoices() {
+    const all = getVoiceOptions();
+    // English voices first (most relevant for this app's questions), but
+    // don't hide the rest — some devices only expose a handful of voices.
+    const sorted = [...all].sort((a, b) => {
+      const aEn = a.lang.toLowerCase().startsWith("en") ? 0 : 1;
+      const bEn = b.lang.toLowerCase().startsWith("en") ? 0 : 1;
+      return aEn - bEn || a.name.localeCompare(b.name);
+    });
+    const selected = voiceSelect.value || prefs.voiceURI;
+    voiceSelect.innerHTML =
+      `<option value="">Browser default</option>` +
+      sorted.map((v) => `<option value="${escapeHtml(v.voiceURI)}" ${v.voiceURI === selected ? "selected" : ""}>${escapeHtml(v.name)} (${escapeHtml(v.lang)})</option>`).join("");
+  }
+  populateVoices();
+  // Chrome (and some others) load voices asynchronously — the list is
+  // often empty on the first call above, and fills in once this fires.
+  if (isSpeechSupported()) window.speechSynthesis.onvoiceschanged = populateVoices;
+
+  voiceSelect.addEventListener("change", () => {
+    setReadAloudPrefs({ voiceURI: voiceSelect.value });
+  });
+
+  const rateInput = $("#read-aloud-rate", view);
+  const rateLabel = $("#read-aloud-rate-label", view);
+  rateInput.addEventListener("input", () => {
+    const rate = parseFloat(rateInput.value);
+    rateLabel.textContent = `${rate.toFixed(2)}x`;
+    setReadAloudPrefs({ rate });
+  });
+
+  const pitchInput = $("#read-aloud-pitch", view);
+  const pitchLabel = $("#read-aloud-pitch-label", view);
+  pitchInput.addEventListener("input", () => {
+    const pitch = parseFloat(pitchInput.value);
+    pitchLabel.textContent = pitch.toFixed(1);
+    setReadAloudPrefs({ pitch });
+  });
+
+  const previewBtn = $("#read-aloud-preview-btn", view);
+  previewBtn.addEventListener("click", () => {
+    toggleReadAloud("__preview__", "This is a preview of the read aloud voice, speed, and pitch you've selected.", () => {
+      previewBtn.textContent = state.speakingId === "__preview__" ? "Stop preview" : "Preview voice";
+    });
   });
 }
 
