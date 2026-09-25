@@ -116,6 +116,7 @@ img { max-width: 100%; }
 .btn-small { padding: 6px 12px; font-size: 13px; }
 .btn-success { background: var(--success); color: var(--on-primary); }
 .btn-warn { background: transparent; color: var(--warn); border-color: var(--warn); }
+.btn-icon-label { display: inline-flex; align-items: center; gap: 6px; }
 
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; font-size: 13px; font-weight: 600; color: var(--text-muted); }
 .field input, .field select, .field textarea {

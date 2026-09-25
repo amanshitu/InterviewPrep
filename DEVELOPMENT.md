@@ -444,3 +444,23 @@ Follow-up to Phase 4.4: the "Completed today" section was deliberately read-only
 | Title refreshes live after changing name or track in Settings, no reload needed | Done |
 | Verified via API: confirmed the static title, and confirmed the user payload's `track` is always a string (never `null`) so the trim/template logic can't throw | Done |
 | Deploy | Not yet — pending |
+
+## Phase 4.8 — "Read aloud" on Today's questions
+
+**Status: implemented; not yet deployed.**
+
+A "Read aloud" button on each revealed question in the "Today's questions" list (only — not the Completed section, not Daily Review, per explicit scope), using the browser's built-in Web Speech API (`SpeechSynthesisUtterance`) — no new dependency, no server involvement, no new endpoint.
+
+| Item | Status |
+|---|---|
+| New shared helpers in `app.js`: `isSpeechSupported()`, `stopSpeaking()`, `toggleReadAloud(id, text, onChange)`, `renderReadAloudButton(id)` — `state.speakingId` tracks which question (if any) is currently being read, so the button's icon/label always reflects the right state | Done |
+| Button added to each revealed card's action row in `home.js`'s active question list, alongside "Got it"/"Review again soon" | Done |
+| Clicking toggles between reading and stopping; clicking a different question's button while one is already reading stops the first and starts the new one (only one utterance in flight at a time, app-wide) | Done |
+| Navigating away from the page (via `dispatchRoute`) calls `stopSpeaking()`, so speech never keeps running in the background after leaving Today | Done |
+| Button renders as `""` (nothing) on a browser with no `speechSynthesis` support, rather than a dead button | Done |
+| Verified: confirmed the served `app.js`/`home.js` bundles parse cleanly and match the source, confirmed all new exports exist and are wired correctly, confirmed `/api/queue/today`'s question shape (`id`, `a`) matches what the click handler looks up. Actual audio playback wasn't verified in this environment (no browser/audio available here) — this is a standard, widely-supported browser API (Chrome/Edge/Safari/Firefox), so recommend a quick manual check in an actual browser before or shortly after deploying | Partially verified |
+| Deploy | Not yet — pending |
+
+**Design notes:**
+- Deliberately scoped to just the active Today's-questions list per explicit instruction, not the Completed section or the separate Daily Review page — those can be extended the same way later if wanted, since `renderReadAloudButton`/`toggleReadAloud` are already generic (keyed by question id + text, not page-specific).
+- The button's text isn't passed via an HTML data-attribute (which would need careful escaping for quotes/HTML entities in longer answers) — the click handler looks the answer text up from `state.todayQueue.questions` by id instead.

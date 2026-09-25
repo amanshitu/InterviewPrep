@@ -13,6 +13,7 @@ export const state = {
   currentView: "home",
   todayQueue: null, // { date, target, completed, remaining, questions } from /api/queue/today
   bankStats: null, // { yours, total } from /api/questions/bank-count
+  speakingId: null, // question id currently being read aloud, if any
 };
 
 // ---------- utils ----------
@@ -75,6 +76,7 @@ const PAGE_LOADERS = {
 };
 
 async function dispatchRoute(path, param) {
+  stopSpeaking(); // leaving a page shouldn't leave read-aloud running in the background
   const loader = PAGE_LOADERS[path] || PAGE_LOADERS["/"];
   const mod = await loader();
   return mod.render(param);
@@ -86,6 +88,62 @@ export function navigate(path, param) {
 }
 
 window.addEventListener("popstate", () => dispatchRoute(location.pathname));
+
+// ---------- read-aloud (Web Speech API) ----------
+// state.speakingId names the question currently being read, so any
+// "Read aloud" button anywhere can show the right icon without its own
+// bookkeeping. Browser-only feature — no server involvement.
+export function isSpeechSupported() {
+  return typeof window !== "undefined" && "speechSynthesis" in window;
+}
+
+export function stopSpeaking() {
+  if (isSpeechSupported()) window.speechSynthesis.cancel();
+  state.speakingId = null;
+}
+
+// Starts reading `text` aloud for `id`, or stops if `id` is already being
+// read. `onChange` fires once synchronously (so the caller can repaint the
+// button right away) and again when speech ends naturally — callers should
+// guard that second call with their own "am I still on this page" check,
+// since it can land after the user has navigated elsewhere.
+export function toggleReadAloud(id, text, onChange) {
+  if (!isSpeechSupported()) return false;
+  if (state.speakingId === id) {
+    stopSpeaking();
+    if (onChange) onChange();
+    return true;
+  }
+  state.speakingId = id;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.rate = 0.95;
+  const finish = () => {
+    if (state.speakingId === id) state.speakingId = null;
+    if (onChange) onChange();
+  };
+  utterance.onend = finish;
+  utterance.onerror = finish;
+  window.speechSynthesis.speak(utterance);
+  if (onChange) onChange();
+  return true;
+}
+
+const SPEAKER_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Z" fill="currentColor"/><path d="M16 8.5c1.4 1 1.4 5.7 0 6.7M19 6.2c2.3 1.9 2.3 9.4 0 11.3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
+const STOP_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></svg>`;
+
+// Renders a "Read aloud" / "Stop" toggle button for the given question id,
+// or "" if this browser has no speech synthesis support at all. Markup
+// only — the caller wires up the click handler (needs the answer text,
+// which this function deliberately doesn't take, to avoid stuffing long
+// text into an HTML attribute).
+export function renderReadAloudButton(id) {
+  if (!isSpeechSupported()) return "";
+  const active = state.speakingId === id;
+  return `<button type="button" class="btn btn-ghost btn-small btn-icon-label" data-read-aloud="${id}">${
+    active ? `${STOP_ICON} Stop` : `${SPEAKER_ICON} Read aloud`
+  }</button>`;
+}
 
 // ---------- shell ----------
 function getInitials(name) {

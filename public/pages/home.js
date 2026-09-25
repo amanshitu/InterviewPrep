@@ -1,5 +1,5 @@
 // Today's queue — the default/home view.
-import { $, $all, el, escapeHtml, toastSuccess, toastError, api, state, renderNav, renderTopStats, navigate } from "../app.js";
+import { $, $all, el, escapeHtml, toastSuccess, toastError, api, state, renderNav, renderTopStats, navigate, renderReadAloudButton, toggleReadAloud } from "../app.js";
 
 const TEST_SIZE = 10;
 const DEFAULT_REVIEW_COUNT = 15;
@@ -84,6 +84,7 @@ function paint() {
              <div class="q-actions">
                <button class="btn btn-success btn-small" data-complete="${q.id}">Got it</button>
                <button class="btn btn-warn btn-small" data-flag-review="${q.id}">Review again soon</button>
+               ${renderReadAloudButton(q.id)}
              </div>`
           : `<button class="btn btn-secondary btn-small" data-reveal="${q.id}">Show model answer</button>`}
       </div>
@@ -165,6 +166,14 @@ function paint() {
   });
   $all("[data-flag-review]", view).forEach((btn) => {
     btn.addEventListener("click", () => flagForReview(btn.dataset.flagReview));
+  });
+  $all("[data-read-aloud]", view).forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const qid = btn.dataset.readAloud;
+      const q = todayQueue.questions.find((x) => x.id === qid);
+      if (!q) return;
+      toggleReadAloud(qid, q.a, () => { if (state.currentView === "home") paint(); });
+    });
   });
   $all("[data-need-review]", view).forEach((btn) => {
     btn.addEventListener("click", () => moveBackToReview(btn.dataset.needReview));
