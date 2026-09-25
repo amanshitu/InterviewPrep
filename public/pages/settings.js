@@ -457,6 +457,7 @@ function buildReadAloudCard() {
       <label class="field" style="margin-top:14px;">
         <span>Voice</span>
         <select id="read-aloud-voice"><option value="">Browser default</option></select>
+        <small>Indian English voices, if your device has one installed, are listed first. Don't see one? Most OSes let you add one — e.g. on Windows, Settings → Time &amp; Language → Speech → Add voices → English (India).</small>
       </label>
       <div class="review-controls" style="margin-top:4px;">
         <span class="range-label">Speed: <strong id="read-aloud-rate-label">${prefs.rate.toFixed(2)}x</strong></span>
@@ -475,19 +476,20 @@ function wireReadAloudCard(view) {
   const voiceSelect = $("#read-aloud-voice", view);
   const prefs = getReadAloudPrefs();
 
+  function voiceTier(lang) {
+    const l = lang.toLowerCase();
+    if (l === "en-in") return 0; // Indian English first — the accent most likely wanted here
+    if (l.startsWith("en")) return 1; // other English variants next
+    return 2; // everything else, so devices with few voices still see them all
+  }
+
   function populateVoices() {
     const all = getVoiceOptions();
-    // English voices first (most relevant for this app's questions), but
-    // don't hide the rest — some devices only expose a handful of voices.
-    const sorted = [...all].sort((a, b) => {
-      const aEn = a.lang.toLowerCase().startsWith("en") ? 0 : 1;
-      const bEn = b.lang.toLowerCase().startsWith("en") ? 0 : 1;
-      return aEn - bEn || a.name.localeCompare(b.name);
-    });
+    const sorted = [...all].sort((a, b) => voiceTier(a.lang) - voiceTier(b.lang) || a.name.localeCompare(b.name));
     const selected = voiceSelect.value || prefs.voiceURI;
     voiceSelect.innerHTML =
       `<option value="">Browser default</option>` +
-      sorted.map((v) => `<option value="${escapeHtml(v.voiceURI)}" ${v.voiceURI === selected ? "selected" : ""}>${escapeHtml(v.name)} (${escapeHtml(v.lang)})</option>`).join("");
+      sorted.map((v) => `<option value="${escapeHtml(v.voiceURI)}" ${v.voiceURI === selected ? "selected" : ""}>${escapeHtml(v.name)} (${escapeHtml(v.lang)}${v.lang.toLowerCase() === "en-in" ? " — India" : ""})</option>`).join("");
   }
   populateVoices();
   // Chrome (and some others) load voices asynchronously — the list is

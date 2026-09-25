@@ -498,3 +498,17 @@ Matches the "Got it" and "Review again soon" buttons to the icon+text look the "
 | Deploy | Not yet — pending |
 
 **Design note:** the "Need Review" button in the Completed-today section (Phase 4.5) wasn't touched — the user asked specifically about "Got it" and "Review again soon," and that button is a distinct action with different wording, so it was left as a plain text button rather than assumed into scope.
+
+## Phase 4.11 — surface Indian English voices for Read aloud
+
+**Status: implemented; not yet deployed.**
+
+The user asked for an Indian accent option. There's no way for the app to add a new synthetic voice — `SpeechSynthesisUtterance` only ever plays whatever voices the browser/OS actually has installed — but the Settings → Read aloud voice picker (Phase 4.9) already lets you choose *any* installed voice, including an Indian English one if your device has one. This phase just makes that easier to find.
+
+| Item | Status |
+|---|---|
+| Voice list sort now has three tiers: `en-IN` first, other English variants second, everything else last (previously it was just "English vs. not") | Done |
+| An `en-IN` option's label gets a `— India` suffix appended so it's unambiguous in the dropdown | Done |
+| Added a `<small>` hint under the Voice field pointing at how to install one on Windows (Settings → Time & Language → Speech → Add voices → English (India)) if none shows up | Done |
+| Verified: served `settings.js` bundle parses and matches source | Done |
+| Deploy | Not yet — pending |
