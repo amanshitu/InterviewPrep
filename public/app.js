@@ -167,6 +167,10 @@ export function toggleReadAloud(id, text, onChange) {
 
 const SPEAKER_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Z" fill="currentColor"/><path d="M16 8.5c1.4 1 1.4 5.7 0 6.7M19 6.2c2.3 1.9 2.3 9.4 0 11.3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
 const STOP_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></svg>`;
+// Shared with home.js/review.js for the "Got it" / "Review again soon"
+// buttons, so their icon+label styling matches the Read aloud button.
+export const CHECK_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 12.5 9 17.5 20 6.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+export const REPEAT_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 11A8 8 0 1 0 18.4 15.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M20 5.5v5.5h-5.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
 // Renders a "Read aloud" / "Stop" toggle button for the given question id,
 // or "" if this browser has no speech synthesis support at all. Markup

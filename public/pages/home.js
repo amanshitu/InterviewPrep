@@ -1,5 +1,5 @@
 // Today's queue — the default/home view.
-import { $, $all, el, escapeHtml, toastSuccess, toastError, api, state, renderNav, renderTopStats, navigate, renderReadAloudButton, toggleReadAloud } from "../app.js";
+import { $, $all, el, escapeHtml, toastSuccess, toastError, api, state, renderNav, renderTopStats, navigate, renderReadAloudButton, toggleReadAloud, CHECK_ICON, REPEAT_ICON } from "../app.js";
 
 const TEST_SIZE = 10;
 const DEFAULT_REVIEW_COUNT = 15;
@@ -82,8 +82,8 @@ function paint() {
           ? `${needsReview ? `<div style="margin-top:6px;"><span class="pill pill-in_progress">Needs review</span></div>` : ""}
              <div class="q-answer">${escapeHtml(q.a)}</div>
              <div class="q-actions">
-               <button class="btn btn-success btn-small" data-complete="${q.id}">Got it</button>
-               <button class="btn btn-warn btn-small" data-flag-review="${q.id}">Review again soon</button>
+               <button class="btn btn-success btn-small btn-icon-label" data-complete="${q.id}">${CHECK_ICON} Got it</button>
+               <button class="btn btn-warn btn-small btn-icon-label" data-flag-review="${q.id}">${REPEAT_ICON} Review again soon</button>
                ${renderReadAloudButton(q.id)}
              </div>`
           : `<button class="btn btn-secondary btn-small" data-reveal="${q.id}">Show model answer</button>`}

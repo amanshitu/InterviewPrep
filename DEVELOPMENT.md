@@ -483,3 +483,18 @@ Follow-up to Phase 4.8: a new "Read aloud" card in Settings (only rendered when 
 **Design notes:**
 - Voice/speed/pitch preferences live in `localStorage`, not the `users` table — this is a "how my own browser sounds" setting, not account data that should follow the user to another device, so no new migration or `/api/profile` field was added.
 - The card only renders on Settings when the browser actually supports speech synthesis, rather than showing dead controls on one that doesn't.
+
+## Phase 4.10 — icon+label styling for "Got it" / "Review again soon"
+
+**Status: implemented; not yet deployed.**
+
+Matches the "Got it" and "Review again soon" buttons to the icon+text look the "Read aloud" button introduced (Phase 4.8) — a checkmark and a repeat/again glyph respectively, using the same `.btn-icon-label` class for spacing/alignment.
+
+| Item | Status |
+|---|---|
+| New shared icon constants in `app.js`: `CHECK_ICON`, `REPEAT_ICON` | Done |
+| Applied to both places these buttons appear: the Today page's active question list (`home.js`) and the Daily Review page (`review.js`) | Done |
+| Verified: confirmed served `app.js`/`home.js`/`review.js` bundles parse and match source, spot-checked the SVG markup is well-formed | Done |
+| Deploy | Not yet — pending |
+
+**Design note:** the "Need Review" button in the Completed-today section (Phase 4.5) wasn't touched — the user asked specifically about "Got it" and "Review again soon," and that button is a distinct action with different wording, so it was left as a plain text button rather than assumed into scope.

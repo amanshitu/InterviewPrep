@@ -1,5 +1,5 @@
 // Spaced-repetition review, drawn from everything the user has completed.
-import { $, $all, el, escapeHtml, toastSuccess, toastError, api, state, renderNav, navigate } from "../app.js";
+import { $, $all, el, escapeHtml, toastSuccess, toastError, api, state, renderNav, navigate, CHECK_ICON, REPEAT_ICON } from "../app.js";
 
 const DEFAULT_REVIEW_COUNT = 15;
 
@@ -59,8 +59,8 @@ function paint() {
                ${item.graded
                  ? `<p class="section-sub" style="margin-top:8px;">Graded: ${item.graded === "got_it" ? "Got it" : "Review again soon"}</p>`
                  : `<div class="q-actions">
-                      <button class="btn btn-success btn-small" data-got="${idx}">Got it</button>
-                      <button class="btn btn-warn btn-small" data-again="${idx}">Review again soon</button>
+                      <button class="btn btn-success btn-small btn-icon-label" data-got="${idx}">${CHECK_ICON} Got it</button>
+                      <button class="btn btn-warn btn-small btn-icon-label" data-again="${idx}">${REPEAT_ICON} Review again soon</button>
                     </div>`}`
             : `<button class="btn btn-secondary btn-small" data-reveal-review="${idx}">Show model answer</button>`}
           ${item.times_shown ? `<div class="section-sub" style="margin-top:8px;">Reviewed ${item.times_shown}× before</div>` : ""}
