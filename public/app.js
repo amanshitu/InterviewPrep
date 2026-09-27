@@ -100,45 +100,74 @@ export function isSpeechSupported() {
 export function stopSpeaking() {
   if (isSpeechSupported()) window.speechSynthesis.cancel();
   state.speakingId = null;
-  releaseWakeLock();
+  stopBackgroundKeepAlive();
 }
 
 // Mobile browsers commonly suspend page JS — and speechSynthesis along with
-// it — once the screen turns off from inactivity. Holding a screen wake
-// lock while reading is active prevents that auto-timeout from kicking in.
-// This can't help against someone deliberately pressing the power button —
-// that's an OS-level suspend no web API can override — only the common
-// "walked away and the screen timed out on its own" case.
-let wakeLock = null;
+// it — once the screen locks or the tab is backgrounded. An earlier version
+// of this fixed that with a Screen Wake Lock, but that forces the screen to
+// stay on, which isn't what was wanted — the goal is letting the screen
+// actually turn off while reading keeps going, the way a music/podcast app
+// does. Browsers are far more lenient about suspending a page that's
+// actively playing real HTMLMediaElement audio, so a silent, looping
+// <audio> track plus a Media Session registration is used to signal "this
+// page is playing background media" for the duration of a read-aloud —
+// in practice this keeps speechSynthesis alive too, without holding the
+// screen on. Best-effort: still ultimately at the mercy of the browser/OS,
+// and can't do anything about a deliberate power-button press.
+let keepAliveAudio = null;
 
-function isWakeLockSupported() {
-  return typeof navigator !== "undefined" && "wakeLock" in navigator;
+function getKeepAliveAudio() {
+  if (keepAliveAudio) return keepAliveAudio;
+  // Built at runtime (real PCM silence, not a hand-rolled base64 guess) —
+  // 1 second of 8kHz 8-bit mono silence, looped for as long as needed.
+  const sampleRate = 8000;
+  const numSamples = sampleRate;
+  const buffer = new ArrayBuffer(44 + numSamples);
+  const view = new DataView(buffer);
+  const writeStr = (offset, str) => { for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i)); };
+  writeStr(0, "RIFF");
+  view.setUint32(4, 36 + numSamples, true);
+  writeStr(8, "WAVE");
+  writeStr(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate, true);
+  view.setUint16(32, 1, true);
+  view.setUint16(34, 8, true);
+  writeStr(36, "data");
+  view.setUint32(40, numSamples, true);
+  for (let i = 0; i < numSamples; i++) view.setUint8(44 + i, 128); // 128 = silence at 8-bit PCM's midpoint
+  const url = URL.createObjectURL(new Blob([buffer], { type: "audio/wav" }));
+  keepAliveAudio = new Audio(url);
+  keepAliveAudio.loop = true;
+  return keepAliveAudio;
 }
 
-async function acquireWakeLock() {
-  if (!isWakeLockSupported() || wakeLock) return;
-  try {
-    wakeLock = await navigator.wakeLock.request("screen");
-    wakeLock.addEventListener("release", () => { wakeLock = null; });
-  } catch {
-    /* best-effort — denied, unsupported context, battery saver, etc. */
+function startBackgroundKeepAlive(title) {
+  getKeepAliveAudio().play().catch(() => { /* best-effort — autoplay restrictions, etc. */ });
+  if ("mediaSession" in navigator) {
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({ title: title || "Reading answer aloud", artist: "Interview Prep" });
+      navigator.mediaSession.playbackState = "playing";
+      navigator.mediaSession.setActionHandler("pause", stopSpeaking);
+      navigator.mediaSession.setActionHandler("stop", stopSpeaking);
+    } catch {
+      /* best-effort — not every browser supports every part of this */
+    }
   }
 }
 
-function releaseWakeLock() {
-  if (wakeLock) {
-    wakeLock.release().catch(() => { /* already released */ });
-    wakeLock = null;
+function stopBackgroundKeepAlive() {
+  if (keepAliveAudio) {
+    keepAliveAudio.pause();
+    keepAliveAudio.currentTime = 0;
   }
-}
-
-if (isWakeLockSupported()) {
-  // The browser force-releases the lock whenever the page is hidden (tab
-  // switched away, app backgrounded) — re-acquire it if we come back while
-  // still reading, since the lock itself doesn't survive that.
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible" && state.speakingId) acquireWakeLock();
-  });
+  if ("mediaSession" in navigator) {
+    try { navigator.mediaSession.playbackState = "none"; } catch { /* best-effort */ }
+  }
 }
 
 // Voice/speed/pitch are a per-browser preference, not account data — stored
@@ -195,13 +224,13 @@ export function toggleReadAloud(id, text, onChange) {
   }
   const finish = () => {
     if (state.speakingId === id) state.speakingId = null;
-    releaseWakeLock();
+    stopBackgroundKeepAlive();
     if (onChange) onChange();
   };
   utterance.onend = finish;
   utterance.onerror = finish;
   window.speechSynthesis.speak(utterance);
-  acquireWakeLock();
+  startBackgroundKeepAlive(text);
   if (onChange) onChange();
   return true;
 }

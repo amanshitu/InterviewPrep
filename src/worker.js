@@ -21,6 +21,10 @@ const CONTENT_SECURITY_POLICY = [
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com",
   "img-src 'self' data:",
+  // The Read aloud background-keep-alive track is a silent WAV built at
+  // runtime as a Blob and played from its blob: object URL — needed so
+  // background audio can keep speechSynthesis alive past a screen lock.
+  "media-src 'self' blob:",
   "connect-src 'self'",
   "base-uri 'self'",
   "form-action 'self'",
