@@ -590,3 +590,21 @@ Follow-up to the confirmed Phase 4.12 limitation (screen lock stops Read aloud, 
 **Design notes:**
 - Off by default: forcing a battery-draining behavior on every user as a side effect of clicking a "Read aloud" button felt wrong, especially having already walked that back once this session. Opt-in keeps the default experience unchanged and puts the trade-off in the hands of whoever actually wants it.
 - The checkbox is `disabled` (not hidden) when Wake Lock isn't supported, with a note explaining why — same pattern already used for the "Voice" picker's degrade-gracefully approach, so an unsupported browser gets an honest explanation rather than a mysteriously inert control.
+
+## Phase 4.15 — group Read-aloud voices by language
+
+**Status: implemented and verified with a real Playwright/Chromium browser (mocked voice list); not yet deployed.**
+
+The Voice picker (Phase 4.9) was a flat list sorted "English variants first." The user asked for real language grouping instead — `<optgroup>`s labeled by language (Hindi, English, etc.), with English and Hindi pinned above every other language.
+
+| Item | Status |
+|---|---|
+| Voices grouped by BCP-47 primary language subtag (`en`, `hi`, `de`, ...) into `<optgroup>`s | Done |
+| Group labels are real language names (`Intl.DisplayNames`, e.g. `"hi"` → "Hindi"), not raw codes — falls back to the raw code if `Intl.DisplayNames` throws | Done |
+| English and Hindi groups pinned first (in that order), every other language group alphabetical by its display name after that | Done |
+| Within the English group, an India-accent voice still leads (Phase 4.11's behavior, preserved) | Done |
+| Each option's label gets a region suffix via `Intl.DisplayNames` region names (e.g. "(India)", "(United Kingdom)") instead of the raw lang code | Done |
+| Verified with a real Playwright/Chromium session using a mocked 7-voice list spanning 6 languages: confirmed exact group order (English, Hindi, then German/Japanese/Spanish alphabetically), confirmed the India-accent voice leads within English, confirmed region names render correctly | Done |
+| Deploy | Not yet — pending |
+
+**Known cosmetic nit:** a voice whose own `name` already embeds its region (common — e.g. "Microsoft Heera - English (India)") ends up with that appended twice, e.g. "Microsoft Heera - English (India) (India)". Not fixed — reliably detecting "this name already contains a region descriptor" across arbitrary OS/browser voice-naming conventions would need fragile string-matching heuristics for a purely cosmetic gain; the option remains fully identifiable and correctly grouped/selectable either way.

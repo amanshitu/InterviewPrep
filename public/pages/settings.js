@@ -457,7 +457,7 @@ function buildReadAloudCard() {
       <label class="field" style="margin-top:14px;">
         <span>Voice</span>
         <select id="read-aloud-voice"><option value="">Browser default</option></select>
-        <small>Indian English voices, if your device has one installed, are listed first. Don't see one? Most OSes let you add one — e.g. on Windows, Settings → Time &amp; Language → Speech → Add voices → English (India).</small>
+        <small>Grouped by language, with English and Hindi first (an India accent leads the English group, if your device has one installed). Don't see the accent you want? Most OSes let you add more voices — e.g. on Windows, Settings → Time &amp; Language → Speech → Add voices.</small>
       </label>
       <div class="review-controls" style="margin-top:4px;">
         <span class="range-label">Speed: <strong id="read-aloud-rate-label">${prefs.rate.toFixed(2)}x</strong></span>
@@ -483,20 +483,68 @@ function wireReadAloudCard(view) {
   const voiceSelect = $("#read-aloud-voice", view);
   const prefs = getReadAloudPrefs();
 
-  function voiceTier(lang) {
-    const l = lang.toLowerCase();
-    if (l === "en-in") return 0; // Indian English first — the accent most likely wanted here
-    if (l.startsWith("en")) return 1; // other English variants next
-    return 2; // everything else, so devices with few voices still see them all
+  // English and Hindi pinned to the top — English because the app's own
+  // content is in English, Hindi as the next most likely accent wanted
+  // here — then every other language the device offers, alphabetically.
+  const PINNED_LANGUAGES = ["en", "hi"];
+
+  function languageDisplayName(primaryLangCode) {
+    try {
+      return new Intl.DisplayNames([navigator.language || "en"], { type: "language" }).of(primaryLangCode) || primaryLangCode;
+    } catch {
+      return primaryLangCode;
+    }
+  }
+
+  function regionDisplayName(fullLangCode) {
+    const region = fullLangCode.split("-")[1];
+    if (!region) return "";
+    try {
+      return new Intl.DisplayNames([navigator.language || "en"], { type: "region" }).of(region.toUpperCase()) || "";
+    } catch {
+      return "";
+    }
   }
 
   function populateVoices() {
     const all = getVoiceOptions();
-    const sorted = [...all].sort((a, b) => voiceTier(a.lang) - voiceTier(b.lang) || a.name.localeCompare(b.name));
     const selected = voiceSelect.value || prefs.voiceURI;
-    voiceSelect.innerHTML =
-      `<option value="">Browser default</option>` +
-      sorted.map((v) => `<option value="${escapeHtml(v.voiceURI)}" ${v.voiceURI === selected ? "selected" : ""}>${escapeHtml(v.name)} (${escapeHtml(v.lang)}${v.lang.toLowerCase() === "en-in" ? " — India" : ""})</option>`).join("");
+
+    const groups = new Map(); // primary language code -> voices
+    for (const v of all) {
+      const primary = (v.lang || "").split("-")[0].toLowerCase();
+      if (!groups.has(primary)) groups.set(primary, []);
+      groups.get(primary).push(v);
+    }
+
+    const sortedKeys = Array.from(groups.keys()).sort((a, b) => {
+      const aPin = PINNED_LANGUAGES.indexOf(a);
+      const bPin = PINNED_LANGUAGES.indexOf(b);
+      if (aPin !== -1 || bPin !== -1) return (aPin === -1 ? 99 : aPin) - (bPin === -1 ? 99 : bPin);
+      return languageDisplayName(a).localeCompare(languageDisplayName(b));
+    });
+
+    let html = `<option value="">Browser default</option>`;
+    for (const key of sortedKeys) {
+      const voicesInGroup = groups.get(key).sort((a, b) => {
+        // Within English, an India accent leads the group — the accent
+        // most likely wanted here.
+        if (key === "en") {
+          const aIn = a.lang.toLowerCase() === "en-in" ? 0 : 1;
+          const bIn = b.lang.toLowerCase() === "en-in" ? 0 : 1;
+          if (aIn !== bIn) return aIn - bIn;
+        }
+        return a.name.localeCompare(b.name);
+      });
+      html += `<optgroup label="${escapeHtml(languageDisplayName(key))}">`;
+      html += voicesInGroup.map((v) => {
+        const region = regionDisplayName(v.lang);
+        const suffix = region ? ` (${region})` : v.lang ? ` (${v.lang})` : "";
+        return `<option value="${escapeHtml(v.voiceURI)}" ${v.voiceURI === selected ? "selected" : ""}>${escapeHtml(v.name)}${escapeHtml(suffix)}</option>`;
+      }).join("");
+      html += `</optgroup>`;
+    }
+    voiceSelect.innerHTML = html;
   }
   populateVoices();
   // Chrome (and some others) load voices asynchronously — the list is
