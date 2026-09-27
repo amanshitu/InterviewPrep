@@ -101,6 +101,48 @@ export function stopSpeaking() {
   if (isSpeechSupported()) window.speechSynthesis.cancel();
   state.speakingId = null;
   stopBackgroundKeepAlive();
+  releaseWakeLock();
+}
+
+// Optional, opt-in Screen Wake Lock (Settings → Read aloud → "Keep screen
+// on while reading") — the background-audio keep-alive below doesn't
+// survive an actual screen lock (confirmed on real devices, PWA and
+// browser both), so for anyone who'd rather the screen just stay on than
+// have reading cut off, this holds it awake for as long as reading lasts.
+// Off by default since it costs battery; only requested when the
+// preference is enabled and the API is supported.
+export function isWakeLockSupported() {
+  return typeof navigator !== "undefined" && "wakeLock" in navigator;
+}
+
+let wakeLock = null;
+
+async function acquireWakeLock() {
+  if (!isWakeLockSupported() || wakeLock) return;
+  try {
+    wakeLock = await navigator.wakeLock.request("screen");
+    wakeLock.addEventListener("release", () => { wakeLock = null; });
+  } catch {
+    /* best-effort — denied, unsupported context, battery saver, etc. */
+  }
+}
+
+function releaseWakeLock() {
+  if (wakeLock) {
+    wakeLock.release().catch(() => { /* already released */ });
+    wakeLock = null;
+  }
+}
+
+if (isWakeLockSupported()) {
+  // The browser force-releases the lock whenever the page is hidden — if
+  // the tab regains visibility while still reading and the preference is
+  // still on, re-acquire it, since the lock itself doesn't survive that.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && state.speakingId && getReadAloudPrefs().keepScreenOn) {
+      acquireWakeLock();
+    }
+  });
 }
 
 // Mobile browsers commonly suspend page JS — and speechSynthesis along with
@@ -173,7 +215,7 @@ function stopBackgroundKeepAlive() {
 // Voice/speed/pitch are a per-browser preference, not account data — stored
 // in localStorage like the theme choice, not synced to the server.
 const READ_ALOUD_PREFS_KEY = "readAloudPrefs";
-const DEFAULT_READ_ALOUD_PREFS = { voiceURI: "", rate: 0.95, pitch: 1 };
+const DEFAULT_READ_ALOUD_PREFS = { voiceURI: "", rate: 0.95, pitch: 1, keepScreenOn: false };
 
 export function getReadAloudPrefs() {
   try {
@@ -225,12 +267,14 @@ export function toggleReadAloud(id, text, onChange) {
   const finish = () => {
     if (state.speakingId === id) state.speakingId = null;
     stopBackgroundKeepAlive();
+    releaseWakeLock();
     if (onChange) onChange();
   };
   utterance.onend = finish;
   utterance.onerror = finish;
   window.speechSynthesis.speak(utterance);
   startBackgroundKeepAlive(text);
+  if (prefs.keepScreenOn) acquireWakeLock();
   if (onChange) onChange();
   return true;
 }

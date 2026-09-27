@@ -1,6 +1,6 @@
 // Account, prep profile, AI provider (BYOK), password/sessions, question
 // sets (upload + suggestions), and data export.
-import { $, $all, el, escapeHtml, toastSuccess, toastError, toastWarning, formatDate, downloadBlob, api, state, renderShell, renderNav, renderAvatar, refreshBankStats, isSpeechSupported, getReadAloudPrefs, setReadAloudPrefs, getVoiceOptions, toggleReadAloud } from "../app.js";
+import { $, $all, el, escapeHtml, toastSuccess, toastError, toastWarning, formatDate, downloadBlob, api, state, renderShell, renderNav, renderAvatar, refreshBankStats, isSpeechSupported, isWakeLockSupported, getReadAloudPrefs, setReadAloudPrefs, getVoiceOptions, toggleReadAloud } from "../app.js";
 
 // Client-side resize keeps the uploaded picture small (well under the
 // server's MAX_AVATAR_DATA_URL_LENGTH backstop) without needing any file
@@ -468,6 +468,13 @@ function buildReadAloudCard() {
         <input type="range" id="read-aloud-pitch" min="0" max="2" step="0.1" value="${prefs.pitch}" />
       </div>
       <button type="button" class="btn btn-secondary" id="read-aloud-preview-btn" style="margin-top:14px;">Preview voice</button>
+      <label class="field" style="margin-top:16px;flex-direction:row;align-items:center;gap:8px;">
+        <input type="checkbox" id="read-aloud-keep-screen-on" ${prefs.keepScreenOn ? "checked" : ""} ${isWakeLockSupported() ? "" : "disabled"} />
+        <span style="font-weight:600;color:var(--text);">Keep screen on while reading</span>
+      </label>
+      <small>${isWakeLockSupported()
+        ? "Reading can otherwise be cut off when your screen locks. Turning this on keeps the screen awake for as long as \"Read aloud\" is active — off by default since it uses more battery."
+        : "Not supported on this browser."}</small>
     </div>
   `);
 }
@@ -521,6 +528,11 @@ function wireReadAloudCard(view) {
     toggleReadAloud("__preview__", "This is a preview of the read aloud voice, speed, and pitch you've selected.", () => {
       previewBtn.textContent = state.speakingId === "__preview__" ? "Stop preview" : "Preview voice";
     });
+  });
+
+  const keepScreenOnCheckbox = $("#read-aloud-keep-screen-on", view);
+  keepScreenOnCheckbox.addEventListener("change", () => {
+    setReadAloudPrefs({ keepScreenOn: keepScreenOnCheckbox.checked });
   });
 }
 

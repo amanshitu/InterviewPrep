@@ -570,3 +570,23 @@ The user asked whether resume text could be read directly from an uploaded PDF i
 - `GlobalWorkerOptions.workerSrc` is resolved via `new URL("./pdf.worker.min.mjs", import.meta.url).href` rather than a hardcoded path, so it keeps working regardless of the app's base path.
 - Deliberately extraction-only, not rendering — this keeps the vendored footprint to exactly two files and sidesteps pdf.js's much larger and eval-heavier rendering/canvas pipeline entirely, which is also almost certainly why no CSP loosening was needed.
 - One environment note from testing: Playwright's own `page.waitForFunction()` helper injects an `eval()`-based polling predicate into the page, which this app's CSP (correctly) blocks — that's a test-harness detail, not an app bug, and was worked around in the test script with manual polling via ordinary `evaluate()`/`$eval()` calls instead.
+
+## Phase 4.14 — opt-in "Keep screen on while reading" toggle
+
+**Status: implemented and verified with a real Playwright/Chromium browser; not yet deployed.**
+
+Follow-up to the confirmed Phase 4.12 limitation (screen lock stops Read aloud, PWA or browser, no client-side avenue around it). Rather than force the screen to stay on for everyone (the original Wake Lock attempt, reverted after the user pushed back — see Phase 4.12), Wake Lock is back as an **explicit, off-by-default opt-in** in Settings, so anyone who'd rather trade battery for uninterrupted reading can turn it on themselves.
+
+| Item | Status |
+|---|---|
+| New `keepScreenOn` field in the same `readAloudPrefs` localStorage bucket as voice/rate/pitch — defaults to `false` | Done |
+| New `isWakeLockSupported()` export plus the wake-lock request/release machinery (re-added from Phase 4.12, since it was fully removed when replaced by the background-audio approach) | Done |
+| `toggleReadAloud` now acquires the wake lock only when `keepScreenOn` is true (checked at the moment reading starts), and always releases it on stop/end — same lifecycle as the background-audio keep-alive, running alongside it rather than replacing it (the audio keep-alive still helps with plain tab-backgrounding; the wake lock is specifically for the screen-lock case it can't reach) | Done |
+| Settings → "Read aloud" card: a "Keep screen on while reading" checkbox, disabled with an explanatory note on a browser without Wake Lock support, otherwise wired to persist immediately on change | Done |
+| Re-acquire-on-visibility-regain logic (from Phase 4.12) restored, now also gated on the preference still being enabled | Done |
+| Verified with a real Playwright/Chromium session (a `navigator.wakeLock.request` spy): confirmed **zero** wake-lock calls while the preference is off (today's default, unaffected), confirmed the checkbox persists across a full page reload, and confirmed enabling it makes `toggleReadAloud` call `wakeLock.request()` at exactly the right moment | Done |
+| Deploy | Not yet — pending |
+
+**Design notes:**
+- Off by default: forcing a battery-draining behavior on every user as a side effect of clicking a "Read aloud" button felt wrong, especially having already walked that back once this session. Opt-in keeps the default experience unchanged and puts the trade-off in the hands of whoever actually wants it.
+- The checkbox is `disabled` (not hidden) when Wake Lock isn't supported, with a note explaining why — same pattern already used for the "Voice" picker's degrade-gracefully approach, so an unsupported browser gets an honest explanation rather than a mysteriously inert control.
