@@ -100,6 +100,45 @@ export function isSpeechSupported() {
 export function stopSpeaking() {
   if (isSpeechSupported()) window.speechSynthesis.cancel();
   state.speakingId = null;
+  releaseWakeLock();
+}
+
+// Mobile browsers commonly suspend page JS — and speechSynthesis along with
+// it — once the screen turns off from inactivity. Holding a screen wake
+// lock while reading is active prevents that auto-timeout from kicking in.
+// This can't help against someone deliberately pressing the power button —
+// that's an OS-level suspend no web API can override — only the common
+// "walked away and the screen timed out on its own" case.
+let wakeLock = null;
+
+function isWakeLockSupported() {
+  return typeof navigator !== "undefined" && "wakeLock" in navigator;
+}
+
+async function acquireWakeLock() {
+  if (!isWakeLockSupported() || wakeLock) return;
+  try {
+    wakeLock = await navigator.wakeLock.request("screen");
+    wakeLock.addEventListener("release", () => { wakeLock = null; });
+  } catch {
+    /* best-effort — denied, unsupported context, battery saver, etc. */
+  }
+}
+
+function releaseWakeLock() {
+  if (wakeLock) {
+    wakeLock.release().catch(() => { /* already released */ });
+    wakeLock = null;
+  }
+}
+
+if (isWakeLockSupported()) {
+  // The browser force-releases the lock whenever the page is hidden (tab
+  // switched away, app backgrounded) — re-acquire it if we come back while
+  // still reading, since the lock itself doesn't survive that.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && state.speakingId) acquireWakeLock();
+  });
 }
 
 // Voice/speed/pitch are a per-browser preference, not account data — stored
@@ -156,11 +195,13 @@ export function toggleReadAloud(id, text, onChange) {
   }
   const finish = () => {
     if (state.speakingId === id) state.speakingId = null;
+    releaseWakeLock();
     if (onChange) onChange();
   };
   utterance.onend = finish;
   utterance.onerror = finish;
   window.speechSynthesis.speak(utterance);
+  acquireWakeLock();
   if (onChange) onChange();
   return true;
 }

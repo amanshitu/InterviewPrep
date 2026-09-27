@@ -222,6 +222,7 @@ img { max-width: 100%; }
 
 .topbar-nav { display: flex; align-items: center; gap: 2px; }
 .nav-link {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   border: none; background: transparent; cursor: pointer;
   font-family: var(--font-body); font-weight: 600; font-size: 13.5px;
   color: var(--text-muted); padding: 8px 12px; border-radius: var(--radius-sm);
@@ -229,6 +230,7 @@ img { max-width: 100%; }
 }
 .nav-link:hover { background: var(--surface-2); color: var(--text); }
 .nav-link.is-active { background: var(--primary-soft); color: var(--primary); }
+.nav-link-icon { display: none; flex-shrink: 0; } /* shown instead of the label only on narrow screens — see media query below */
 
 .topbar-spacer { flex: 1; min-width: 8px; }
 
@@ -351,6 +353,7 @@ img { max-width: 100%; }
 .completed-toggle {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   width: 100%; border: none; background: transparent; cursor: pointer; padding: 0; text-align: left;
+  color: inherit; /* buttons default to a UA system color otherwise, ignoring the theme's --text in dark mode */
 }
 .completed-toggle-chevron { color: var(--text-muted); transition: transform .15s ease; flex-shrink: 0; }
 .completed-toggle-chevron.is-open { transform: rotate(180deg); }
@@ -448,12 +451,18 @@ input[type="range"] { accent-color: var(--primary); width: 160px; }
   .profile-name { display: none; }
 }
 @media (max-width: 640px) {
+  /* Icon-only nav instead of forcing a second row: with full text labels
+     ("Today"/"Stats"/"Admin"/"About") plus the brand, theme toggle, and
+     profile avatar, everything didn't fit on one line — an earlier fix
+     forced the nav onto its own row via a flex-basis:100% spacer, but that
+     left the brand sitting alone with nothing else visible above it and
+     still overflowed into a horizontal scroll on the nav's row. Icons take
+     far less space, so it now fits on a single row and wraps naturally
+     (via .topbar's existing flex-wrap) if a device is exceptionally narrow. */
+  .nav-link-label { display: none; }
+  .nav-link-icon { display: inline-flex; }
+  .nav-link { padding: 8px; }
   .topbar { row-gap: 8px; }
-  .topbar-spacer { order: 1; flex-basis: 100%; height: 0; }
-  .topbar-nav { order: 2; flex: 1; overflow-x: auto; }
-  .theme-toggle { order: 3; }
-  .profile-menu { order: 4; }
-  .nav-link { padding: 8px 10px; font-size: 13px; }
 }
 @media (max-width: 480px) {
   .auth-card { padding: 24px 18px; }

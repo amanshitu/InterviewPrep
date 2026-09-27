@@ -512,3 +512,29 @@ The user asked for an Indian accent option. There's no way for the app to add a 
 | Added a `<small>` hint under the Voice field pointing at how to install one on Windows (Settings → Time & Language → Speech → Add voices → English (India)) if none shows up | Done |
 | Verified: served `settings.js` bundle parses and matches source | Done |
 | Deploy | Not yet — pending |
+
+## Phase 4.12 — dark-mode "Completed today" heading fix, mobile topbar overhaul, Read-aloud wake lock
+
+**Status: implemented and verified with a real Playwright/Chromium browser (installed locally for this phase — see note below); not yet deployed.**
+
+Three unrelated bug reports landed in the same working session, fixed together:
+
+**1. "Completed today" heading unreadable in dark mode.** `.completed-toggle` is a `<button>` that never set its own `color`, so it fell back to the browser's UA-default button text color instead of inheriting the theme's `--text` token — every other clickable text element in the app (`.auth-tab`, `.profile-trigger`) already set `color` explicitly; this one was the one place that got missed. Fixed with `color: inherit`.
+
+**2. Mobile topbar broken — brand alone on its own row, everything else in a horizontally-scrolling row underneath.** Root cause: a `max-width:640px` rule forced the nav onto a second row via a `.topbar-spacer { flex-basis: 100% }` trick, then crammed the nav + theme toggle + profile menu together on that second row with `overflow-x: auto` on just the nav — so the brand ended up alone on row one with nothing else visible, and the row below scrolled sideways. Fixed by converting the nav to icon-only at that breakpoint instead of forcing a row break: each nav button ("Today"/"Stats"/"Admin"/"About") now has an inline SVG icon (`.nav-link-icon`) alongside its existing text label (`.nav-link-label`); on desktop the icon stays hidden (no visual change) and only the label shows; at ≤640px the label hides and the icon shows instead. With icon-only nav, the whole topbar (brand + 4 nav icons + theme toggle + profile avatar) fits comfortably on one row even at a 390px viewport, so the forced-wrap hack and its `overflow-x: auto` were removed entirely — `.topbar`'s pre-existing `flex-wrap: wrap` is left to handle any exceptionally narrow device naturally instead of a manual `order` override.
+
+**3. Read-aloud stops when the phone's screen turns off.** Mobile browsers commonly suspend page JS (and `speechSynthesis` with it) once the screen auto-locks from inactivity. Added a Screen Wake Lock (`navigator.wakeLock.request("screen")`), acquired when reading starts and released when it stops (button click, natural end, or navigating away) — this prevents the *automatic* screen-off timeout from interrupting playback. Also re-acquires the lock if the tab regains visibility while still reading, since the browser force-releases any wake lock whenever a page is hidden. Feature-detected and best-effort (wrapped in try/catch) — degrades silently to today's behavior on unsupported browsers.
+
+| Item | Status |
+|---|---|
+| `.completed-toggle` now readable in dark mode | Done |
+| Mobile topbar: icon-only nav at ≤640px, forced-wrap/horizontal-scroll hack removed | Done |
+| Screen wake lock acquired while reading, released on stop/end/navigation, re-acquired on visibility regain | Done |
+| Verified with a real headless-Chromium Playwright session at a 390×844 mobile viewport: confirmed zero horizontal overflow (`scrollWidth === clientWidth` on both `.topbar` and `body`), confirmed nav labels hidden / icons shown, confirmed brand+nav+theme+profile all render on one row without overlapping, confirmed `speechSynthesis.speaking` becomes `true` after clicking Read aloud, and confirmed (via a spy wrapping `navigator.wakeLock.request`) that the app calls it at exactly the right moment (once on start, not again on stop) | Done |
+| Deploy | Not yet — pending |
+
+**Caveats:**
+- The wake lock can't help against someone *deliberately* pressing the phone's power button to lock it — that's an OS-level suspend no web API can override. It only prevents the common "walked away, screen timed out on its own" case, which is what was actually reported.
+- Wake Lock API browser support: broadly available on Chrome/Edge/Android (including mobile Chrome); Safari has partial support from 16.4+; on an unsupported browser the feature detection means read-aloud behaves exactly as it did before this phase — no regression, just no fix there either.
+- In this session's sandboxed headless-Chromium test environment, `navigator.wakeLock.request()` itself correctly gets called at the right time but rejects with `NotAllowedError` — expected, since headless mode has no real screen/display surface to lock. This is a test-environment limitation, not a code defect; the call-timing verification (via the request spy) is what confirms the logic is correct, and real-device behavior should be spot-checked once deployed.
+- Playwright + Chromium were installed locally just for this phase's verification (`npm install --no-save playwright@1.48.0` plus `npx playwright install chromium`) — installed with `--no-save` so `package.json`/`package-lock.json` are untouched, and `node_modules/` is already gitignored, so nothing needed cleaning up in git. Future phases can reuse this same local install for real-browser checks instead of API-only verification.

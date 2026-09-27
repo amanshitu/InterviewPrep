@@ -134,10 +134,22 @@
     </button>
 
     <nav class="topbar-nav" id="topbar-nav" aria-label="Navigation">
-      <button class="nav-link" id="nav-home-btn" data-view="home">Today</button>
-      <button class="nav-link" id="nav-stats-btn" data-view="stats">Stats</button>
-      <button class="nav-link" id="nav-admin-btn" data-view="admin" hidden>Admin</button>
-      <button class="nav-link" id="nav-about-btn" data-view="about">About</button>
+      <button class="nav-link" id="nav-home-btn" data-view="home">
+        <svg class="nav-link-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M3 9h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <span class="nav-link-label">Today</span>
+      </button>
+      <button class="nav-link" id="nav-stats-btn" data-view="stats">
+        <svg class="nav-link-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <span class="nav-link-label">Stats</span>
+      </button>
+      <button class="nav-link" id="nav-admin-btn" data-view="admin" hidden>
+        <svg class="nav-link-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6l7-3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="nav-link-label">Admin</span>
+      </button>
+      <button class="nav-link" id="nav-about-btn" data-view="about">
+        <svg class="nav-link-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M12 11v5M12 8v.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <span class="nav-link-label">About</span>
+      </button>
     </nav>
 
     <div class="topbar-spacer"></div>
