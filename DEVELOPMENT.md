@@ -608,3 +608,24 @@ The Voice picker (Phase 4.9) was a flat list sorted "English variants first." Th
 | Deploy | Not yet — pending |
 
 **Known cosmetic nit:** a voice whose own `name` already embeds its region (common — e.g. "Microsoft Heera - English (India)") ends up with that appended twice, e.g. "Microsoft Heera - English (India) (India)". Not fixed — reliably detecting "this name already contains a region descriptor" across arbitrary OS/browser voice-naming conventions would need fragile string-matching heuristics for a purely cosmetic gain; the option remains fully identifiable and correctly grouped/selectable either way.
+
+## Phase 4.16 — code-review fixes for the voice-grouping code
+
+**Status: implemented and verified with a real Playwright/Chromium browser; not yet deployed.**
+
+Ran `/code-review` on the Phase 4.15 voice-grouping commit — 7 finder-angle agents in parallel (simplification, efficiency, altitude/generalization, correctness, reuse, and two independent "removed-behavior"/regression angles), then verified each candidate directly against the code. 6 findings survived verification and were fixed; 2 were deliberately excluded (see below).
+
+| Finding | Fix |
+|---|---|
+| `regionDisplayName(v.lang)` called with unguarded `v.lang` — a voice with `lang === undefined`/`null` threw inside `.map()`, aborting `populateVoices()` before the dropdown ever updates, and since the same function is the `onvoiceschanged` handler it stayed permanently broken | Call site now passes `v.lang \|\| ""`, matching the guard already used one line above for grouping |
+| Empty/missing `lang` produced a blank `<optgroup label="">` sorted confusingly close to the pinned groups | Voices with no usable language now go in an explicitly-labeled "Other" group, always placed last (filtered out of the alphabetical sort entirely and appended at the end, rather than relying on how an empty string happens to collate) |
+| Region parsing assumed the 2nd subtag is always the region, breaking on script-tagged locales (`zh-Hans-CN` → tried to resolve "Hans" as a region, failed, showed the raw tag) | `regionDisplayName` now scans the subtags after the primary language for the first one that's actually region-shaped (2 letters, or a 3-digit UN M49 code), skipping script/variant subtags like "Hans" |
+| The "India accent leads the English group" check used an exact match against `"en-in"`, silently stopping working for any tag with extra subtags appended | Changed to `startsWith("en-in")`, so extended tags still lead |
+| Grouping used an exact primary-subtag match, narrower than the old flat-list version's permissive `startsWith("en")` — non-standard tags (a 3-letter `"eng-USA"`, an underscore-separated `"en_IN"`) that used to merge into "English" now got stranded in their own oddly-labeled group | Restored the old permissive behavior specifically for English (the one specially-treated, pinned language): if the raw lowercased tag starts with `"en"`, its group key is canonicalized to `"en"` regardless of exact subtag parsing |
+| `Intl.DisplayNames` (language and region formatters) were reconstructed on every call — twice per group per render, once per voice per render, and again on every `onvoiceschanged` firing (which some browsers fire multiple times as voices load asynchronously) | Both formatters are now built once when `wireReadAloudCard` runs (per Settings page visit), not rebuilt inside `populateVoices()` or its helpers |
+
+**Excluded from the fix list (reviewed and deliberately not applied):**
+- One angle suggested deriving `PINNED_LANGUAGES` from `navigator.language` instead of hardcoding `["en", "hi"]`. Not applied — the user's explicit request was "Hindi and English will be on top" as a fixed requirement, not "pin whatever language my device happens to be set to." The hardcoding is intentional, not an oversight.
+- A stale `speechSynthesis.onvoiceschanged` handler (never unregistered when navigating away from Settings) was flagged by one angle — explicitly noted by that same agent as pre-existing behavior from the prior version of this code, not introduced by the language-grouping diff, so left out of scope for this review's fix pass.
+
+**Verification:** a single Playwright/Chromium test with a 9-voice mocked list deliberately covering every reviewed edge case at once — normal `en-US`/`hi-IN`, an exact `en-IN`, an extended `en-IN-u-va-posix`, an underscore `en_IN`, a 3-letter `eng-USA`, a script-tagged `zh-Hans-CN`, an `undefined` lang, and an empty-string lang — confirmed all six fixes simultaneously: zero crashes/console errors, both non-standard English tags merged correctly into the English group, the extended India tag still led that group, the script-tagged voice resolved to "(China)" instead of a raw tag, and both unknown-language voices landed together in a trailing "Other" group instead of a blank one.

@@ -488,19 +488,34 @@ function wireReadAloudCard(view) {
   // here — then every other language the device offers, alphabetically.
   const PINNED_LANGUAGES = ["en", "hi"];
 
+  // Built once (not per populateVoices() call, which also runs on every
+  // onvoiceschanged firing) since navigator.language never changes mid-session.
+  const uiLocale = navigator.language || "en";
+  let languageNames = null;
+  let regionNames = null;
+  try { languageNames = new Intl.DisplayNames([uiLocale], { type: "language" }); } catch { /* unsupported browser */ }
+  try { regionNames = new Intl.DisplayNames([uiLocale], { type: "region" }); } catch { /* unsupported browser */ }
+
   function languageDisplayName(primaryLangCode) {
+    if (!primaryLangCode) return "Other"; // voices with no usable language tag at all
+    if (!languageNames) return primaryLangCode;
     try {
-      return new Intl.DisplayNames([navigator.language || "en"], { type: "language" }).of(primaryLangCode) || primaryLangCode;
+      return languageNames.of(primaryLangCode) || primaryLangCode;
     } catch {
       return primaryLangCode;
     }
   }
 
+  // A script subtag (e.g. "Hans" in "zh-Hans-CN") sits in the same position
+  // a region subtag would for a plain tag like "en-US" — so pick the first
+  // remaining subtag that's actually region-shaped (2 letters, or a 3-digit
+  // UN M49 code) rather than assuming it's always the second subtag.
   function regionDisplayName(fullLangCode) {
-    const region = fullLangCode.split("-")[1];
-    if (!region) return "";
+    const parts = (fullLangCode || "").split("-");
+    const region = parts.slice(1).find((p) => /^[A-Za-z]{2}$/.test(p) || /^\d{3}$/.test(p));
+    if (!region || !regionNames) return "";
     try {
-      return new Intl.DisplayNames([navigator.language || "en"], { type: "region" }).of(region.toUpperCase()) || "";
+      return regionNames.of(region.toUpperCase()) || "";
     } catch {
       return "";
     }
@@ -510,35 +525,49 @@ function wireReadAloudCard(view) {
     const all = getVoiceOptions();
     const selected = voiceSelect.value || prefs.voiceURI;
 
-    const groups = new Map(); // primary language code -> voices
+    const groups = new Map(); // primary language code ("" = unknown) -> voices
     for (const v of all) {
-      const primary = (v.lang || "").split("-")[0].toLowerCase();
+      const rawLang = (v.lang || "").toLowerCase();
+      let primary = rawLang.split("-")[0];
+      // Keep non-standard English-ish tags (a stray 3-letter "eng-USA", an
+      // underscore-separated "en_IN" from some older Android builds) merged
+      // into English rather than stranded in their own group — matches how
+      // the original flat-list version's permissive startsWith("en") check
+      // used to treat these.
+      if (rawLang.startsWith("en")) primary = "en";
       if (!groups.has(primary)) groups.set(primary, []);
       groups.get(primary).push(v);
     }
 
-    const sortedKeys = Array.from(groups.keys()).sort((a, b) => {
+    // Voices with no usable language tag go last, in their own clearly-
+    // labeled "Other" group, rather than sorting into the alphabetical run
+    // via an empty string's collation position (which happened to land
+    // right after the pinned groups — confusing, and locale-dependent).
+    const namedKeys = Array.from(groups.keys()).filter((k) => k !== "");
+    namedKeys.sort((a, b) => {
       const aPin = PINNED_LANGUAGES.indexOf(a);
       const bPin = PINNED_LANGUAGES.indexOf(b);
       if (aPin !== -1 || bPin !== -1) return (aPin === -1 ? 99 : aPin) - (bPin === -1 ? 99 : bPin);
       return languageDisplayName(a).localeCompare(languageDisplayName(b));
     });
+    const sortedKeys = groups.has("") ? [...namedKeys, ""] : namedKeys;
 
     let html = `<option value="">Browser default</option>`;
     for (const key of sortedKeys) {
       const voicesInGroup = groups.get(key).sort((a, b) => {
         // Within English, an India accent leads the group — the accent
-        // most likely wanted here.
+        // most likely wanted here. startsWith (not an exact match) so an
+        // India-tagged voice still leads even with extra subtags appended.
         if (key === "en") {
-          const aIn = a.lang.toLowerCase() === "en-in" ? 0 : 1;
-          const bIn = b.lang.toLowerCase() === "en-in" ? 0 : 1;
+          const aIn = a.lang.toLowerCase().startsWith("en-in") ? 0 : 1;
+          const bIn = b.lang.toLowerCase().startsWith("en-in") ? 0 : 1;
           if (aIn !== bIn) return aIn - bIn;
         }
         return a.name.localeCompare(b.name);
       });
       html += `<optgroup label="${escapeHtml(languageDisplayName(key))}">`;
       html += voicesInGroup.map((v) => {
-        const region = regionDisplayName(v.lang);
+        const region = regionDisplayName(v.lang || "");
         const suffix = region ? ` (${region})` : v.lang ? ` (${v.lang})` : "";
         return `<option value="${escapeHtml(v.voiceURI)}" ${v.voiceURI === selected ? "selected" : ""}>${escapeHtml(v.name)}${escapeHtml(suffix)}</option>`;
       }).join("");
