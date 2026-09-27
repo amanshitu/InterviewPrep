@@ -539,3 +539,30 @@ Three unrelated bug reports landed in the same working session, fixed together:
 - This is a best-effort browser behavior, not a guaranteed API — it leans on browsers generally being lenient about background-suspending an actively-playing media element, which is well-established on Android Chrome; iOS Safari is historically stricter about backgrounded tabs generally, so real-device behavior there is worth spot-checking after deploying.
 - **Environment note**: while chasing this down, a stale local `wrangler dev` process kept serving an old build after a source edit (a recurring flakiness in this session's Windows dev environment, previously seen with D1 migration-tracking desyncs and repeated `.wrangler/tmp` bundle-resolution errors) — the CSP fix initially appeared not to take effect until the process was fully killed and `.wrangler` cleared and restarted, which also wiped the local D1 database and required re-running `wrangler d1 migrations apply interview-prep-db --local` to restore it. Worth remembering for future local-only fixes: if a change doesn't seem to take effect, verify by curling the actual response header/body rather than trusting that dev server is watching correctly.
 - Playwright + Chromium were installed locally for this phase's verification (`npm install --no-save playwright@1.48.0` plus `npx playwright install chromium`) — installed with `--no-save` so `package.json`/`package-lock.json` are untouched, and `node_modules/` is already gitignored, so nothing needed cleaning up in git. Future phases can reuse this same local install for real-browser checks instead of API-only verification.
+
+## Phase 4.13 — optional PDF upload for the resume-prompt builder
+
+**Status: implemented and verified with a real Playwright/Chromium browser; not yet deployed.**
+
+The user asked whether resume text could be read directly from an uploaded PDF instead of always pasting it in — floating a hybrid (keep paste, add PDF browse) as a fallback if full replacement wasn't a good idea. Recommendation given before building: yes to the hybrid, but flagged clearly that this is **the app's first-ever third-party dependency** — everything until now has been zero-dependency by deliberate choice (an XLSX importer was declined earlier for exactly this reason, and "paste text, not upload" was the original locked-in call on this very feature). User confirmed: build the hybrid.
+
+**What shipped:**
+- Vendored a same-origin copy of Mozilla's `pdf.js` v4.0.379 (`public/vendor/pdfjs/pdf.min.mjs` + `pdf.worker.min.mjs`, ~1.3MB combined, plus its Apache-2.0 `LICENSE`) — no CDN, no build step, just static files served by the existing `[assets]` binding like any other file in `public/`.
+- New `public/vendor/pdfjs/extract.js`: a small wrapper exporting `extractPdfText(arrayBuffer)`. Lazy-loaded via dynamic `import()` only when a user actually clicks "Browse for a PDF," so it never touches the app's normal page weight. Uses pdf.js's text-layer API only (`getTextContent()`, one page at a time) — no rendering, no glyph rasterization. Returns `""` (never throws) on anything it can't extract usable text from, so the caller always has a single, simple "did this work" check.
+- Settings → "Generate questions from your resume": a "Browse for a PDF" button next to the existing paste textarea. On file select, the PDF is parsed **entirely in the browser** (never uploaded anywhere, never touches the Worker) and the extracted text fills the same textarea the paste flow already used — reviewable/editable before generating a prompt, exactly like pasted text. Empty extraction (common for scanned/image-only resumes) shows a warning toast steering the user back to pasting manually instead of failing silently.
+
+| Item | Status |
+|---|---|
+| pdf.js vendored same-origin, uninstalled from npm afterward (only its built output is kept — `--no-save` avoided touching `package.json`) | Done |
+| "Browse for a PDF" button + status line added to the resume-prompt card | Done |
+| Extraction pre-fills the existing resume textarea rather than bypassing it — user still reviews/edits before anything is sent to the AI-suggest-role or generate-prompt endpoints | Done |
+| Graceful failure: empty/unparseable PDF shows a warning toast with clear next-step guidance, not a silent no-op or a scary error | Done |
+| Verified end-to-end with a real Playwright/Chromium session: generated an actual text-based PDF via `page.pdf()`, uploaded it through the real file input, confirmed the extracted text matches the source exactly (including a unique marker string), and confirmed **zero CSP violations** — pdf.js's text-extraction codepath needed no CSP changes at all (no `unsafe-eval`, no additional `script-src`/`worker-src` entries — the existing `script-src 'self' ...` already covers the same-origin worker module) | Done |
+| Also verified the failure path: a non-PDF file produces the expected warning toast and leaves the textarea untouched | Done |
+| Deploy | Not yet — pending |
+
+**Design notes:**
+- Chose pdf.js's `.mjs` (ES module) build specifically because this app already loads all its own code as native ES modules (`<script type="module">`, dynamic `import()` per route) — no bundler, no UMD global needed, it just plugs into the existing architecture.
+- `GlobalWorkerOptions.workerSrc` is resolved via `new URL("./pdf.worker.min.mjs", import.meta.url).href` rather than a hardcoded path, so it keeps working regardless of the app's base path.
+- Deliberately extraction-only, not rendering — this keeps the vendored footprint to exactly two files and sidesteps pdf.js's much larger and eval-heavier rendering/canvas pipeline entirely, which is also almost certainly why no CSP loosening was needed.
+- One environment note from testing: Playwright's own `page.waitForFunction()` helper injects an `eval()`-based polling predicate into the page, which this app's CSP (correctly) blocks — that's a test-harness detail, not an app bug, and was worked around in the test script with manual polling via ordinary `evaluate()`/`$eval()` calls instead.

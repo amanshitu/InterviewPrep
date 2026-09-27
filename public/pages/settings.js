@@ -872,9 +872,15 @@ function buildResumePromptCard() {
       <p class="section-sub" style="margin-top:6px;">Paste your resume and target role to get a ready-to-use prompt for ChatGPT or Claude — it'll reply with categorized interview questions and detailed model answers you can import right below.</p>
       <label class="field" style="margin-top:14px;">
         <span>Resume text</span>
-        <textarea id="resume-text" rows="16" maxlength="24000" placeholder="Paste your resume text here (copy it out of your PDF or Word document)."></textarea>
+        <textarea id="resume-text" rows="16" maxlength="24000" placeholder="Paste your resume text here (copy it out of your PDF or Word document), or browse for a PDF below."></textarea>
         <small>Sent to generate a target-role suggestion and the tailored prompt below (never stored) — pasting that prompt into ChatGPT/Claude then sends it there under your own account, not through this app.</small>
       </label>
+      <div class="q-actions" style="margin-top:0;">
+        <input type="file" id="resume-pdf-input" accept="application/pdf" hidden />
+        <button type="button" class="btn btn-secondary btn-small" id="resume-pdf-browse-btn">Browse for a PDF</button>
+        <span class="section-sub" id="resume-pdf-status"></span>
+      </div>
+      <p class="section-sub" style="margin-top:4px;">Extracted entirely in your browser — the PDF itself is never uploaded anywhere. Works best on text-based PDFs; if extraction comes up empty (common for scanned resumes), paste the text in above instead.</p>
       <label class="field">
         <span>Target role</span>
         <div class="q-actions" style="margin-top:0;">
@@ -959,6 +965,33 @@ function wireResumePromptCard(view) {
     if (!value) return;
     addResumeCategoryCheckbox(categoriesList, value, true);
     input.value = "";
+  });
+
+  const pdfInput = $("#resume-pdf-input", view);
+  const pdfStatus = $("#resume-pdf-status", view);
+  $("#resume-pdf-browse-btn", view).addEventListener("click", () => pdfInput.click());
+  pdfInput.addEventListener("change", async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    pdfStatus.textContent = "Reading PDF…";
+    try {
+      const { extractPdfText } = await import("../vendor/pdfjs/extract.js");
+      const buffer = await file.arrayBuffer();
+      const text = await extractPdfText(buffer);
+      if (!text) {
+        pdfStatus.textContent = "";
+        toastWarning("Couldn't read text from that PDF (it may be a scanned image) — paste the resume text in manually instead.");
+        return;
+      }
+      const textarea = $("#resume-text", view);
+      textarea.value = text.slice(0, 24000);
+      pdfStatus.textContent = `Loaded from ${file.name}`;
+      toastSuccess("Resume text extracted — review it below before generating.");
+    } catch {
+      pdfStatus.textContent = "";
+      toastError("Couldn't read that PDF — paste the resume text in manually instead.");
+    }
   });
 
   $("#resume-suggest-role-btn", view).addEventListener("click", async () => {
