@@ -460,8 +460,10 @@ input[type="range"] { accent-color: var(--primary); width: 160px; }
      far less space, so it now fits on a single row and wraps naturally
      (via .topbar's existing flex-wrap) if a device is exceptionally narrow. */
   .nav-link-label { display: none; }
+  .nav-link.is-active .nav-link-label { display: inline; } /* the active item keeps its text label, like a pill — others stay icon-only */
   .nav-link-icon { display: inline-flex; }
   .nav-link { padding: 8px; }
+  .nav-link.is-active { padding: 8px 14px; }
   .topbar { row-gap: 8px; }
 }
 @media (max-width: 480px) {

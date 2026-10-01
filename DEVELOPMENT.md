@@ -629,3 +629,17 @@ Ran `/code-review` on the Phase 4.15 voice-grouping commit — 7 finder-angle ag
 - A stale `speechSynthesis.onvoiceschanged` handler (never unregistered when navigating away from Settings) was flagged by one angle — explicitly noted by that same agent as pre-existing behavior from the prior version of this code, not introduced by the language-grouping diff, so left out of scope for this review's fix pass.
 
 **Verification:** a single Playwright/Chromium test with a 9-voice mocked list deliberately covering every reviewed edge case at once — normal `en-US`/`hi-IN`, an exact `en-IN`, an extended `en-IN-u-va-posix`, an underscore `en_IN`, a 3-letter `eng-USA`, a script-tagged `zh-Hans-CN`, an `undefined` lang, and an empty-string lang — confirmed all six fixes simultaneously: zero crashes/console errors, both non-standard English tags merged correctly into the English group, the extended India tag still led that group, the script-tagged voice resolved to "(China)" instead of a raw tag, and both unknown-language voices landed together in a trailing "Other" group instead of a blank one.
+
+## Phase 4.17 — mobile top nav: active item shows text, others icon-only
+
+**Status: implemented and verified with a real Playwright/Chromium browser; not yet deployed.**
+
+The icon-only mobile nav from Phase 4.12 made every item (Today/Stats/Admin/About) icon-only, all the time. The user wanted it closer to a common mobile pattern instead — shown via a reference screenshot (a rounded highlighted "pill" with icon+text for the current page, plain icons for the rest) — so only the active nav item keeps its label; everything else stays icon-only.
+
+| Item | Status |
+|---|---|
+| `.nav-link.is-active .nav-link-label` now overrides the mobile breakpoint's `.nav-link-label { display: none; }`, so the active item alone keeps its text visible | Done |
+| Active item gets slightly more horizontal padding (`8px 14px` vs `8px` for icon-only items) so the visible label has breathing room, forming the pill look from the reference image | Done |
+| No changes needed to the pill's background/color styling — `.nav-link.is-active { background: var(--primary-soft); color: var(--primary); }` already existed from before and was already exactly the look wanted | Done |
+| Verified with a real Playwright/Chromium session at 390×844: confirmed the active item's label is visible while all others are icon-only, confirmed this correctly follows navigation (Today → Stats), confirmed the topbar still has zero horizontal overflow, and visually compared screenshots against the reference image | Done |
+| Deploy | Not yet — pending |
