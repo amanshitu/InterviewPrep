@@ -3,7 +3,7 @@
 // and logged out (a standalone screen, so prospective users can read it
 // before creating an account). buildAboutView() is the single source of
 // content for both contexts.
-import { $, el, escapeHtml, state, renderNav } from "../app.js";
+import { $, el, escapeHtml, state, renderNav, BACK_ICON } from "../app.js";
 
 export function render() {
   if (state.currentUser) {
@@ -33,7 +33,7 @@ function renderStandalone() {
   // had a footer at all.
   wrap.innerHTML = "";
   wrap.appendChild(buildAboutView());
-  wrap.appendChild(el(`<button class="btn btn-ghost" id="about-back-btn" style="align-self:center;">Back to sign in</button>`));
+  wrap.appendChild(el(`<button class="btn btn-ghost btn-icon-label" id="about-back-btn" style="align-self:center;">${BACK_ICON} Back to sign in</button>`));
   wrap.appendChild(el(`
     <footer class="site-footer">
       <p>&copy; ${new Date().getFullYear()} Xynora. All rights reserved. Designed and developed by <a href="https://www.xynora.in" target="_blank" rel="noopener noreferrer">Xynora</a> &middot; <a href="https://www.xynoramedia.com" target="_blank" rel="noopener noreferrer">Xynora Media</a></p>

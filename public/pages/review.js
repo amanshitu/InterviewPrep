@@ -1,5 +1,5 @@
 // Spaced-repetition review, drawn from everything the user has completed.
-import { $, $all, el, escapeHtml, toastSuccess, toastError, api, state, renderNav, navigate, CHECK_ICON, REPEAT_ICON } from "../app.js";
+import { $, $all, el, escapeHtml, toastSuccess, toastError, api, state, renderNav, navigate, CHECK_ICON, REPEAT_ICON, EYE_ICON, SHUFFLE_ICON, BACK_ICON } from "../app.js";
 
 const DEFAULT_REVIEW_COUNT = 15;
 
@@ -30,8 +30,8 @@ function paint() {
     <div class="card">
       <div class="section-title" style="font-size:20px;">Daily review</div>
       <p class="section-sub" style="margin-top:6px;">${reviewBatch.length} random questions pulled from your completed questions.</p>
-      <button class="btn btn-secondary" id="reshuffle-btn" style="margin-top:14px;">New batch</button>
-      <button class="btn btn-ghost" id="back-home-btn" style="margin-top:14px;">Back to Today</button>
+      <button class="btn btn-secondary btn-icon-label" id="reshuffle-btn" style="margin-top:14px;">${SHUFFLE_ICON} New batch</button>
+      <button class="btn btn-ghost btn-icon-label" id="back-home-btn" style="margin-top:14px;">${BACK_ICON} Back to Today</button>
     </div>
   `));
 
@@ -62,7 +62,7 @@ function paint() {
                       <button class="btn btn-success btn-small btn-icon-label" data-got="${idx}">${CHECK_ICON} Got it</button>
                       <button class="btn btn-warn btn-small btn-icon-label" data-again="${idx}">${REPEAT_ICON} Review again soon</button>
                     </div>`}`
-            : `<button class="btn btn-secondary btn-small" data-reveal-review="${idx}">Show model answer</button>`}
+            : `<button class="btn btn-secondary btn-small btn-icon-label" data-reveal-review="${idx}">${EYE_ICON} Show model answer</button>`}
           ${item.times_shown ? `<div class="section-sub" style="margin-top:8px;">Reviewed ${item.times_shown}× before</div>` : ""}
         </div>
       `));

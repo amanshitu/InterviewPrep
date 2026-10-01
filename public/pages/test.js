@@ -1,5 +1,5 @@
 // Daily AI-generated multiple-choice test.
-import { $, $all, el, escapeHtml, toastError, api, state, renderNav, navigate } from "../app.js";
+import { $, $all, el, escapeHtml, toastError, api, state, renderNav, navigate, BACK_ICON } from "../app.js";
 
 let testBatch = [];
 
@@ -31,7 +31,7 @@ function paint() {
     <div class="card">
       <div class="section-title" style="font-size:20px;">Daily test</div>
       <p class="section-sub" style="margin-top:6px;">${answeredCount}/${testBatch.length} answered${answeredCount ? ` · ${correctCount} correct` : ""}</p>
-      <button class="btn btn-ghost" id="back-home-btn" style="margin-top:14px;">Back to Today</button>
+      <button class="btn btn-ghost btn-icon-label" id="back-home-btn" style="margin-top:14px;">${BACK_ICON} Back to Today</button>
     </div>
   `));
 

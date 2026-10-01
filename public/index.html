@@ -40,8 +40,8 @@
     <p class="auth-sub">A daily interview-prep tracker: everyone gets the shared HR/behavioral curriculum, plus whatever question sets you or others upload — a fresh batch every day sized to your own pace, plus spaced-repetition review of everything you've covered.</p>
 
     <div class="auth-tabs" role="tablist">
-      <button class="auth-tab is-active" data-tab="login" role="tab" aria-selected="true">Sign in</button>
-      <button class="auth-tab" data-tab="signup" role="tab" aria-selected="false">Create account</button>
+      <button class="auth-tab is-active btn-icon-label" data-tab="login" role="tab" aria-selected="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 3h3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-3M10 17l5-5-5-5M14 12H3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg> Sign in</button>
+      <button class="auth-tab btn-icon-label" data-tab="signup" role="tab" aria-selected="false"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="9" cy="7" r="3.2" stroke="currentColor" stroke-width="1.8"/><path d="M3 20c0-3.5 2.7-6 6-6s6 2.5 6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M18 8v5M15.5 10.5h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg> Create account</button>
     </div>
 
     <form id="login-form" class="auth-form">
@@ -55,8 +55,8 @@
       </label>
       <p class="form-error" id="login-error" hidden></p>
       <p class="form-note" id="login-success" hidden></p>
-      <button type="submit" class="btn btn-primary btn-block">Sign in</button>
-      <button type="button" class="btn btn-ghost btn-block" id="forgot-password-link" style="margin-top:8px;">Forgot password?</button>
+      <button type="submit" class="btn btn-primary btn-block btn-icon-label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 3h3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-3M10 17l5-5-5-5M14 12H3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg> Sign in</button>
+      <button type="button" class="btn btn-ghost btn-block btn-icon-label" id="forgot-password-link" style="margin-top:8px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="7.5" cy="15.5" r="3.5" stroke="currentColor" stroke-width="1.8"/><path d="M10 13l8-8M15 5l2 2M18 2l2 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg> Forgot password?</button>
     </form>
 
     <form id="forgot-form" class="auth-form" hidden>
@@ -67,8 +67,8 @@
       </label>
       <p class="form-error" id="forgot-error" hidden></p>
       <p class="form-note" id="forgot-success" hidden></p>
-      <button type="submit" class="btn btn-primary btn-block">Send reset link</button>
-      <button type="button" class="btn btn-ghost btn-block" id="forgot-cancel-link" style="margin-top:8px;">Back to sign in</button>
+      <button type="submit" class="btn btn-primary btn-block btn-icon-label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M21 3 3 10l7 3 3 7 8-17Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></svg> Send reset link</button>
+      <button type="button" class="btn btn-ghost btn-block btn-icon-label" id="forgot-cancel-link" style="margin-top:8px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M19 12H5M11 18l-6-6 6-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg> Back to sign in</button>
     </form>
 
     <form id="reset-form" class="auth-form" hidden>
@@ -79,7 +79,7 @@
         <small>At least 8 characters.</small>
       </label>
       <p class="form-error" id="reset-error" hidden></p>
-      <button type="submit" class="btn btn-primary btn-block">Update password</button>
+      <button type="submit" class="btn btn-primary btn-block btn-icon-label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="7.5" cy="15.5" r="3.5" stroke="currentColor" stroke-width="1.8"/><path d="M10 13l8-8M15 5l2 2M18 2l2 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg> Update password</button>
     </form>
 
     <form id="signup-form" class="auth-form" hidden>
@@ -111,7 +111,7 @@
         <small>You can change this any time in Settings.</small>
       </label>
       <p class="form-error" id="signup-error" hidden></p>
-      <button type="submit" class="btn btn-primary btn-block">Create account</button>
+      <button type="submit" class="btn btn-primary btn-block btn-icon-label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="9" cy="7" r="3.2" stroke="currentColor" stroke-width="1.8"/><path d="M3 20c0-3.5 2.7-6 6-6s6 2.5 6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M18 8v5M15.5 10.5h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg> Create account</button>
     </form>
   </div>
   <footer class="site-footer">
@@ -187,8 +187,8 @@
         <svg class="profile-caret" width="10" height="10" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
       <div class="profile-dropdown" id="profile-dropdown">
-        <button class="profile-dropdown-item" id="settings-btn">Settings</button>
-        <button class="profile-dropdown-item profile-dropdown-danger" id="logout-btn">Sign out</button>
+        <button class="profile-dropdown-item btn-icon-label" id="settings-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 6h8M18 6h2M4 12h4M12 12h8M4 18h8M18 18h2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="14" cy="6" r="2" fill="currentColor"/><circle cx="8" cy="12" r="2" fill="currentColor"/><circle cx="14" cy="18" r="2" fill="currentColor"/></svg> Settings</button>
+        <button class="profile-dropdown-item profile-dropdown-danger btn-icon-label" id="logout-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 17l5-5-5-5M21 12H9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg> Sign out</button>
       </div>
     </div>
   </header>

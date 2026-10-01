@@ -643,3 +643,44 @@ The icon-only mobile nav from Phase 4.12 made every item (Today/Stats/Admin/Abou
 | No changes needed to the pill's background/color styling — `.nav-link.is-active { background: var(--primary-soft); color: var(--primary); }` already existed from before and was already exactly the look wanted | Done |
 | Verified with a real Playwright/Chromium session at 390×844: confirmed the active item's label is visible while all others are icon-only, confirmed this correctly follows navigation (Today → Stats), confirmed the topbar still has zero horizontal overflow, and visually compared screenshots against the reference image | Done |
 | Deploy | Not yet — pending |
+
+## Phase 4.18 — app-wide icon+text buttons, modernized Today/Stats dashboards
+
+**Status: implemented and verified with a real Playwright/Chromium browser across every page; not yet deployed.**
+
+The user shared a reference screenshot (a CRM-style UI: rounded dark pill buttons with icon+text, e.g. "⬆ Import" / "⬇ Export" / "+ Add company") and asked to (1) modernize the dashboard with graphs/images/icons and (2) restyle every button, app-wide, to match that icon+text pattern. Confirmed scope first via `AskUserQuestion` before starting, since the reference was clearly from an unrelated app (style reference only, not literal CRM features) and "every button, app-wide" is a large, precedent-setting change: user chose **both** Today and Stats pages for the dashboard pass, and **every button app-wide** for the icon restyle.
+
+**Audit first:** delegated a read-only Explore agent to inventory every plain-text button across the whole app (`public/index.html` + every `public/pages/*.js`) before touching anything — it found 52 buttons needing icons, flagged several ambiguous cases (label-flipping buttons, tab controls, dropdown menu items, glyph-only "✕"/"+" buttons) for manual judgment calls, and confirmed `stats.js` and `test.js`'s MCQ-option buttons needed no icons (dynamic answer content, not fixed UI labels — correctly out of scope).
+
+**Icon library:** ~20 new hand-written SVG icon constants added to `app.js` (`SIGNIN_ICON`, `SIGNUP_ICON`, `KEY_ICON`, `SEND_ICON`, `BACK_ICON`, `SETTINGS_ICON`, `LOGOUT_ICON`, `EYE_ICON`, `PLUS_ICON`, `SHUFFLE_ICON`, `SPARKLE_ICON`, `CLOSE_ICON`, `CAMERA_ICON`, `TRASH_ICON`, `SAVE_ICON`, `DOWNLOAD_ICON`, `UPLOAD_ICON`, `COPY_ICON`, `CHECKLIST_ICON`), plus `SPEAKER_ICON`/`STOP_ICON` (previously module-private, now exported for reuse in Settings). Kept deliberately simple/geometric (circles, straight strokes) rather than intricate glyphs, since these are hand-written paths with no design tool in the loop — verified by screenshot afterward rather than guessed blind.
+
+**Where icons landed** (same semantic icon reused across matching actions for consistency):
+- `index.html`: both auth tabs, all 4 auth-form submit buttons, "Forgot password?"/"Back to sign in", and both profile-dropdown items (Settings/Sign out).
+- `home.js`: "Got it"/"Review again soon" (already had icons from an earlier phase), "Show model answer", "Request 5 more questions", "Need Review", "Generate today's review", "Start today's test" (sparkle — it's the AI-generated feature).
+- `review.js`: "New batch" (shuffle), "Back to Today", "Show model answer".
+- `test.js`: "Back to Today".
+- `admin.js`: "Review questions"/"Hide questions" (label-flip, icon stays), "Approve", "Reject".
+- `about.js`: "Back to sign in" (standalone pre-login view only).
+- `settings.js` (27 buttons — the biggest file): Change/Remove picture, Save name/profile/AI provider, Update password, Sign out of all devices, Export progress, Preview/Stop voice (label-flip), Upload a question set/Import from CSV/Download template, Submit for review, the manual-upload form's Remove question/Remove section/Add question/Add section/Submit/Cancel (the old "✕"/"+" glyphs replaced with proper icons), CSV preview's Import/Cancel, Browse for a PDF, Suggest from resume/Generate prompt (label-flip, sparkle), Add category, Copy prompt, Subscribe.
+- CSS: `.btn-icon-label` gained `justify-content: center` (needed for full-width `.btn-block` buttons); `.profile-dropdown-item` switched from `display:block` to `display:flex` so its icon+label lays out correctly without fighting `.btn-icon-label`'s own flex rules.
+
+**Label-flipping buttons** (3 of them: admin's "Review questions"↔"Hide questions", Settings' "Preview voice"↔"Stop preview", "Suggest from resume"↔"Thinking…", "Generate prompt"↔"Generating…") previously did `btn.textContent = newLabel`, which would have silently deleted the icon the moment the label changed. Fixed by wrapping just the text in a `<span class="...-label">` and updating only that span's `textContent` (or, for the voice preview button which also swaps icon, replacing just the `<svg>`'s `outerHTML`) — the icon survives every state change now.
+
+**Dashboard modernization:**
+- **Today page**: a new radial "today's target" progress ring (pure circle-circumference/stroke-dasharray math, not an SVG chart library) sits next to the existing hero welcome text/linear bar. Each of the 5 stat tiles (Day streak, Longest streak, Pending today, Completed today, Today's target) gained a small icon above its value.
+- **Stats page**: same stat-tile icon treatment (Current streak, Longest streak, Logged actions, Overall completion), plus a matching icon on every section header (Focus areas, Your coaching insight, Accuracy trend, Progress by topic, Weakest questions). No new chart type was added here — `stats.js` already had a bar chart (accuracy trend) and CSS-bar progress rows (progress by topic) from earlier phases, which already covered the "graphs" ask reasonably well; this pass focused on icons.
+
+| Item | Status |
+|---|---|
+| Icon library (20 new + 2 newly-exported) added to `app.js` | Done |
+| All 52 previously plain-text buttons across every page now have icon+text | Done |
+| 3 label-flipping buttons fixed so their icon survives state changes | Done |
+| Radial progress ring added to the Today page hero card | Done |
+| Icons added to every stat tile (Today + Stats) and every Stats section header | Done |
+| Verified with a real Playwright/Chromium session across every page (auth screen incl. forgot-password, Today revealed + profile dropdown, Stats, full-scroll Settings incl. the manual-upload form, Review, Test, About, and Admin incl. a live pending-set approve/reject/review-toggle check using a disposable test set) at both desktop (1280px) and mobile (390px) viewports — zero console/page errors beyond the expected harmless pre-login 401, zero horizontal overflow on mobile, and every icon rendered as intended (no malformed/invisible SVG paths) | Done |
+| Deploy | Not yet — pending |
+
+**Design notes:**
+- Every icon reuses the same semantic icon across unrelated buttons that do conceptually the same thing (e.g. `TRASH_ICON` for every "remove/delete" action, `SAVE_ICON` for every "save this form" action) rather than inventing a new glyph per button — keeps the whole app's icon vocabulary small and learnable.
+- Deliberately did *not* touch the MCQ answer-option buttons in `test.js` or add icons to `.auth-tab`'s underlying semantics beyond the icon pass already covers — their content is dynamic answer text, not a fixed action label, so an icon there wouldn't mean anything.
+- The reference image's literal CRM buttons ("Add company", "Import", "Export" with specific up/down arrow conventions) were treated as a *style* reference only — confirmed with the user before starting — so e.g. "Import" actions here use an up-arrow and "Export"/"Download" actions use a down-arrow, matching the reference's exact (if slightly unconventional) arrow-direction choice, applied to this app's actual CSV/PDF/JSON import-export actions rather than anything CRM-specific.

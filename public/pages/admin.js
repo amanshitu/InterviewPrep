@@ -1,6 +1,6 @@
 // Question-set approval queue + review history — only reachable/visible
 // for role='admin'.
-import { $, $all, el, escapeHtml, toastSuccess, toastError, api, state, renderNav } from "../app.js";
+import { $, $all, el, escapeHtml, toastSuccess, toastError, api, state, renderNav, EYE_ICON, CHECK_ICON, CLOSE_ICON } from "../app.js";
 
 // Cache fetched question lists per set within this page load so toggling
 // a review panel open/closed repeatedly doesn't re-fetch every time.
@@ -82,9 +82,9 @@ function paint(sets, history) {
           <div class="section-title" style="font-size:16px;">${escapeHtml(s.title)}</div>
           <p class="section-sub" style="margin-top:4px;">${s.question_count} question${s.question_count === 1 ? "" : "s"}${s.track ? ` · ${escapeHtml(s.track)}` : ""} · by ${escapeHtml(s.owner_name || "unknown")} (${escapeHtml(s.owner_email || "")})</p>
           <div class="q-actions" style="margin-top:12px;">
-            <button class="btn btn-ghost btn-small" data-review="${s.id}">Review questions</button>
-            <button class="btn btn-success btn-small" data-approve="${s.id}">Approve</button>
-            <button class="btn btn-warn btn-small" data-reject="${s.id}">Reject</button>
+            <button class="btn btn-ghost btn-small btn-icon-label" data-review="${s.id}">${EYE_ICON}<span class="review-toggle-label">Review questions</span></button>
+            <button class="btn btn-success btn-small btn-icon-label" data-approve="${s.id}">${CHECK_ICON} Approve</button>
+            <button class="btn btn-warn btn-small btn-icon-label" data-reject="${s.id}">${CLOSE_ICON} Reject</button>
           </div>
         </div>
       `);
@@ -125,7 +125,7 @@ function paint(sets, history) {
           <p class="section-sub">${isApproved ? "Approved" : "Rejected"} by ${actorLabel}${actedAt ? ` · ${new Date(actedAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}` : ""}</p>
           ${!isApproved && h.rejected_reason ? `<p class="section-sub" style="margin-top:4px;">Reason: ${escapeHtml(h.rejected_reason)}</p>` : ""}
           <div class="q-actions" style="margin-top:10px;">
-            <button class="btn btn-ghost btn-small" data-review="${h.id}">Review questions</button>
+            <button class="btn btn-ghost btn-small btn-icon-label" data-review="${h.id}">${EYE_ICON}<span class="review-toggle-label">Review questions</span></button>
           </div>
         </div>
       `);
@@ -142,7 +142,7 @@ function paint(sets, history) {
       const panel = btn.closest(".card").querySelector(".admin-review-panel");
       const opening = panel.hidden;
       panel.hidden = !opening;
-      btn.textContent = opening ? "Hide questions" : "Review questions";
+      btn.querySelector(".review-toggle-label").textContent = opening ? "Hide questions" : "Review questions";
       if (opening) await loadQuestionsInto(panel, btn.dataset.review);
     });
   });

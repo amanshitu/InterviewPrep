@@ -2,6 +2,17 @@
 // /api/activity (the append-only history table).
 import { $, el, escapeHtml, toastError, api, state, renderNav } from "../app.js";
 
+// Small header icons + stat-tile icons — purely decorative, matching the
+// app-wide modernization pass (no new data, just visual polish).
+const STREAK_TILE_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2c1.2 3 .5 4.6-.6 6.2C10 10 9 11.4 9 13.2A3 3 0 0 0 15 14c0-1-.4-1.7-.9-2.3.9.6 2.4 2 2.4 4.3a5.5 5.5 0 1 1-11 0C5.5 11.8 8.8 8.4 12 2Z" fill="var(--accent)"/></svg>`;
+const TROPHY_TILE_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 4h10v4a5 5 0 0 1-10 0V4Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M7 5H4a3 3 0 0 0 3 5M17 5h3a3 3 0 0 1-3 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M12 13v4M8 21h8M9 21v-2a3 3 0 0 1 6 0v2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const CHECKLIST_TILE_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4 6l1 1 1.5-1.5M4 12l1 1 1.5-1.5M4 18l1 1 1.5-1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const DONUT_TILE_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>`;
+const AIM_HEADER_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="5" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/></svg>`;
+const BARS_HEADER_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
+const LIST_HEADER_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="5" width="16" height="16" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M8 3v4M16 3v4M4 10h16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
+const SPARKLE_HEADER_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2l1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8L12 2Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>`;
+
 function buildBarChartSvg(data) {
   const width = Math.max(320, data.length * 34);
   const height = 140;
@@ -50,7 +61,7 @@ export async function render() {
 function buildFocusCard(focusAreas) {
   const card = el(`
     <div class="card">
-      <div class="section-title" style="font-size:16px;">Focus areas</div>
+      <div class="section-title" style="font-size:16px;display:flex;align-items:center;gap:8px;">${AIM_HEADER_ICON} Focus areas</div>
       <p class="section-sub" style="margin-top:4px;">Where to spend your next study session, ranked worst-first.</p>
     </div>
   `);
@@ -79,7 +90,7 @@ function buildFocusCard(focusAreas) {
 function buildProgressByTopicCard(topics) {
   const card = el(`
     <div class="card">
-      <div class="section-title" style="font-size:16px;">Progress by topic</div>
+      <div class="section-title" style="font-size:16px;display:flex;align-items:center;gap:8px;">${LIST_HEADER_ICON} Progress by topic</div>
       <p class="section-sub" style="margin-top:4px;">Completion and accuracy across everything in your curriculum.</p>
     </div>
   `);
@@ -108,7 +119,7 @@ function buildInsightCard() {
   return el(`
     <div class="card">
       <div class="group-days">AI-generated</div>
-      <div class="section-title" style="font-size:16px;margin-top:2px;">Your coaching insight</div>
+      <div class="section-title" style="font-size:16px;margin-top:2px;display:flex;align-items:center;gap:8px;">${SPARKLE_HEADER_ICON} Your coaching insight</div>
       <div id="insight-body" style="margin-top:10px;"><p class="section-sub">Generating your insight…</p></div>
     </div>
   `);
@@ -150,10 +161,10 @@ function paint(events, progress) {
 
   view.appendChild(el(`
     <div class="stat-grid">
-      <div class="stat-tile"><div class="stat-tile-value">${(currentUser.streak && currentUser.streak.count) || 0}</div><div class="stat-tile-label">Current streak</div></div>
-      <div class="stat-tile"><div class="stat-tile-value">${(currentUser.streak && currentUser.streak.longest) || 0}</div><div class="stat-tile-label">Longest streak</div></div>
-      <div class="stat-tile"><div class="stat-tile-value">${events.length}</div><div class="stat-tile-label">Logged actions</div></div>
-      <div class="stat-tile"><div class="stat-tile-value">${progress ? progress.overall.completionPct + "%" : "—"}</div><div class="stat-tile-label">Overall completion</div></div>
+      <div class="stat-tile">${STREAK_TILE_ICON}<div class="stat-tile-value">${(currentUser.streak && currentUser.streak.count) || 0}</div><div class="stat-tile-label">Current streak</div></div>
+      <div class="stat-tile">${TROPHY_TILE_ICON}<div class="stat-tile-value">${(currentUser.streak && currentUser.streak.longest) || 0}</div><div class="stat-tile-label">Longest streak</div></div>
+      <div class="stat-tile">${CHECKLIST_TILE_ICON}<div class="stat-tile-value">${events.length}</div><div class="stat-tile-label">Logged actions</div></div>
+      <div class="stat-tile">${DONUT_TILE_ICON}<div class="stat-tile-value">${progress ? progress.overall.completionPct + "%" : "—"}</div><div class="stat-tile-label">Overall completion</div></div>
     </div>
   `));
 
@@ -178,7 +189,7 @@ function paint(events, progress) {
 
   const chartCard = el(`
     <div class="card">
-      <div class="section-title" style="font-size:16px;">Accuracy trend</div>
+      <div class="section-title" style="font-size:16px;display:flex;align-items:center;gap:8px;">${BARS_HEADER_ICON} Accuracy trend</div>
       <p class="section-sub" style="margin-top:4px;">% marked "got it" on each day you reviewed, last ${trendData.length || 0} days.</p>
     </div>
   `);
@@ -207,7 +218,7 @@ function paint(events, progress) {
     .sort((a, b) => b.rate - a.rate)
     .slice(0, 8);
 
-  const weakQCard = el(`<div class="card"><div class="section-title" style="font-size:16px;">Weakest questions</div></div>`);
+  const weakQCard = el(`<div class="card"><div class="section-title" style="font-size:16px;display:flex;align-items:center;gap:8px;">${AIM_HEADER_ICON} Weakest questions</div></div>`);
   if (weakQuestions.length === 0) {
     weakQCard.appendChild(el(`<p class="section-sub" style="margin-top:8px;">Not enough review history yet.</p>`));
   } else {

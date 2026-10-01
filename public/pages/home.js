@@ -1,11 +1,38 @@
 // Today's queue — the default/home view.
-import { $, $all, el, escapeHtml, toastSuccess, toastError, api, state, renderNav, renderTopStats, navigate, renderReadAloudButton, toggleReadAloud, CHECK_ICON, REPEAT_ICON } from "../app.js";
+import { $, $all, el, escapeHtml, toastSuccess, toastError, api, state, renderNav, renderTopStats, navigate, renderReadAloudButton, toggleReadAloud, CHECK_ICON, REPEAT_ICON, EYE_ICON, PLUS_ICON, CHECKLIST_ICON, SPARKLE_ICON } from "../app.js";
 
 const TEST_SIZE = 10;
 const DEFAULT_REVIEW_COUNT = 15;
 
 let localRevealed = {}; // question_id -> revealed, for this page visit
 let completedExpanded = false;
+
+// A radial "today's target" ring — the one new chart-like visual on this
+// page. Pure math (circle circumference + stroke-dasharray/dashoffset),
+// not a hand-drawn icon path, so it's low-risk to get right without a
+// design tool in the loop.
+function buildProgressRing(pct, size = 76) {
+  const stroke = 7;
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const offset = c * (1 - Math.min(100, Math.max(0, pct)) / 100);
+  const center = size / 2;
+  return `
+    <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" role="img" aria-label="${pct}% of today's target completed" style="flex-shrink:0;">
+      <circle cx="${center}" cy="${center}" r="${r}" fill="none" stroke="var(--surface-2)" stroke-width="${stroke}"/>
+      <circle cx="${center}" cy="${center}" r="${r}" fill="none" stroke="var(--primary)" stroke-width="${stroke}" stroke-linecap="round" stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${offset.toFixed(1)}" transform="rotate(-90 ${center} ${center})"/>
+      <text x="${center}" y="${center + 5}" text-anchor="middle" font-size="16" font-weight="800" fill="var(--text)">${pct}%</text>
+    </svg>
+  `;
+}
+
+// Small icons shown above each stat tile — purely decorative/visual, no
+// new data, matching the "icons" part of the app-wide modernization pass.
+const STREAK_TILE_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2c1.2 3 .5 4.6-.6 6.2C10 10 9 11.4 9 13.2A3 3 0 0 0 15 14c0-1-.4-1.7-.9-2.3.9.6 2.4 2 2.4 4.3a5.5 5.5 0 1 1-11 0C5.5 11.8 8.8 8.4 12 2Z" fill="var(--accent)"/></svg>`;
+const TROPHY_TILE_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 4h10v4a5 5 0 0 1-10 0V4Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M7 5H4a3 3 0 0 0 3 5M17 5h3a3 3 0 0 1-3 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M12 13v4M8 21h8M9 21v-2a3 3 0 0 1 6 0v2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const PENDING_TILE_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="5" width="16" height="16" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M8 3v4M16 3v4M4 10h16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
+const DONE_TILE_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M8 12.5 11 15.5 16 9.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const TARGET_TILE_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="5" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/></svg>`;
 
 export async function render() {
   state.currentView = "home";
@@ -36,19 +63,24 @@ function paint() {
 
   view.appendChild(el(`
     <div class="card card-hero">
-      <div class="section-title">Welcome back, ${escapeHtml(currentUser.name.split(" ")[0])}</div>
-      <p class="section-sub" style="margin-top:6px;">${todayQueue.completed} of ${todayQueue.target} questions done today${currentUser.track ? ` · preparing for ${escapeHtml(currentUser.track)}` : ""}</p>
-      <div class="progress-track" style="margin-top:14px;"><div class="progress-fill" style="width:${pct}%"></div></div>
+      <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:200px;">
+          <div class="section-title">Welcome back, ${escapeHtml(currentUser.name.split(" ")[0])}</div>
+          <p class="section-sub" style="margin-top:6px;">${todayQueue.completed} of ${todayQueue.target} questions done today${currentUser.track ? ` · preparing for ${escapeHtml(currentUser.track)}` : ""}</p>
+          <div class="progress-track" style="margin-top:14px;"><div class="progress-fill" style="width:${pct}%"></div></div>
+        </div>
+        ${buildProgressRing(pct)}
+      </div>
     </div>
   `));
 
   view.appendChild(el(`
     <div class="stat-grid">
-      <div class="stat-tile"><div class="stat-tile-value">${(currentUser.streak && currentUser.streak.count) || 0}</div><div class="stat-tile-label">Day streak</div></div>
-      <div class="stat-tile"><div class="stat-tile-value">${(currentUser.streak && currentUser.streak.longest) || 0}</div><div class="stat-tile-label">Longest streak</div></div>
-      <div class="stat-tile"><div class="stat-tile-value">${todayQueue.questions.length}</div><div class="stat-tile-label">Pending today</div></div>
-      <div class="stat-tile"><div class="stat-tile-value">${todayQueue.completed}</div><div class="stat-tile-label">Completed today</div></div>
-      <div class="stat-tile"><div class="stat-tile-value">${todayQueue.target}</div><div class="stat-tile-label">Today's target</div></div>
+      <div class="stat-tile">${STREAK_TILE_ICON}<div class="stat-tile-value">${(currentUser.streak && currentUser.streak.count) || 0}</div><div class="stat-tile-label">Day streak</div></div>
+      <div class="stat-tile">${TROPHY_TILE_ICON}<div class="stat-tile-value">${(currentUser.streak && currentUser.streak.longest) || 0}</div><div class="stat-tile-label">Longest streak</div></div>
+      <div class="stat-tile">${PENDING_TILE_ICON}<div class="stat-tile-value">${todayQueue.questions.length}</div><div class="stat-tile-label">Pending today</div></div>
+      <div class="stat-tile">${DONE_TILE_ICON}<div class="stat-tile-value">${todayQueue.completed}</div><div class="stat-tile-label">Completed today</div></div>
+      <div class="stat-tile">${TARGET_TILE_ICON}<div class="stat-tile-value">${todayQueue.target}</div><div class="stat-tile-label">Today's target</div></div>
     </div>
   `));
 
@@ -86,7 +118,7 @@ function paint() {
                <button class="btn btn-warn btn-small btn-icon-label" data-flag-review="${q.id}">${REPEAT_ICON} Review again soon</button>
                ${renderReadAloudButton(q.id)}
              </div>`
-          : `<button class="btn btn-secondary btn-small" data-reveal="${q.id}">Show model answer</button>`}
+          : `<button class="btn btn-secondary btn-small btn-icon-label" data-reveal="${q.id}">${EYE_ICON} Show model answer</button>`}
       </div>
     `));
   });
@@ -94,7 +126,7 @@ function paint() {
 
   if (todayQueue.remaining <= 0) {
     queueCard.appendChild(el(`
-      <button class="btn btn-secondary" id="request-more-btn" style="margin-top:14px;">Request 5 more questions</button>
+      <button class="btn btn-secondary btn-icon-label" id="request-more-btn" style="margin-top:14px;">${PLUS_ICON} Request 5 more questions</button>
     `));
   }
   view.appendChild(queueCard);
@@ -124,7 +156,7 @@ function paint() {
           </div>
           <div class="q-answer">${escapeHtml(q.a)}</div>
           <div class="q-actions">
-            <button class="btn btn-warn btn-small" data-need-review="${q.id}">Need Review</button>
+            <button class="btn btn-warn btn-small btn-icon-label" data-need-review="${q.id}">${REPEAT_ICON} Need Review</button>
           </div>
         </div>
       `));
@@ -143,7 +175,7 @@ function paint() {
         <span class="range-label">Count: <strong id="review-count-label">${DEFAULT_REVIEW_COUNT}</strong></span>
         <input type="range" id="review-count" min="10" max="20" step="1" value="${DEFAULT_REVIEW_COUNT}" />
       </div>
-      <button class="btn btn-primary" style="margin-top:14px;" id="start-review-btn">Generate today's review</button>
+      <button class="btn btn-primary btn-icon-label" style="margin-top:14px;" id="start-review-btn">${CHECKLIST_ICON} Generate today's review</button>
     </div>
   `));
   row2.appendChild(el(`
@@ -151,7 +183,7 @@ function paint() {
       <div class="group-days">AI-generated</div>
       <div class="section-title" style="font-size:17px;margin-top:2px;">Daily test</div>
       <p class="section-sub" style="margin-top:6px;">${TEST_SIZE} multiple-choice questions drawn from what you've completed — same set all day, so you can pick it back up.</p>
-      <button class="btn btn-primary" style="margin-top:14px;" id="start-test-btn">Start today's test</button>
+      <button class="btn btn-primary btn-icon-label" style="margin-top:14px;" id="start-test-btn">${SPARKLE_ICON} Start today's test</button>
     </div>
   `));
   view.appendChild(row2);

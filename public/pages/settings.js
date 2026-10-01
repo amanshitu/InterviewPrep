@@ -1,6 +1,6 @@
 // Account, prep profile, AI provider (BYOK), password/sessions, question
 // sets (upload + suggestions), and data export.
-import { $, $all, el, escapeHtml, toastSuccess, toastError, toastWarning, formatDate, downloadBlob, api, state, renderShell, renderNav, renderAvatar, refreshBankStats, isSpeechSupported, isWakeLockSupported, getReadAloudPrefs, setReadAloudPrefs, getVoiceOptions, toggleReadAloud } from "../app.js";
+import { $, $all, el, escapeHtml, toastSuccess, toastError, toastWarning, formatDate, downloadBlob, api, state, renderShell, renderNav, renderAvatar, refreshBankStats, isSpeechSupported, isWakeLockSupported, getReadAloudPrefs, setReadAloudPrefs, getVoiceOptions, toggleReadAloud, CAMERA_ICON, TRASH_ICON, SAVE_ICON, KEY_ICON, LOGOUT_ICON, DOWNLOAD_ICON, UPLOAD_ICON, SEND_ICON, PLUS_ICON, CLOSE_ICON, SPARKLE_ICON, COPY_ICON, SPEAKER_ICON, STOP_ICON } from "../app.js";
 
 // Client-side resize keeps the uploaded picture small (well under the
 // server's MAX_AVATAR_DATA_URL_LENGTH backstop) without needing any file
@@ -103,8 +103,8 @@ export function render() {
         <span class="profile-avatar is-lg" id="avatar-preview"></span>
         <div class="avatar-upload-actions">
           <input type="file" id="avatar-file-input" accept="image/png,image/jpeg,image/webp" hidden />
-          <button type="button" class="btn btn-ghost btn-small" id="avatar-upload-btn">Change picture</button>
-          <button type="button" class="btn btn-ghost btn-small" id="avatar-remove-btn" ${currentUser.avatarData ? "" : "hidden"}>Remove</button>
+          <button type="button" class="btn btn-ghost btn-small btn-icon-label" id="avatar-upload-btn">${CAMERA_ICON} Change picture</button>
+          <button type="button" class="btn btn-ghost btn-small btn-icon-label" id="avatar-remove-btn" ${currentUser.avatarData ? "" : "hidden"}>${TRASH_ICON} Remove</button>
         </div>
       </div>
       <p class="form-error" id="avatar-error" hidden></p>
@@ -115,7 +115,7 @@ export function render() {
       </label>
       <p class="form-error" id="name-error" hidden></p>
       <p class="form-note" id="name-success" hidden></p>
-      <button class="btn btn-primary" id="save-name-btn">Save name</button>
+      <button class="btn btn-primary btn-icon-label" id="save-name-btn">${SAVE_ICON} Save name</button>
     </div>
   `));
 
@@ -150,7 +150,7 @@ export function render() {
       </label>
       <p class="form-error" id="profile-error" hidden></p>
       <p class="form-note" id="profile-success" hidden></p>
-      <button class="btn btn-primary" id="save-profile-btn">Save profile</button>
+      <button class="btn btn-primary btn-icon-label" id="save-profile-btn">${SAVE_ICON} Save profile</button>
     </div>
   `));
 
@@ -173,7 +173,7 @@ export function render() {
         </label>
         <p class="form-error" id="password-error" hidden></p>
         <p class="form-note" id="password-success" hidden></p>
-        <button type="submit" class="btn btn-primary">Update password</button>
+        <button type="submit" class="btn btn-primary btn-icon-label">${KEY_ICON} Update password</button>
       </form>
     </div>
   `));
@@ -182,7 +182,7 @@ export function render() {
     <div class="card">
       <div class="section-title">Sessions</div>
       <p class="section-sub" style="margin-top:6px;">Sign out everywhere this account is logged in, including this device.</p>
-      <button class="btn btn-warn" id="revoke-all-btn" style="margin-top:12px;">Sign out of all devices</button>
+      <button class="btn btn-warn btn-icon-label" id="revoke-all-btn" style="margin-top:12px;">${LOGOUT_ICON} Sign out of all devices</button>
     </div>
   `));
 
@@ -194,7 +194,7 @@ export function render() {
     <div class="card">
       <div class="section-title">Export data</div>
       <p class="section-sub" style="margin-top:6px;">Download your progress as a JSON file.</p>
-      <button class="btn btn-secondary" id="export-progress-btn" style="margin-top:12px;">Export my progress (JSON)</button>
+      <button class="btn btn-secondary btn-icon-label" id="export-progress-btn" style="margin-top:12px;">${DOWNLOAD_ICON} Export my progress (JSON)</button>
     </div>
   `));
 
@@ -390,7 +390,7 @@ function buildAiProviderCard() {
       </label>
       <p class="form-error" id="ai-error" hidden></p>
       <p class="form-note" id="ai-success" hidden></p>
-      <button class="btn btn-primary" id="save-ai-btn">Save AI provider</button>
+      <button class="btn btn-primary btn-icon-label" id="save-ai-btn">${SAVE_ICON} Save AI provider</button>
     </div>
   `);
 }
@@ -467,7 +467,7 @@ function buildReadAloudCard() {
         <span class="range-label">Pitch: <strong id="read-aloud-pitch-label">${prefs.pitch.toFixed(1)}</strong></span>
         <input type="range" id="read-aloud-pitch" min="0" max="2" step="0.1" value="${prefs.pitch}" />
       </div>
-      <button type="button" class="btn btn-secondary" id="read-aloud-preview-btn" style="margin-top:14px;">Preview voice</button>
+      <button type="button" class="btn btn-secondary btn-icon-label" id="read-aloud-preview-btn" style="margin-top:14px;">${SPEAKER_ICON}<span class="preview-toggle-label">Preview voice</span></button>
       <label class="field" style="margin-top:16px;flex-direction:row;align-items:center;gap:8px;">
         <input type="checkbox" id="read-aloud-keep-screen-on" ${prefs.keepScreenOn ? "checked" : ""} ${isWakeLockSupported() ? "" : "disabled"} />
         <span style="font-weight:600;color:var(--text);">Keep screen on while reading</span>
@@ -603,7 +603,9 @@ function wireReadAloudCard(view) {
   const previewBtn = $("#read-aloud-preview-btn", view);
   previewBtn.addEventListener("click", () => {
     toggleReadAloud("__preview__", "This is a preview of the read aloud voice, speed, and pitch you've selected.", () => {
-      previewBtn.textContent = state.speakingId === "__preview__" ? "Stop preview" : "Preview voice";
+      const isPlaying = state.speakingId === "__preview__";
+      previewBtn.querySelector("svg").outerHTML = isPlaying ? STOP_ICON : SPEAKER_ICON;
+      previewBtn.querySelector(".preview-toggle-label").textContent = isPlaying ? "Stop preview" : "Preview voice";
     });
   });
 
@@ -631,9 +633,9 @@ function buildQuestionSetsCard() {
       <p class="section-sub" style="margin-top:6px;">Upload your own set of questions, grouped into sections. New sets start private to you; sharing them with other users needs admin approval.</p>
       <div id="my-sets-list" style="margin-top:14px;"></div>
       <div class="q-actions" style="margin-top:14px;">
-        <button class="btn btn-secondary" id="new-set-btn">Upload a question set</button>
-        <button class="btn btn-secondary" id="import-csv-btn">Import from CSV</button>
-        <button class="btn btn-ghost" id="csv-template-btn">Download CSV template</button>
+        <button class="btn btn-secondary btn-icon-label" id="new-set-btn">${UPLOAD_ICON} Upload a question set</button>
+        <button class="btn btn-secondary btn-icon-label" id="import-csv-btn">${UPLOAD_ICON} Import from CSV</button>
+        <button class="btn btn-ghost btn-icon-label" id="csv-template-btn">${DOWNLOAD_ICON} Download CSV template</button>
       </div>
       <input type="file" id="csv-file-input" accept=".csv,text/csv" hidden />
       <div id="new-set-form-wrap" hidden style="margin-top:16px;"></div>
@@ -728,7 +730,7 @@ async function loadMySets(container) {
           <span class="weak-row-label">${escapeHtml(s.title)}${s.track ? ` <span class="section-sub">(${escapeHtml(s.track)})</span>` : ""}</span>
           ${renderSetStatusPill(s)}
           ${s.visibility === "private" || s.visibility === "rejected"
-            ? `<button class="btn btn-ghost btn-small" data-submit-review="${s.id}">Submit for review</button>`
+            ? `<button class="btn btn-ghost btn-small btn-icon-label" data-submit-review="${s.id}">${SEND_ICON} Submit for review</button>`
             : ""}
         </div>
       `);
@@ -759,7 +761,7 @@ function addQuestionRow(sectionQuestionsEl) {
     <div class="upload-question-row">
       <input type="text" class="upload-q" placeholder="Question" />
       <input type="text" class="upload-a" placeholder="Model answer" />
-      <button type="button" class="btn btn-ghost btn-small" title="Remove question">✕</button>
+      <button type="button" class="btn btn-ghost btn-small btn-icon-label" title="Remove question">${TRASH_ICON}</button>
     </div>
   `);
   $("button", row).addEventListener("click", () => row.remove());
@@ -771,10 +773,10 @@ function addSectionBlock(sectionsEl) {
     <div class="upload-section">
       <div class="upload-section-head">
         <input type="text" class="upload-section-label" placeholder="Section title (e.g. Networking)" />
-        <button type="button" class="btn btn-ghost btn-small" title="Remove section">✕ section</button>
+        <button type="button" class="btn btn-ghost btn-small btn-icon-label" title="Remove section">${TRASH_ICON} Remove section</button>
       </div>
       <div class="upload-section-questions"></div>
-      <button type="button" class="btn btn-ghost btn-small">+ Add question</button>
+      <button type="button" class="btn btn-ghost btn-small btn-icon-label">${PLUS_ICON} Add question</button>
     </div>
   `);
   const questionsEl = $(".upload-section-questions", section);
@@ -797,11 +799,11 @@ function buildNewSetForm() {
         <input type="text" id="new-set-track" placeholder="e.g. tech" />
       </label>
       <div id="new-set-sections"></div>
-      <button type="button" class="btn btn-secondary btn-small" id="add-section-btn" style="margin-top:8px;">+ Add section</button>
+      <button type="button" class="btn btn-secondary btn-small btn-icon-label" id="add-section-btn" style="margin-top:8px;">${PLUS_ICON} Add section</button>
       <p class="form-error" id="new-set-error" hidden style="margin-top:12px;"></p>
       <div class="q-actions" style="margin-top:14px;">
-        <button type="button" class="btn btn-primary" id="submit-set-btn">Submit</button>
-        <button type="button" class="btn btn-ghost" id="cancel-set-btn">Cancel</button>
+        <button type="button" class="btn btn-primary btn-icon-label" id="submit-set-btn">${SEND_ICON} Submit</button>
+        <button type="button" class="btn btn-ghost btn-icon-label" id="cancel-set-btn">${CLOSE_ICON} Cancel</button>
       </div>
     </div>
   `);
@@ -826,8 +828,8 @@ function buildCsvPreviewForm(sections, skipped, defaultTitle) {
       </label>
       <p class="form-error" id="csv-set-error" hidden></p>
       <div class="q-actions" style="margin-top:10px;">
-        <button type="button" class="btn btn-primary" id="csv-submit-btn">Import</button>
-        <button type="button" class="btn btn-ghost" id="csv-cancel-btn">Cancel</button>
+        <button type="button" class="btn btn-primary btn-icon-label" id="csv-submit-btn">${UPLOAD_ICON} Import</button>
+        <button type="button" class="btn btn-ghost btn-icon-label" id="csv-cancel-btn">${CLOSE_ICON} Cancel</button>
       </div>
     </div>
   `);
@@ -966,7 +968,7 @@ function buildResumePromptCard() {
       </label>
       <div class="q-actions" style="margin-top:0;">
         <input type="file" id="resume-pdf-input" accept="application/pdf" hidden />
-        <button type="button" class="btn btn-secondary btn-small" id="resume-pdf-browse-btn">Browse for a PDF</button>
+        <button type="button" class="btn btn-secondary btn-small btn-icon-label" id="resume-pdf-browse-btn">${UPLOAD_ICON} Browse for a PDF</button>
         <span class="section-sub" id="resume-pdf-status"></span>
       </div>
       <p class="section-sub" style="margin-top:4px;">Extracted entirely in your browser — the PDF itself is never uploaded anywhere. Works best on text-based PDFs; if extraction comes up empty (common for scanned resumes), paste the text in above instead.</p>
@@ -974,7 +976,7 @@ function buildResumePromptCard() {
         <span>Target role</span>
         <div class="q-actions" style="margin-top:0;">
           <input type="text" id="resume-target-role" value="${escapeHtml(defaultRole)}" placeholder="e.g. Engineering Manager" style="flex:1;min-width:160px;" />
-          <button type="button" class="btn btn-secondary btn-small" id="resume-suggest-role-btn">Suggest from resume</button>
+          <button type="button" class="btn btn-secondary btn-small btn-icon-label" id="resume-suggest-role-btn">${SPARKLE_ICON}<span class="suggest-role-label">Suggest from resume</span></button>
         </div>
         <small>AI-suggested from your resume if you use the button — always editable, so you can type a different target role instead.</small>
         <p class="form-error" id="resume-role-error" hidden></p>
@@ -984,21 +986,21 @@ function buildResumePromptCard() {
         <div id="resume-categories-list" class="resume-categories"></div>
         <div class="q-actions" style="margin-top:8px;">
           <input type="text" id="resume-new-category" class="resume-category-input" placeholder="Add a custom category" />
-          <button type="button" class="btn btn-ghost btn-small" id="resume-add-category-btn">+ Add category</button>
+          <button type="button" class="btn btn-ghost btn-small btn-icon-label" id="resume-add-category-btn">${PLUS_ICON} Add category</button>
         </div>
       </div>
       <label class="field">
         <span>Questions per category</span>
         <input type="number" id="resume-per-category" min="3" max="20" value="10" />
       </label>
-      <button class="btn btn-primary" id="resume-generate-btn">Generate prompt</button>
+      <button class="btn btn-primary btn-icon-label" id="resume-generate-btn">${SPARKLE_ICON}<span class="generate-prompt-label">Generate prompt</span></button>
       <div id="resume-prompt-output" hidden style="margin-top:16px;">
         <label class="field">
           <span>Copy this into ChatGPT or Claude</span>
           <textarea id="resume-prompt-text" rows="10" readonly></textarea>
         </label>
         <div class="q-actions">
-          <button type="button" class="btn btn-secondary" id="resume-copy-btn">Copy prompt</button>
+          <button type="button" class="btn btn-secondary btn-icon-label" id="resume-copy-btn">${COPY_ICON} Copy prompt</button>
         </div>
         <ol class="section-sub" style="margin-top:12px;padding-left:18px;line-height:1.7;">
           <li>Copy the prompt above.</li>
@@ -1091,8 +1093,9 @@ function wireResumePromptCard(view) {
     if (!resumeText) { toastWarning("Paste your resume text first."); return; }
 
     btn.disabled = true;
-    const originalLabel = btn.textContent;
-    btn.textContent = "Thinking…";
+    const label = btn.querySelector(".suggest-role-label");
+    const originalLabel = label.textContent;
+    label.textContent = "Thinking…";
     try {
       const data = await api("/api/resume/suggest-role", {
         method: "POST",
@@ -1106,7 +1109,7 @@ function wireResumePromptCard(view) {
       errBox.hidden = false;
     } finally {
       btn.disabled = false;
-      btn.textContent = originalLabel;
+      label.textContent = originalLabel;
     }
   });
 
@@ -1122,8 +1125,9 @@ function wireResumePromptCard(view) {
     if (categories.length === 0) { toastWarning("Pick at least one category."); return; }
 
     btn.disabled = true;
-    const originalLabel = btn.textContent;
-    btn.textContent = "Generating…";
+    const label = btn.querySelector(".generate-prompt-label");
+    const originalLabel = label.textContent;
+    label.textContent = "Generating…";
     try {
       const data = await api("/api/resume/generate-prompt", {
         method: "POST",
@@ -1144,7 +1148,7 @@ function wireResumePromptCard(view) {
       toastWarning(`${reason} — used the standard prompt template instead.`);
     } finally {
       btn.disabled = false;
-      btn.textContent = originalLabel;
+      label.textContent = originalLabel;
     }
   });
 
@@ -1185,7 +1189,7 @@ async function loadSuggestions(container) {
         <div class="weak-row" style="margin-bottom:8px;">
           <span class="weak-row-label">${escapeHtml(s.title)}${s.track ? ` <span class="section-sub">(${escapeHtml(s.track)})</span>` : ""}</span>
           <span class="section-sub">by ${escapeHtml(s.owner_name || "someone")}</span>
-          <button class="btn btn-secondary btn-small" data-subscribe="${s.id}">Subscribe</button>
+          <button class="btn btn-secondary btn-small btn-icon-label" data-subscribe="${s.id}">${PLUS_ICON} Subscribe</button>
         </div>
       `);
       container.appendChild(row);
