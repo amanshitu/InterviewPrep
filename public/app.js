@@ -490,6 +490,27 @@ function wireMobileShell() {
   $("#fab-upload-btn").addEventListener("click", () => { closeMobileSheets(); navigate("/settings"); });
   $("#fab-review-btn").addEventListener("click", () => { closeMobileSheets(); navigate("/review"); });
   $("#fab-test-btn").addEventListener("click", () => { closeMobileSheets(); navigate("/test"); });
+
+  wireCompactThemeToggle();
+}
+
+// The topbar's theme toggle (mobile only — the profile sheet's own copy
+// always shows all three, it has the room) starts collapsed to just the
+// current choice (System by default) and expands to reveal the other two
+// only once tapped, instead of showing all three all the time. initTheme()
+// already handles applying/syncing whichever option gets clicked — this
+// only adds the show/hide choreography around it, scoped to the topbar's
+// unique #theme-toggle id so the sheet's un-id'd duplicate is untouched.
+function wireCompactThemeToggle() {
+  const container = $("#theme-toggle");
+  if (!container || !isMobileLayout()) return;
+  container.classList.add("is-collapsible");
+  container.addEventListener("click", () => {
+    container.classList.toggle("is-expanded");
+  });
+  document.addEventListener("click", (e) => {
+    if (!container.contains(e.target)) container.classList.remove("is-expanded");
+  });
 }
 
 // ---------- auth ----------

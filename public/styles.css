@@ -484,7 +484,13 @@ input[type="range"] { accent-color: var(--primary); width: 160px; }
   /* Theme toggle stays visible here (pushed to the top-right by the
      existing .topbar-spacer, flex:1, which no longer has anything else
      after it to share space with) instead of living only in the profile
-     sheet — quick to reach without an extra tap. */
+     sheet — quick to reach without an extra tap. Starts collapsed to just
+     the current choice (System by default); tapping it reveals the other
+     two, tapping one of those applies it and collapses back down. Scoped
+     to the topbar's unique #theme-toggle id — the profile sheet's own
+     (un-id'd) copy always shows all three, it has the room. */
+  #theme-toggle.is-collapsible .theme-option:not(.is-active) { display: none; }
+  #theme-toggle.is-collapsible.is-expanded .theme-option:not(.is-active) { display: flex; }
   /* The 860px rule above hides the brand text because nav links/stats/
      theme toggle/profile menu still compete for space there — but none of
      that remains in the topbar once the mobile shell takes over below

@@ -771,3 +771,20 @@ Phase 5.0 hid the topbar's theme toggle on mobile, reasoning its duplicate insid
 | Theme toggle visible again in the mobile topbar's top-right corner | Done |
 | Verified it actually changes the theme when tapped, zero horizontal overflow, desktop topbar unaffected (`display: flex`, same as always) | Done |
 | Deploy | Not yet — pending |
+
+## Phase 5.4 — collapsible theme toggle in the mobile topbar
+
+**Status: implemented and verified with a real Playwright/Chromium browser; not yet deployed.**
+
+Showing all three theme options (System/Light/Dark) side by side in the topbar felt like more than that one corner needed. Changed to: collapsed to just the current choice (System by default) — tap it to reveal the other two, tap one of those to apply it and collapse back down. New `wireCompactThemeToggle()` in `app.js` adds the show/hide choreography; `initTheme()` (unchanged) still owns actually applying/syncing whichever option gets clicked.
+
+Scoped to the topbar's instance only via its unique `#theme-toggle` id — the profile sheet's own copy (no id, just the shared `.theme-option`/`.theme-toggle` classes) always shows all three, since it has the room there and wasn't the thing asked about.
+
+| Item | Status |
+|---|---|
+| Topbar theme toggle starts collapsed to just the active option | Done |
+| Tapping it expands to show all three; tapping a different one applies it and collapses back to showing just that one | Done |
+| Profile sheet's copy untouched — still always shows all three | Done |
+| Desktop topbar unaffected — no `is-collapsible` class ever gets added there (`wireCompactThemeToggle()` is a no-op when `isMobileLayout()` is false) | Done |
+| Verified the exact visible-option set at each step (collapsed → expanded → collapsed-on-a-different-theme) and confirmed the theme actually applied, plus confirmed desktop shows all three with no collapsible class | Done |
+| Deploy | Not yet — pending |
