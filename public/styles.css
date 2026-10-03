@@ -480,7 +480,11 @@ input[type="range"] { accent-color: var(--primary); width: 160px; }
      above this comment already handle the icon-only top nav for narrow
      *desktop* windows, this section instead swaps the whole navigation
      model out for real mobile devices at the same breakpoint. */
-  .topbar-nav, .profile-menu, .topbar .theme-toggle { display: none; }
+  .topbar-nav, .profile-menu { display: none; }
+  /* Theme toggle stays visible here (pushed to the top-right by the
+     existing .topbar-spacer, flex:1, which no longer has anything else
+     after it to share space with) instead of living only in the profile
+     sheet — quick to reach without an extra tap. */
   /* The 860px rule above hides the brand text because nav links/stats/
      theme toggle/profile menu still compete for space there — but none of
      that remains in the topbar once the mobile shell takes over below

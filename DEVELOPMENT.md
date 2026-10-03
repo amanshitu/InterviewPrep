@@ -759,3 +759,15 @@ Not gated to mobile-only — a content addition like this (more visible real dat
 | Verified with backdated activity rows inserted directly via D1 (2 days ago: 2, yesterday: 1, today: 2) — confirmed the chart's `data-count` attributes exactly matched, and confirmed tapping the bar with count "2" from two days ago produced the correct date + count sentence | Done |
 | Verified rendering at both 390px and 1280px | Done |
 | Deploy | Not yet — pending |
+
+## Phase 5.3 — theme toggle visible in the mobile topbar again
+
+**Status: implemented and verified with a real Playwright/Chromium browser; not yet deployed.**
+
+Phase 5.0 hid the topbar's theme toggle on mobile, reasoning its duplicate inside the profile sheet was enough. Asked to bring it back to the top-right corner instead — quicker to reach than an extra tap into the sheet. Removed `.topbar .theme-toggle` from the mobile hide rule; it naturally lands top-right because the existing `.topbar-spacer` (`flex: 1`) has nothing else after it to share space with anymore. The sheet's copy stays too (no reason to remove it — it stays in sync automatically, same as before).
+
+| Item | Status |
+|---|---|
+| Theme toggle visible again in the mobile topbar's top-right corner | Done |
+| Verified it actually changes the theme when tapped, zero horizontal overflow, desktop topbar unaffected (`display: flex`, same as always) | Done |
+| Deploy | Not yet — pending |
