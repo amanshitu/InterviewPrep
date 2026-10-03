@@ -565,7 +565,7 @@ input[type="range"] { accent-color: var(--primary); width: 160px; }
      — the label stays on its own line below. Desktop keeps the original
      icon-above-number layout (see the base .stat-tile-top rule). */
   .stat-tile-top { flex-direction: row; align-items: center; gap: 8px; }
-  .stat-tile-top svg { width: 22px; height: 22px; }
+  .stat-tile-top svg { width: 30px; height: 30px; }
 }
 @media (max-width: 480px) {
   .auth-card { padding: 24px 18px; }
