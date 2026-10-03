@@ -161,10 +161,10 @@ function paint(events, progress) {
 
   view.appendChild(el(`
     <div class="stat-grid">
-      <div class="stat-tile">${STREAK_TILE_ICON}<div class="stat-tile-value">${(currentUser.streak && currentUser.streak.count) || 0}</div><div class="stat-tile-label">Current streak</div></div>
-      <div class="stat-tile">${TROPHY_TILE_ICON}<div class="stat-tile-value">${(currentUser.streak && currentUser.streak.longest) || 0}</div><div class="stat-tile-label">Longest streak</div></div>
-      <div class="stat-tile">${CHECKLIST_TILE_ICON}<div class="stat-tile-value">${events.length}</div><div class="stat-tile-label">Logged actions</div></div>
-      <div class="stat-tile">${DONUT_TILE_ICON}<div class="stat-tile-value">${progress ? progress.overall.completionPct + "%" : "—"}</div><div class="stat-tile-label">Overall completion</div></div>
+      <div class="stat-tile"><div class="stat-tile-top">${STREAK_TILE_ICON}<div class="stat-tile-value">${(currentUser.streak && currentUser.streak.count) || 0}</div></div><div class="stat-tile-label">Current streak</div></div>
+      <div class="stat-tile"><div class="stat-tile-top">${TROPHY_TILE_ICON}<div class="stat-tile-value">${(currentUser.streak && currentUser.streak.longest) || 0}</div></div><div class="stat-tile-label">Longest streak</div></div>
+      <div class="stat-tile"><div class="stat-tile-top">${CHECKLIST_TILE_ICON}<div class="stat-tile-value">${events.length}</div></div><div class="stat-tile-label">Logged actions</div></div>
+      <div class="stat-tile"><div class="stat-tile-top">${DONUT_TILE_ICON}<div class="stat-tile-value">${progress ? progress.overall.completionPct + "%" : "—"}</div></div><div class="stat-tile-label">Overall completion</div></div>
     </div>
   `));
 

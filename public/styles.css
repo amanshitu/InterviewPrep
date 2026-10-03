@@ -315,7 +315,8 @@ img { max-width: 100%; }
 
 .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 14px; }
 .stat-tile { background: var(--surface-2); border-radius: var(--radius-md); padding: 14px 16px; }
-.stat-tile > svg { display: block; margin-bottom: 6px; color: var(--text-muted); }
+.stat-tile-top { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.stat-tile-top svg { flex-shrink: 0; color: var(--text-muted); }
 .stat-tile-value { font-family: var(--font-display); font-weight: 800; font-size: 26px; font-variant-numeric: tabular-nums; }
 .stat-tile-label { font-size: 12.5px; color: var(--text-muted); font-weight: 600; }
 
@@ -480,6 +481,11 @@ input[type="range"] { accent-color: var(--primary); width: 160px; }
      *desktop* windows, this section instead swaps the whole navigation
      model out for real mobile devices at the same breakpoint. */
   .topbar-nav, .profile-menu, .topbar .theme-toggle { display: none; }
+  /* The 860px rule above hides the brand text because nav links/stats/
+     theme toggle/profile menu still compete for space there — but none of
+     that remains in the topbar once the mobile shell takes over below
+     640px, so there's room to bring the name back. */
+  .topbar-brand span { display: inline; }
   .topbar { padding-top: max(10px, env(safe-area-inset-top)); }
   .main { padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
 
@@ -554,6 +560,12 @@ input[type="range"] { accent-color: var(--primary); width: 160px; }
   }
   .swipe-stamp.got { left: 14px; color: var(--success); border-color: var(--success); transform: rotate(-12deg); }
   .swipe-stamp.again { right: 14px; color: var(--warn); border-color: var(--warn); transform: rotate(12deg); }
+
+  /* Bigger icon, sitting inline with the number instead of stacked above it
+     — the label stays on its own line below. Desktop keeps the original
+     icon-above-number layout (see the base .stat-tile-top rule). */
+  .stat-tile-top { flex-direction: row; align-items: center; gap: 8px; }
+  .stat-tile-top svg { width: 22px; height: 22px; }
 }
 @media (max-width: 480px) {
   .auth-card { padding: 24px 18px; }

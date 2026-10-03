@@ -76,11 +76,11 @@ function paint() {
 
   view.appendChild(el(`
     <div class="stat-grid">
-      <div class="stat-tile">${STREAK_TILE_ICON}<div class="stat-tile-value">${(currentUser.streak && currentUser.streak.count) || 0}</div><div class="stat-tile-label">Day streak</div></div>
-      <div class="stat-tile">${TROPHY_TILE_ICON}<div class="stat-tile-value">${(currentUser.streak && currentUser.streak.longest) || 0}</div><div class="stat-tile-label">Longest streak</div></div>
-      <div class="stat-tile">${PENDING_TILE_ICON}<div class="stat-tile-value">${todayQueue.questions.length}</div><div class="stat-tile-label">Pending today</div></div>
-      <div class="stat-tile">${DONE_TILE_ICON}<div class="stat-tile-value">${todayQueue.completed}</div><div class="stat-tile-label">Completed today</div></div>
-      <div class="stat-tile">${TARGET_TILE_ICON}<div class="stat-tile-value">${todayQueue.target}</div><div class="stat-tile-label">Today's target</div></div>
+      <div class="stat-tile"><div class="stat-tile-top">${STREAK_TILE_ICON}<div class="stat-tile-value">${(currentUser.streak && currentUser.streak.count) || 0}</div></div><div class="stat-tile-label">Day streak</div></div>
+      <div class="stat-tile"><div class="stat-tile-top">${TROPHY_TILE_ICON}<div class="stat-tile-value">${(currentUser.streak && currentUser.streak.longest) || 0}</div></div><div class="stat-tile-label">Longest streak</div></div>
+      <div class="stat-tile"><div class="stat-tile-top">${PENDING_TILE_ICON}<div class="stat-tile-value">${todayQueue.questions.length}</div></div><div class="stat-tile-label">Pending today</div></div>
+      <div class="stat-tile"><div class="stat-tile-top">${DONE_TILE_ICON}<div class="stat-tile-value">${todayQueue.completed}</div></div><div class="stat-tile-label">Completed today</div></div>
+      <div class="stat-tile"><div class="stat-tile-top">${TARGET_TILE_ICON}<div class="stat-tile-value">${todayQueue.target}</div></div><div class="stat-tile-label">Today's target</div></div>
     </div>
   `));
 

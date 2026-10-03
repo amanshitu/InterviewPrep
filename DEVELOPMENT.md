@@ -723,3 +723,20 @@ Branch: `feature/IntPreparation-v1.2.0-Mobile-PWA-Compatible-Development`, forke
 **Design notes:**
 - The profile sheet's theme-toggle duplication works without any new theme-sync code because `initTheme()` already does `$all(".theme-option")` once at boot and binds every matching element by class — adding a second, always-present (not dynamically inserted) copy in the DOM was enough.
 - `promptRejectReason()`'s branch lives entirely in `app.js`, not `admin.js` — `admin.js`'s only change was swapping one line (`prompt(...)`) for a function call that wraps the rest of the existing logic in a callback. This keeps the mobile/desktop branching in one place rather than scattered across every page that might ever need a reason prompt.
+
+## Phase 5.1 — mobile topbar brand text, bigger inline stat-tile icons
+
+**Status: implemented and verified with a real Playwright/Chromium browser at mobile, narrow-desktop, and full-desktop widths; not yet deployed.**
+
+Two quick follow-ups from screenshots of the Phase 5.0 shell on an actual phone.
+
+**1. Mobile topbar showed only the brand icon, no "Interview Prep" text.** Root cause: an existing rule (`.topbar-brand span { display: none; }`) hides the brand text below 860px — written back when the nav links, stat pills, theme toggle, and profile menu all still had to compete for space in that same bar at that width. None of that remains in the topbar once the mobile shell (≤640px) takes over, so there's room for the name again. Fixed with a single override inside the existing mobile-shell CSS block: `.topbar-brand span { display: inline; }`. Verified at three widths: 390px (now visible), 800px — between the two breakpoints, a *narrow desktop/tablet* window where the old nav still shows and still needs the space (stayed hidden, unchanged), and 1280px (unaffected, was always visible).
+
+**2. Stat tiles' icons were too small and stacked above the number** — asked to be bigger and sit inline with the number, label kept on its own line below. Changed on mobile only: the icon and value are now wrapped together in a new `.stat-tile-top` element; the *base* rule keeps them stacked in a column (reproducing the exact previous desktop look, just via the new wrapper instead of a `.stat-tile > svg` direct-child selector), and a mobile-only override switches that wrapper to a row (icon beside the number) and enlarges the icon from ~16px to 22px. Applied to both pages that have stat tiles — Today (`home.js`) and Stats (`stats.js`).
+
+| Item | Status |
+|---|---|
+| Brand text restored on mobile, narrow-desktop behavior unchanged | Done |
+| Stat-tile icons bigger + inline with the number on mobile; desktop verified pixel-equivalent (`.stat-tile-top` computed `flex-direction: column`, matching the old layout) | Done |
+| Verified at 390px, 800px, and 1280px widths with a real Playwright/Chromium session | Done |
+| Deploy | Not yet — pending |
