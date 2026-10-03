@@ -564,7 +564,7 @@ input[type="range"] { accent-color: var(--primary); width: 160px; }
   /* Bigger icon, sitting inline with the number instead of stacked above it
      — the label stays on its own line below. Desktop keeps the original
      icon-above-number layout (see the base .stat-tile-top rule). */
-  .stat-tile-top { flex-direction: row; align-items: center; justify-content: center; gap: 8px; }
+  .stat-tile-top { flex-direction: row; align-items: center; justify-content: flex-start; gap: 8px; }
   .stat-tile-top svg { width: 30px; height: 30px; }
   .stat-tile-label { text-align: center; }
 }
