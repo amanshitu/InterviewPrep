@@ -1,6 +1,6 @@
 {
   "name": "interview-prep",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "Daily interview-prep tracker (HR, delivery/program management, people management, technical architecture, AI automation) with login and per-user progress, deployed on Cloudflare Workers + D1.",
   "scripts": {
