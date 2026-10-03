@@ -1,5 +1,5 @@
 // Today's queue — the default/home view.
-import { $, $all, el, escapeHtml, toastSuccess, toastError, api, state, renderNav, renderTopStats, navigate, renderReadAloudButton, toggleReadAloud, CHECK_ICON, REPEAT_ICON, EYE_ICON, PLUS_ICON, CHECKLIST_ICON, SPARKLE_ICON } from "../app.js";
+import { $, $all, el, escapeHtml, toastSuccess, toastError, api, state, renderNav, renderTopStats, navigate, renderReadAloudButton, toggleReadAloud, CHECK_ICON, REPEAT_ICON, EYE_ICON, PLUS_ICON, CHECKLIST_ICON, SPARKLE_ICON, isMobileLayout } from "../app.js";
 
 const TEST_SIZE = 10;
 const DEFAULT_REVIEW_COUNT = 15;
@@ -98,11 +98,15 @@ function paint() {
       </div>
     `));
   }
+  const mobileSwipe = isMobileLayout();
   todayQueue.questions.forEach((q, idx) => {
     const revealed = localRevealed[q.id] || q.status === "shown";
     const needsReview = q.last_result === "again";
     list.appendChild(el(`
-      <div class="q-card" data-qid="${q.id}">
+      <div class="q-card${revealed && mobileSwipe ? " is-swipeable" : ""}" data-qid="${q.id}">
+        ${revealed && mobileSwipe
+          ? `<div class="swipe-stamp got" data-stamp="got">GOT IT</div><div class="swipe-stamp again" data-stamp="again">AGAIN</div>`
+          : ""}
         <div class="q-topic-tag">${escapeHtml(q.topic_label)}</div>
         <div class="q-card-head" style="margin-top:6px;">
           <div>
@@ -210,6 +214,9 @@ function paint() {
   $all("[data-need-review]", view).forEach((btn) => {
     btn.addEventListener("click", () => moveBackToReview(btn.dataset.needReview));
   });
+  if (mobileSwipe) {
+    $all(".q-card.is-swipeable", view).forEach((card) => wireSwipeCard(card));
+  }
   const completedToggle = $("#completed-toggle", view);
   if (completedToggle) {
     completedToggle.addEventListener("click", () => {
@@ -232,6 +239,58 @@ function revealQuestion(qid) {
   if (localRevealed[qid]) return;
   localRevealed[qid] = true;
   paint();
+}
+
+// Mobile-only drag-to-grade on a revealed question card — swipe right for
+// "Got it", left for "Review again soon". Purely additive: it just calls
+// the exact same completeQuestion()/flagForReview() the buttons below it
+// already call, after a brief fly-off animation, so there's one source of
+// truth for what either action actually does.
+function wireSwipeCard(card) {
+  const qid = card.dataset.qid;
+  const stampGot = card.querySelector('[data-stamp="got"]');
+  const stampAgain = card.querySelector('[data-stamp="again"]');
+  let dragging = false, startX = 0, dx = 0, pointerId = null;
+
+  function setTransform(x) {
+    card.style.transform = `translateX(${x}px) rotate(${x / 18}deg)`;
+    const p = Math.min(1, Math.abs(x) / 90);
+    stampGot.style.opacity = x > 0 ? p : 0;
+    stampAgain.style.opacity = x < 0 ? p : 0;
+  }
+
+  card.addEventListener("pointerdown", (e) => {
+    if (e.target.closest(".btn")) return; // let the explicit buttons work untouched
+    dragging = true;
+    pointerId = e.pointerId;
+    card.setPointerCapture(pointerId);
+    startX = e.clientX;
+    dx = 0;
+    card.style.transition = "none";
+  });
+  card.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    dx = e.clientX - startX;
+    setTransform(dx);
+  });
+  function onRelease() {
+    if (!dragging) return;
+    dragging = false;
+    card.style.transition = "transform .3s cubic-bezier(.22,.9,.35,1), opacity .3s ease";
+    if (Math.abs(dx) > 90) {
+      const dir = dx > 0 ? 1 : -1;
+      card.style.transform = `translateX(${dir * 420}px) rotate(${dir * 18}deg)`;
+      card.style.opacity = "0";
+      setTimeout(() => {
+        if (dir > 0) completeQuestion(qid);
+        else flagForReview(qid);
+      }, 260);
+    } else {
+      setTransform(0);
+    }
+  }
+  card.addEventListener("pointerup", onRelease);
+  card.addEventListener("pointercancel", onRelease);
 }
 
 async function completeQuestion(qid) {

@@ -5,7 +5,7 @@
 //
 // Bump CACHE_NAME whenever static assets change in a way that matters —
 // there's no build step to hash filenames for you.
-const CACHE_NAME = "interview-prep-shell-v1";
+const CACHE_NAME = "interview-prep-shell-v2";
 const SHELL_ASSETS = ["/", "/app.js", "/styles.css", "/manifest.json"];
 
 self.addEventListener("install", (event) => {

@@ -1,6 +1,6 @@
 // Question-set approval queue + review history — only reachable/visible
 // for role='admin'.
-import { $, $all, el, escapeHtml, toastSuccess, toastError, api, state, renderNav, EYE_ICON, CHECK_ICON, CLOSE_ICON } from "../app.js";
+import { $, $all, el, escapeHtml, toastSuccess, toastError, api, state, renderNav, EYE_ICON, CHECK_ICON, CLOSE_ICON, promptRejectReason } from "../app.js";
 
 // Cache fetched question lists per set within this page load so toggling
 // a review panel open/closed repeatedly doesn't re-fetch every time.
@@ -161,17 +161,18 @@ async function approveSet(id) {
   }
 }
 
-async function rejectSet(id) {
-  const reason = prompt("Reason for rejecting this set (shown to the owner):") || "";
-  try {
-    await api(`/api/admin/question-sets/${id}/reject`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ reason }),
-    });
-    toastSuccess("Rejected.");
-    render();
-  } catch (err) {
-    toastError(err.message);
-  }
+function rejectSet(id) {
+  promptRejectReason(async (reason) => {
+    try {
+      await api(`/api/admin/question-sets/${id}/reject`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ reason }),
+      });
+      toastSuccess("Rejected.");
+      render();
+    } catch (err) {
+      toastError(err.message);
+    }
+  });
 }

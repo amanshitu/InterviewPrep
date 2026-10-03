@@ -684,3 +684,42 @@ The user shared a reference screenshot (a CRM-style UI: rounded dark pill button
 - Every icon reuses the same semantic icon across unrelated buttons that do conceptually the same thing (e.g. `TRASH_ICON` for every "remove/delete" action, `SAVE_ICON` for every "save this form" action) rather than inventing a new glyph per button — keeps the whole app's icon vocabulary small and learnable.
 - Deliberately did *not* touch the MCQ answer-option buttons in `test.js` or add icons to `.auth-tab`'s underlying semantics beyond the icon pass already covers — their content is dynamic answer text, not a fixed action label, so an icon there wouldn't mean anything.
 - The reference image's literal CRM buttons ("Add company", "Import", "Export" with specific up/down arrow conventions) were treated as a *style* reference only — confirmed with the user before starting — so e.g. "Import" actions here use an up-arrow and "Export"/"Download" actions use a down-arrow, matching the reference's exact (if slightly unconventional) arrow-direction choice, applied to this app's actual CSV/PDF/JSON import-export actions rather than anything CRM-specific.
+
+## Phase 5.0 — v1.2.0 mobile-PWA shell: bottom tab bar, FAB, bottom sheets, swipe-to-grade
+
+**Status: implemented and verified with a real Playwright/Chromium browser at both mobile (390px) and desktop (1280px) widths; not yet deployed.**
+
+Branch: `feature/IntPreparation-v1.2.0-Mobile-PWA-Compatible-Development`, forked from the `v1.1.0` tag on `feature/job-referance-and-application-integration`. Before this phase, two planning artifacts were shared and approved: a four-phase written plan, then a fully interactive clickable prototype (phone-frame mockup with a working drag-to-swipe card, tab switching, and bottom sheets) that the user iterated on directly (adding the center "+" FAB after seeing a CRM reference image). This phase implements Phase 1 of that plan — the app shell/navigation — plus the swipe gesture and bottom-sheet pieces of Phase 3, wired to the real app's real data instead of mock content.
+
+**The core guarantee, and how it's enforced:** every change is scoped to the app's existing `max-width: 640px` breakpoint (the same one already used for the icon-only top nav) or to code paths only a mobile-only element can trigger. Concretely:
+- New CSS lives inside the existing `@media (max-width: 640px)` block in `styles.css`; a single new base rule (`.mobile-tab-bar, .sheet-backdrop, .app-sheet { display: none; }`, outside any media query) keeps the whole mobile shell invisible above that width with no gap at the boundary.
+- New JS only runs when something only present in the mobile DOM is clicked (the bottom tab bar, the FAB, a sheet row) — `isMobileLayout()` additionally gates the one shared code path (`promptRejectReason`) that's called from both mobile and desktop, so desktop keeps calling the exact same `prompt()` it always did.
+- Verified directly, not just assumed: a Playwright pass at 1280px confirmed `.mobile-tab-bar` computed `display: none`, `.topbar-nav`/`.profile-menu` still `flex`/`block` as before, the desktop profile dropdown still opens, and zero horizontal overflow — i.e. an actual before/after-equivalent check, not just "the CSS looks right."
+
+**What shipped:**
+- **Bottom tab bar + FAB** (`index.html`, mobile-only markup; wired in `app.js`'s new `wireMobileShell()`): Today / Stats / Admin (hidden for non-admins, same pattern as the existing desktop nav) / Profile, with a raised circular "+" FAB between Stats and Admin matching the reference image. Tapping a tab calls `.click()` on the *existing* corresponding desktop nav button rather than duplicating navigation logic — one source of truth for what each tab does.
+- **Bottom sheets** (new exported `openMobileSheet()`/`closeMobileSheets()` in `app.js`, shared by all three):
+  - **Profile sheet** (Profile tab) — avatar/name/email, Settings, About, a duplicated Theme toggle (the existing `initTheme()` already binds every `.theme-option` on the page by class, so this second instance needed no new JS — just markup — to stay in sync with the original), Sign out. Settings/About/Sign out rows call `.click()` on their existing desktop counterparts, same reuse pattern as the tabs.
+  - **Quick-actions sheet** (FAB) — Upload a question set / Start daily review / Start daily test, each just `navigate()`-ing to the relevant page.
+  - **Reject-reason sheet** (Admin → Reject, mobile only) — replaces the browser's plain `prompt()` with a real textarea in a sheet. `admin.js`'s `rejectSet()` now calls a new exported `promptRejectReason(onConfirm)` from `app.js`, which internally branches: desktop gets the identical `prompt()` call it always had, mobile gets the sheet. `admin.js` itself doesn't know or care which happened.
+- **Swipe-to-grade on Today's question cards** (`home.js`, mobile only): dragging a revealed card reveals a "GOT IT"/"AGAIN" stamp and, past a 90px threshold, plays a fly-off animation and then calls the *exact same* `completeQuestion()`/`flagForReview()` the existing buttons call — not a reimplementation, just a faster path to the same two functions. A `.closest(".btn")` guard on the drag-start means tapping the existing buttons inside the card is unaffected.
+- **Safe-area support**: `viewport-fit=cover` added to the viewport meta; the mobile topbar, tab bar, and sheets all pad for `env(safe-area-inset-top/bottom)` so the app draws correctly around a notch/home-indicator instead of leaving the browser to handle it by default.
+- **Service worker cache bump** (`sw.js`: `interview-prep-shell-v1` → `v2`) since shipped shell assets changed.
+
+| Item | Status |
+|---|---|
+| Bottom tab bar + FAB, wired to real navigation | Done |
+| Profile / quick-actions / reject-reason bottom sheets, all wired to real app behavior (not mock content) | Done |
+| Swipe-to-grade on Today's cards, calling the real completion/review functions | Done |
+| Safe-area insets + `viewport-fit=cover` | Done |
+| Service worker cache version bumped | Done |
+| Verified at 1280px: `.mobile-tab-bar` hidden, top nav/profile dropdown behave exactly as before, zero horizontal overflow, zero console errors beyond the expected harmless pre-login 401 | Done |
+| Verified at 390px: tab navigation, profile sheet (incl. the duplicated theme toggle actually changing the theme), FAB sheet + navigation, and a simulated pointer-drag swipe that was confirmed against real server data (`completed` went from 0 → 1 via `/api/queue/today` after the swipe, not just a visual check) | Done |
+| Verified the mobile admin reject-sheet end-to-end with a disposable pending set: typed a real reason, confirmed, and read it back from `/api/admin/approval-history` | Done |
+| Deploy | Not yet — pending |
+
+**Deferred from the full 4-phase plan** (deliberately, to keep this phase reviewable — not forgotten): page transitions (View Transitions API), skeleton loading states, pull-to-refresh, and the install banner/iOS install tip are Phase 2 and the rest of Phase 4 from the written plan, not yet built. The shell and gesture work landing in this phase was the highest-impact, most structurally invasive piece and the one both planning artifacts were built around — the remaining phases are lower-risk, additive polish that can land independently whenever asked for next.
+
+**Design notes:**
+- The profile sheet's theme-toggle duplication works without any new theme-sync code because `initTheme()` already does `$all(".theme-option")` once at boot and binds every matching element by class — adding a second, always-present (not dynamically inserted) copy in the DOM was enough.
+- `promptRejectReason()`'s branch lives entirely in `app.js`, not `admin.js` — `admin.js`'s only change was swapping one line (`prompt(...)`) for a function call that wraps the rest of the existing logic in a callback. This keeps the mobile/desktop branching in one place rather than scattered across every page that might ever need a reason prompt.

@@ -351,6 +351,14 @@ export function renderShell() {
   renderTopStats();
   renderNav();
   updateDocumentTitle();
+  // Mobile profile sheet mirrors the same identity (desktop's profile
+  // dropdown has no equivalent of these two rows, so only present there).
+  const sheetName = $("#sheet-user-name");
+  if (sheetName) {
+    sheetName.textContent = state.currentUser.name;
+    $("#sheet-user-email").textContent = state.currentUser.email;
+    renderAvatar($("#sheet-profile-avatar"), state.currentUser);
+  }
 }
 
 function updateDocumentTitle() {
@@ -389,6 +397,99 @@ export function renderNav() {
   const adminBtn = $("#nav-admin-btn");
   adminBtn.hidden = state.currentUser.role !== "admin";
   adminBtn.classList.toggle("is-active", state.currentView === "admin");
+
+  // Mobile bottom tab bar mirrors the same active state — About has no
+  // bottom tab of its own, it lives in the profile sheet instead.
+  const mHome = $("#mtab-home");
+  if (mHome) {
+    mHome.classList.toggle("is-active", state.currentView === "home");
+    $("#mtab-stats").classList.toggle("is-active", state.currentView === "stats");
+    const mAdmin = $("#mtab-admin");
+    mAdmin.hidden = state.currentUser.role !== "admin";
+    mAdmin.classList.toggle("is-active", state.currentView === "admin");
+  }
+}
+
+// ---------- mobile shell (bottom tab bar, FAB, bottom sheets) ----------
+// Everything in this section only ever runs because a mobile-only element
+// (the tab bar, the FAB) was clicked — none of it is reachable from the
+// desktop UI, so desktop behavior can't be affected by it.
+export function isMobileLayout() {
+  return window.matchMedia("(max-width: 640px)").matches;
+}
+
+export function openMobileSheet(selector) {
+  const backdrop = $("#sheet-backdrop");
+  const sheet = $(selector);
+  if (!backdrop || !sheet) return;
+  backdrop.hidden = false;
+  sheet.hidden = false;
+  requestAnimationFrame(() => {
+    backdrop.classList.add("is-open");
+    sheet.classList.add("is-open");
+  });
+}
+
+export function closeMobileSheets() {
+  const backdrop = $("#sheet-backdrop");
+  if (!backdrop) return;
+  backdrop.classList.remove("is-open");
+  $all(".app-sheet").forEach((s) => s.classList.remove("is-open"));
+  // Matches the CSS transition duration — keeps the sheet in the DOM
+  // (and visible) until it's actually finished sliding away.
+  setTimeout(() => {
+    backdrop.hidden = true;
+    $all(".app-sheet").forEach((s) => { s.hidden = true; });
+  }, 300);
+}
+
+// Mobile replacement for the admin reject flow's prompt() — a real text
+// field in a sheet instead of the browser's plain dialog. Desktop is
+// completely untouched: same prompt() call, same fallback, same timing.
+export function promptRejectReason(onConfirm) {
+  if (!isMobileLayout()) {
+    const reason = prompt("Reason for rejecting this set (shown to the owner):") || "";
+    onConfirm(reason);
+    return;
+  }
+  const textarea = $("#reject-sheet-textarea");
+  const confirmBtn = $("#reject-sheet-confirm");
+  const cancelBtn = $("#reject-sheet-cancel");
+  textarea.value = "";
+  openMobileSheet("#reject-sheet");
+  function cleanup() {
+    confirmBtn.removeEventListener("click", handleConfirm);
+    cancelBtn.removeEventListener("click", handleCancel);
+    closeMobileSheets();
+  }
+  function handleConfirm() {
+    const reason = textarea.value.trim();
+    cleanup();
+    onConfirm(reason);
+  }
+  function handleCancel() { cleanup(); }
+  confirmBtn.addEventListener("click", handleConfirm);
+  cancelBtn.addEventListener("click", handleCancel);
+}
+
+function wireMobileShell() {
+  const fabBtn = $("#mobile-fab-btn");
+  if (!fabBtn) return; // defensive — markup always present, but keep this section self-contained
+
+  $("#mtab-home").addEventListener("click", () => $("#nav-home-btn").click());
+  $("#mtab-stats").addEventListener("click", () => $("#nav-stats-btn").click());
+  $("#mtab-admin").addEventListener("click", () => $("#nav-admin-btn").click());
+  $("#mtab-profile").addEventListener("click", () => openMobileSheet("#profile-sheet"));
+  fabBtn.addEventListener("click", () => openMobileSheet("#fab-sheet"));
+
+  $("#sheet-backdrop").addEventListener("click", closeMobileSheets);
+  $("#sheet-about-btn").addEventListener("click", () => { closeMobileSheets(); $("#nav-about-btn").click(); });
+  $("#sheet-settings-btn").addEventListener("click", () => { closeMobileSheets(); $("#settings-btn").click(); });
+  $("#sheet-logout-btn").addEventListener("click", () => { closeMobileSheets(); $("#logout-btn").click(); });
+
+  $("#fab-upload-btn").addEventListener("click", () => { closeMobileSheets(); navigate("/settings"); });
+  $("#fab-review-btn").addEventListener("click", () => { closeMobileSheets(); navigate("/review"); });
+  $("#fab-test-btn").addEventListener("click", () => { closeMobileSheets(); navigate("/test"); });
 }
 
 // ---------- auth ----------
@@ -606,6 +707,7 @@ async function boot(user) {
   $("#settings-btn").addEventListener("click", () => navigate("/settings"));
   initTheme();
   wireProfileMenu();
+  wireMobileShell();
   renderShell();
   refreshBankStats(); // fire-and-forget — pill pops in once loaded, doesn't block first render
   await dispatchRoute(location.pathname);
