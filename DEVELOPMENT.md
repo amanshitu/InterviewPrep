@@ -740,3 +740,22 @@ Two quick follow-ups from screenshots of the Phase 5.0 shell on an actual phone.
 | Stat-tile icons bigger + inline with the number on mobile; desktop verified pixel-equivalent (`.stat-tile-top` computed `flex-direction: column`, matching the old layout) | Done |
 | Verified at 390px, 800px, and 1280px widths with a real Playwright/Chromium session | Done |
 | Deploy | Not yet — pending |
+
+## Phase 5.2 — interactive "This week" chart on Stats
+
+**Status: implemented and verified with a real Playwright/Chromium browser, real backdated activity data; not yet deployed.**
+
+The Stats page's existing charts (accuracy trend, progress-by-topic bars) sit further down the page, past the Focus Areas/Insight cards — on a fresh or lightly-used account they're easy to miss without scrolling. Added a new "This week" card right after the stat tiles, prominent above the fold: a 7-bar chart of questions actually completed each day (not placeholder numbers — built from the same `events` activity-log data every other chart on this page already reads, filtered to `event_type === "reveal"`, the exact event `handleCompleteQuestion` logs once per "Got it").
+
+Made genuinely interactive, not just decorative: tapping/clicking a bar (or focusing it and pressing Enter/Space — each bar is a keyboard-reachable `role="button"`) highlights that bar and swaps in an exact sentence below ("Thursday, Oct 1: 2 questions completed") — there's no hover-only affordance, since a touchscreen has no hover.
+
+Not gated to mobile-only — a content addition like this (more visible real data) is a different kind of change than the app-shell/gesture work in Phase 5.0/5.1, and the Stats page's existing charts were never mobile-gated either, so gating just this one new card would have made the page inconsistent with itself. Verified it renders and reads cleanly at both 390px and 1280px.
+
+| Item | Status |
+|---|---|
+| New "This week" card with a 7-day bar chart, inserted right after the stat tiles on Stats | Done |
+| Real data (filtered `activity_log` reveal events), not sample/fake numbers | Done |
+| Tap/click or keyboard (Enter/Space) selects a bar, highlights it, and shows an exact count + date sentence | Done |
+| Verified with backdated activity rows inserted directly via D1 (2 days ago: 2, yesterday: 1, today: 2) — confirmed the chart's `data-count` attributes exactly matched, and confirmed tapping the bar with count "2" from two days ago produced the correct date + count sentence | Done |
+| Verified rendering at both 390px and 1280px | Done |
+| Deploy | Not yet — pending |

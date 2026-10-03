@@ -58,6 +58,67 @@ export async function render() {
   loadInsight();
 }
 
+// A compact, tappable "this week" bar chart — real data (questions
+// actually completed each day, from the same activity log everything else
+// on this page reads from), not placeholder numbers. Tapping/selecting a
+// bar highlights it and swaps in its exact count below, rather than
+// requiring a hover (which doesn't exist on a touchscreen).
+function buildWeeklyActivityCard(events) {
+  const completedEvents = events.filter((e) => e.event_type === "reveal");
+  const today = new Date();
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    days.push(d.toISOString().slice(0, 10));
+  }
+  const counts = days.map((day) => completedEvents.filter((e) => (e.occurred_at || "").slice(0, 10) === day).length);
+  const max = Math.max(1, ...counts);
+  const width = 320, height = 120;
+  const barGap = 10;
+  const barWidth = (width - barGap * (days.length - 1)) / days.length;
+  const bars = days
+    .map((day, i) => {
+      const barHeight = Math.max(4, (counts[i] / max) * (height - 30));
+      const x = i * (barWidth + barGap);
+      const y = height - 20 - barHeight;
+      const dayLabel = new Date(`${day}T00:00:00`).toLocaleDateString(undefined, { weekday: "short" }).slice(0, 2);
+      return `
+        <g class="week-bar" data-day="${day}" data-count="${counts[i]}" tabindex="0" role="button" aria-label="${day}: ${counts[i]} questions completed">
+          <rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barHeight.toFixed(1)}" rx="4" fill="var(--primary)" opacity="0.5"/>
+          <text x="${(x + barWidth / 2).toFixed(1)}" y="${height - 6}" font-size="10" text-anchor="middle" fill="var(--text-muted)">${escapeHtml(dayLabel)}</text>
+        </g>`;
+    })
+    .join("");
+
+  const card = el(`
+    <div class="card">
+      <div class="section-title" style="font-size:16px;display:flex;align-items:center;gap:8px;">${BARS_HEADER_ICON} This week</div>
+      <p class="section-sub" style="margin-top:4px;">Questions completed each day — tap a bar for the exact count.</p>
+      <div style="margin-top:12px;overflow-x:auto;">
+        <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="This week's completed questions">${bars}</svg>
+      </div>
+      <p class="section-sub" id="week-chart-detail" style="margin-top:8px;">Tap a day above to see the exact count.</p>
+    </div>
+  `);
+
+  card.querySelectorAll(".week-bar").forEach((bar) => {
+    const activate = () => {
+      card.querySelectorAll(".week-bar rect").forEach((r) => r.setAttribute("opacity", "0.5"));
+      bar.querySelector("rect").setAttribute("opacity", "1");
+      const dateLabel = new Date(`${bar.dataset.day}T00:00:00`).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+      const count = bar.dataset.count;
+      card.querySelector("#week-chart-detail").textContent = `${dateLabel}: ${count} question${count === "1" ? "" : "s"} completed.`;
+    };
+    bar.addEventListener("click", activate);
+    bar.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activate(); }
+    });
+  });
+
+  return card;
+}
+
 function buildFocusCard(focusAreas) {
   const card = el(`
     <div class="card">
@@ -168,6 +229,7 @@ function paint(events, progress) {
     </div>
   `));
 
+  view.appendChild(buildWeeklyActivityCard(events));
   view.appendChild(buildFocusCard(progress ? progress.focusAreas : null));
   view.appendChild(buildInsightCard());
 
