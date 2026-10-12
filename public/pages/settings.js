@@ -158,6 +158,8 @@ export function render() {
 
   view.appendChild(buildAnswerFontSizeCard());
 
+  view.appendChild(buildSelfTestQuotaCard());
+
   if (isSpeechSupported()) view.appendChild(buildReadAloudCard());
 
   view.appendChild(el(`
@@ -342,6 +344,7 @@ export function render() {
   wireSuggestionsCard(view);
   wireAiProviderCard(view);
   wireAnswerFontSizeCard(view);
+  loadSelfTestQuota(view);
   if (isSpeechSupported()) wireReadAloudCard(view);
   renderNav();
 }
@@ -476,6 +479,36 @@ function wireAnswerFontSizeCard(view) {
   $all("#font-size-options .font-size-option", view).forEach((btn) => {
     btn.addEventListener("click", () => setAnswerFontSize(btn.dataset.size));
   });
+}
+
+// ---------- Self Test AI quota ----------
+function buildSelfTestQuotaCard() {
+  return el(`
+    <div class="card">
+      <div class="section-title">Self Test AI usage</div>
+      <p class="section-sub" style="margin-top:6px;">Each time you analyze a practice answer in Self Test, it spends from this daily budget — a rough token estimate, not an exact count. Resets at your own midnight; set your own AI key above for unlimited use.</p>
+      <p class="section-sub" id="self-test-quota-line" style="margin-top:10px;">Checking today's usage…</p>
+      <div class="progress-track" style="margin-top:10px;"><div class="progress-fill" id="self-test-quota-fill" style="width:0%"></div></div>
+    </div>
+  `);
+}
+
+async function loadSelfTestQuota(view) {
+  const line = $("#self-test-quota-line", view);
+  const fill = $("#self-test-quota-fill", view);
+  if (!line) return;
+  try {
+    const data = await api("/api/self-test/quota");
+    if (data.unlimited) {
+      line.textContent = "Unlimited — using your own AI key.";
+      if (fill) fill.style.width = "0%";
+      return;
+    }
+    line.textContent = `${data.used.toLocaleString()} / ${data.quota.toLocaleString()} tokens used today (${data.remaining.toLocaleString()} left).`;
+    if (fill) fill.style.width = `${Math.min(100, Math.round((data.used / data.quota) * 100))}%`;
+  } catch {
+    line.textContent = "";
+  }
 }
 
 // ---------- Read aloud voice/speed/pitch ----------

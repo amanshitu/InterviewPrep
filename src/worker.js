@@ -1565,6 +1565,143 @@ async function handleGetStatsInsight(request, env, user) {
   return json({ insight, generatedBy, cached: false });
 }
 
+// ---------- Self Test: practice answering a random question, AI-graded ----------
+// A separate, token-granular daily budget — deliberately not the existing
+// ai_usage/FREE_AI_DAILY_CAP counter, which tracks *number of generations*
+// for the other AI features (MCQ, Stats insight, resume prompts). This one
+// was asked for specifically as a visible, hard-capped *token* quota, so it
+// gets its own table and its own cap, keyed by date the same way for a
+// consistent "resets at your own midnight" mental model. Same BYOK carve-out
+// as everywhere else: a user's own key is their own cost, not capped here.
+const SELF_TEST_TOKEN_DAILY_QUOTA = 6000;
+
+// No provider in this app's stack reliably reports exact token counts back
+// through the shared callConfiguredAi() helper (and changing that helper's
+// return shape risks the other three features that already depend on it) —
+// so spend is the standard ~4-characters-per-token estimate over the
+// prompt + reply text. Good enough for a budget a user watches go down,
+// called out as an estimate in the UI rather than presented as exact.
+function estimateTokens(text) {
+  return Math.max(1, Math.ceil((text || "").length / 4));
+}
+
+async function getSelfTestQuota(env, user) {
+  if (usesByok(user)) return { unlimited: true, used: 0, quota: null, remaining: null };
+  const today = todayDateStr(user.timezone);
+  const row = await env.DB.prepare("SELECT tokens_used FROM ai_token_usage WHERE user_id = ? AND date = ?")
+    .bind(user.id, today)
+    .first();
+  const used = (row && row.tokens_used) || 0;
+  return { unlimited: false, used, quota: SELF_TEST_TOKEN_DAILY_QUOTA, remaining: Math.max(0, SELF_TEST_TOKEN_DAILY_QUOTA - used) };
+}
+
+async function handleGetSelfTestQuota(request, env, user) {
+  return json(await getSelfTestQuota(env, user));
+}
+
+async function handleGetSelfTestQuestion(request, env, user) {
+  const row = await env.DB.prepare(
+    `SELECT q.id as id, q.q as q, q.a as a, q.topic_label as topic_label FROM questions q
+     JOIN user_question_sets uqs ON uqs.set_id = q.set_id AND uqs.user_id = ?
+     ORDER BY RANDOM() LIMIT 1`,
+  )
+    .bind(user.id)
+    .first();
+  if (!row) return json({ error: "No questions available yet — subscribe to or upload a question set first." }, { status: 400 });
+  return json({ question: row });
+}
+
+function buildSelfTestAnalysisPrompt(question, modelAnswer, userAnswer) {
+  return `You are an expert interview coach reviewing a candidate's spoken/written practice answer. Compare it to the model answer and give specific, actionable feedback — not generic encouragement.
+
+Question: ${question}
+
+Model answer (for reference, don't just repeat it): ${modelAnswer}
+
+Candidate's answer: ${userAnswer}
+
+Reply in exactly this plain-text format, no markdown:
+Score: <a number 1-10>
+Strengths: <1-2 sentences on what the candidate did well>
+Gaps: <1-2 sentences on what's missing or weak compared to the model answer>
+Suggestion: <one concrete, specific thing to improve next time>`;
+}
+
+function parseSelfTestFeedback(raw) {
+  if (!raw) return null;
+  const get = (label) => {
+    const m = raw.match(new RegExp(`${label}:\\s*(.+?)(?:\\n(?:Score|Strengths|Gaps|Suggestion):|$)`, "is"));
+    return m ? m[1].trim() : "";
+  };
+  const scoreText = get("Score");
+  const score = parseInt(scoreText, 10);
+  return {
+    score: Number.isFinite(score) ? Math.max(1, Math.min(10, score)) : null,
+    strengths: get("Strengths") || "",
+    gaps: get("Gaps") || "",
+    suggestion: get("Suggestion") || "",
+  };
+}
+
+async function handleSelfTestAnalyze(request, env, user) {
+  const parsed = await readJsonBody(request, 20000);
+  if (!parsed.ok) return json({ error: parsed.error }, { status: parsed.status });
+  const questionId = (parsed.body.question_id || "").toString();
+  const userAnswer = (parsed.body.answer || "").toString().trim().slice(0, 6000);
+  if (!questionId) return json({ error: "Missing question_id." }, { status: 400 });
+  if (!userAnswer) return json({ error: "Write or speak an answer first." }, { status: 400 });
+
+  const question = await env.DB.prepare(
+    `SELECT q.id as id, q.q as q, q.a as a FROM questions q
+     JOIN user_question_sets uqs ON uqs.set_id = q.set_id AND uqs.user_id = ?
+     WHERE q.id = ?`,
+  )
+    .bind(user.id, questionId)
+    .first();
+  if (!question) return json({ error: "Question not found." }, { status: 404 });
+
+  const quotaBefore = await getSelfTestQuota(env, user);
+  const prompt = buildSelfTestAnalysisPrompt(question.q, question.a, userAnswer);
+  const estimatedCost = estimateTokens(prompt) + 350; // + a generous allowance for the reply, charged before the call so a quota check can't be bypassed by a slow/failed request
+  if (!quotaBefore.unlimited && quotaBefore.used + estimatedCost > quotaBefore.quota) {
+    return json({
+      error: "You've used today's Self Test AI quota — it resets at your own midnight, or set your own AI key in Settings for unlimited use.",
+      quota: quotaBefore,
+    }, { status: 429 });
+  }
+
+  const { raw, generatedBy, capped } = await callConfiguredAi(env, user, prompt, "self-test analysis", 500);
+  if (capped) {
+    return json({
+      error: "You've used today's free AI allowance for all features combined — try again tomorrow, or set your own AI key in Settings for unlimited use.",
+      quota: quotaBefore,
+    }, { status: 429 });
+  }
+  if (!raw) {
+    return json({ error: "Couldn't reach the AI right now — try again in a moment." }, { status: 502 });
+  }
+
+  const feedback = parseSelfTestFeedback(raw);
+  if (!feedback) {
+    return json({ error: "The AI's reply couldn't be parsed — try again." }, { status: 502 });
+  }
+
+  let quota = quotaBefore;
+  if (!quotaBefore.unlimited) {
+    const actualCost = estimateTokens(prompt) + estimateTokens(raw);
+    const today = todayDateStr(user.timezone);
+    await env.DB.prepare(
+      `INSERT INTO ai_token_usage (user_id, date, tokens_used) VALUES (?, ?, ?)
+       ON CONFLICT(user_id, date) DO UPDATE SET tokens_used = tokens_used + excluded.tokens_used`,
+    )
+      .bind(user.id, today, actualCost)
+      .run();
+    quota = await getSelfTestQuota(env, user);
+  }
+
+  return json({ feedback, modelAnswer: question.a, generatedBy, quota });
+}
+
 // ---------- Stats: per-topic progress + accuracy (for "target areas") ----------
 // Completion counts come from the relational content model (every set a
 // user can see has a row in user_question_sets, per the signup/subscribe
@@ -1977,6 +2114,15 @@ export default {
         }
         if (url.pathname === "/api/question-sets/suggestions" && request.method === "GET") {
           return applySecurityHeaders(await handleListSuggestions(request, env, user));
+        }
+        if (url.pathname === "/api/self-test/quota" && request.method === "GET") {
+          return applySecurityHeaders(await handleGetSelfTestQuota(request, env, user));
+        }
+        if (url.pathname === "/api/self-test/question" && request.method === "GET") {
+          return applySecurityHeaders(await handleGetSelfTestQuestion(request, env, user));
+        }
+        if (url.pathname === "/api/self-test/analyze" && request.method === "POST") {
+          return applySecurityHeaders(await handleSelfTestAnalyze(request, env, user));
         }
 
         const setAction = url.pathname.match(/^\/api\/question-sets\/([^/]+)\/(submit|subscribe)$/);

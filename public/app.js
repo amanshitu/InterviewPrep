@@ -69,6 +69,7 @@ const PAGE_LOADERS = {
   "/": () => import("./pages/home.js"),
   "/review": () => import("./pages/review.js"),
   "/test": () => import("./pages/test.js"),
+  "/self-test": () => import("./pages/selftest.js"),
   "/settings": () => import("./pages/settings.js"),
   "/stats": () => import("./pages/stats.js"),
   "/admin": () => import("./pages/admin.js"),
@@ -95,6 +96,14 @@ window.addEventListener("popstate", () => dispatchRoute(location.pathname));
 // bookkeeping. Browser-only feature — no server involvement.
 export function isSpeechSupported() {
   return typeof window !== "undefined" && "speechSynthesis" in window;
+}
+
+// Speech *recognition* (speech-to-text) — a separate, much less universally
+// supported browser API (no Firefox support as of this writing) used by
+// Self Test's microphone input. Always feature-detected, never assumed.
+export function getSpeechRecognitionCtor() {
+  if (typeof window === "undefined") return null;
+  return window.SpeechRecognition || window.webkitSpeechRecognition || null;
 }
 
 export function stopSpeaking() {
@@ -310,6 +319,7 @@ export const DOWNLOAD_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fi
 export const UPLOAD_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 20V8M7 13l5-5 5 5M4 4h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 export const COPY_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M5 16H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
 export const CHECKLIST_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4 6l1 1 1.5-1.5M4 12l1 1 1.5-1.5M4 18l1 1 1.5-1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+export const MIC_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3" stroke="currentColor" stroke-width="1.6"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4M9 22h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
 
 // Renders a "Read aloud" / "Stop" toggle button for the given question id,
 // or "" if this browser has no speech synthesis support at all. Markup
@@ -490,6 +500,7 @@ function wireMobileShell() {
   $("#fab-upload-btn").addEventListener("click", () => { closeMobileSheets(); navigate("/settings"); });
   $("#fab-review-btn").addEventListener("click", () => { closeMobileSheets(); navigate("/review"); });
   $("#fab-test-btn").addEventListener("click", () => { closeMobileSheets(); navigate("/test"); });
+  $("#fab-selftest-btn").addEventListener("click", () => { closeMobileSheets(); navigate("/self-test"); });
 
   wireCompactThemeToggle();
 }

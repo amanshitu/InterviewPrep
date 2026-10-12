@@ -1,5 +1,5 @@
 // Today's queue — the default/home view.
-import { $, $all, el, escapeHtml, toastSuccess, toastError, api, state, renderNav, renderTopStats, navigate, renderReadAloudButton, toggleReadAloud, CHECK_ICON, REPEAT_ICON, EYE_ICON, PLUS_ICON, CHECKLIST_ICON, SPARKLE_ICON, isMobileLayout } from "../app.js";
+import { $, $all, el, escapeHtml, toastSuccess, toastError, api, state, renderNav, renderTopStats, navigate, renderReadAloudButton, toggleReadAloud, CHECK_ICON, REPEAT_ICON, EYE_ICON, PLUS_ICON, CHECKLIST_ICON, SPARKLE_ICON, MIC_ICON, isMobileLayout } from "../app.js";
 
 const TEST_SIZE = 10;
 const DEFAULT_REVIEW_COUNT = 15;
@@ -190,6 +190,14 @@ function paint() {
       <button class="btn btn-primary btn-icon-label" style="margin-top:14px;" id="start-test-btn">${SPARKLE_ICON} Start today's test</button>
     </div>
   `));
+  row2.appendChild(el(`
+    <div class="card">
+      <div class="group-days">AI-generated</div>
+      <div class="section-title" style="font-size:17px;margin-top:2px;">Self Test</div>
+      <p class="section-sub" style="margin-top:6px;">Write or speak your own answer to a random question, and get AI feedback on how it compares to the model answer.</p>
+      <button class="btn btn-primary btn-icon-label" style="margin-top:14px;" id="start-selftest-btn">${MIC_ICON} Start self test</button>
+    </div>
+  `));
   view.appendChild(row2);
 
   main.appendChild(view);
@@ -231,6 +239,7 @@ function paint() {
   rangeInput.addEventListener("input", () => { $("#review-count-label", view).textContent = rangeInput.value; });
   $("#start-review-btn", view).addEventListener("click", () => navigate("/review", parseInt(rangeInput.value, 10)));
   $("#start-test-btn", view).addEventListener("click", () => navigate("/test"));
+  $("#start-selftest-btn", view).addEventListener("click", () => navigate("/self-test"));
 
   renderNav();
 }

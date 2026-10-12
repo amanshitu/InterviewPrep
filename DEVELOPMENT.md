@@ -804,3 +804,27 @@ New Settings card ("Answer text size") with four buttons, each one rendered *in*
 | Default (Small/14px) is pixel-identical to the answer text's size before this feature existed | Done |
 | Verified: default confirmed 14px: selecting "Extra large" confirmed the active button updates, confirmed the *already-revealed* answer's computed font-size actually becomes 21px without a reload, and confirmed the choice survives a full page reload | Done |
 | Deploy | Not yet — pending |
+
+## Phase 5.6 — Self Test module with AI feedback and a token-metered quota
+
+**Status: implemented and verified with curl + a real Playwright/Chromium browser; not yet deployed.**
+
+New "Self Test" module: the app picks a random question from the user's own accessible sets, the user writes (or dictates, via Web Speech API) a free-text answer in their own words, and an "Analyze my answer" button sends it to the configured AI (BYOK or the free Workers AI tier, same `callConfiguredAi` helper every other AI feature already uses) for structured feedback — a 1-10 score, strengths, gaps, and a suggestion — after which the model's own saved answer is revealed for comparison. Entry points: a new card on the Today page (next to Daily Review/Daily Test) and a mobile FAB quick action.
+
+The accompanying ask — "allocate some AI token quota to all users, visible in Settings, that can't be exceeded" — is a genuinely different unit from the existing `ai_usage`/`FREE_AI_DAILY_CAP = 20` cap (MCQ generation, Stats insight, resume-prompt generation), which counts *generations per day*, not *tokens*. Reusing it would have under- or over-charged users depending on answer length, so this feature gets its own table instead: `ai_token_usage(user_id, date, tokens_used)` (`migrations/0009_self_test_token_quota.sql`), a `SELF_TEST_TOKEN_DAILY_QUOTA = 6000`/day constant, reset at the user's own midnight via the existing `todayDateStr(user.timezone)` convention, and BYOK-exempt via the existing `usesByok(user)` check — all mirroring the existing cap's precedent exactly, just on a different unit and a separate table so the two caps can't interfere with each other.
+
+Token counts are estimated (~4 characters/token, `estimateTokens()`) since no provider reliably surfaces an exact count through the shared `callConfiguredAi` return shape — surfaced everywhere in the UI as "approximate," never claimed as exact. Enforcement is a hard pre-flight check: estimated cost of the prompt plus a flat 350-token reply allowance is checked and rejected (429) *before* any AI call is made, so a user truly cannot exceed the quota even by one over-budget request; quota is only debited after a successful, parseable AI reply, so a failed/unreachable AI call never burns quota it didn't use.
+
+Dictation (mic button, feature-detected via a new `getSpeechRecognitionCtor()` in `app.js`, hidden entirely where unsupported e.g. Firefox) only ever fills the textarea for the user to review — never auto-submits — matching the same "never send AI content the user hasn't reviewed" principle the PDF-resume-import feature established earlier.
+
+| Item | Status |
+|---|---|
+| New `ai_token_usage` table + migration | Done |
+| New Self Test page (`public/pages/selftest.js`): random question, free-text or dictated answer, Analyze button, AI feedback display, model-answer reveal, live quota line | Done |
+| Entry points: Today-page card, mobile FAB quick action | Done |
+| Settings page shows live tokens-used/remaining for the Self Test quota | Done |
+| Hard quota enforcement verified: manually set usage to 5,900/6,000 via direct D1 write, confirmed a further analyze request is blocked with 429 *before* any AI call, both via curl and via the real browser UI | Done |
+| Verified quota is never debited on a failed/unparseable AI response (confirmed via curl: stayed at 0 after a 502) | Done |
+| Verified empty-answer validation, "New question" skip, and the Settings quota card all render and behave correctly end-to-end via Playwright | Done |
+| AI feedback content itself not visually verified locally — local Workers AI has no inference simulator (same pre-existing limitation documented for MCQ generation); graceful 502 handling confirmed instead | Known limitation |
+| Deploy | Not yet — pending |
