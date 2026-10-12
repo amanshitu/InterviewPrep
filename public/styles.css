@@ -347,7 +347,14 @@ img { max-width: 100%; }
 .q-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
 .q-index { font-family: var(--font-display); font-weight: 800; color: var(--primary); font-size: 13px; }
 .q-text { font-weight: 700; font-size: 15.5px; margin-bottom: 4px; }
-.q-answer { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border); color: var(--text); font-size: 14px; line-height: 1.6; }
+.q-answer { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border); color: var(--text); font-size: var(--answer-font-size, 14px); line-height: 1.6; }
+
+.font-size-options { display: flex; gap: 8px; flex-wrap: wrap; }
+.font-size-option {
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 8px 14px; cursor: pointer; color: var(--text); font-family: var(--font-body); font-weight: 600;
+}
+.font-size-option.is-active { background: var(--primary-soft); color: var(--primary); border-color: var(--primary); }
 .q-topic-tag { font-size: 11.5px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: .02em; }
 .q-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
 .admin-review-panel { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 0; }

@@ -680,6 +680,42 @@ function initTheme() {
   });
 }
 
+// ---------- answer text size ----------
+// A per-browser reading preference (localStorage, same pattern as theme),
+// applied via a CSS custom property so every .q-answer everywhere — Today,
+// Daily Review, the admin question-review panel — picks it up for free
+// from one shared rule, no per-page wiring needed. Defaults to "small"
+// (14px), matching the size .q-answer already had before this existed, so
+// nobody's view changes unless they opt in.
+const ANSWER_FONT_SIZE_KEY = "answerFontSize";
+const ANSWER_FONT_SIZES = { small: 14, medium: 16, large: 18, xlarge: 21 };
+
+export function getAnswerFontSize() {
+  try {
+    const saved = localStorage.getItem(ANSWER_FONT_SIZE_KEY);
+    return ANSWER_FONT_SIZES[saved] ? saved : "small";
+  } catch {
+    return "small";
+  }
+}
+
+export function setAnswerFontSize(size) {
+  const px = ANSWER_FONT_SIZES[size] || ANSWER_FONT_SIZES.small;
+  document.documentElement.style.setProperty("--answer-font-size", `${px}px`);
+  $all(".font-size-option").forEach((btn) => {
+    btn.classList.toggle("is-active", btn.dataset.size === size);
+  });
+  try {
+    localStorage.setItem(ANSWER_FONT_SIZE_KEY, size);
+  } catch {
+    /* best-effort — localStorage unavailable */
+  }
+}
+
+function initAnswerFontSize() {
+  setAnswerFontSize(getAnswerFontSize());
+}
+
 // ---------- profile dropdown ----------
 function wireProfileMenu() {
   const menu = $("#profile-menu");
@@ -727,6 +763,7 @@ async function boot(user) {
   $("#nav-about-btn").addEventListener("click", () => navigate("/about"));
   $("#settings-btn").addEventListener("click", () => navigate("/settings"));
   initTheme();
+  initAnswerFontSize();
   wireProfileMenu();
   wireMobileShell();
   renderShell();

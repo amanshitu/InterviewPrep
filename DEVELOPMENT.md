@@ -788,3 +788,19 @@ Scoped to the topbar's instance only via its unique `#theme-toggle` id — the p
 | Desktop topbar unaffected — no `is-collapsible` class ever gets added there (`wireCompactThemeToggle()` is a no-op when `isMobileLayout()` is false) | Done |
 | Verified the exact visible-option set at each step (collapsed → expanded → collapsed-on-a-different-theme) and confirmed the theme actually applied, plus confirmed desktop shows all three with no collapsible class | Done |
 | Deploy | Not yet — pending |
+
+## Phase 5.5 — adjustable answer text size
+
+**Status: implemented and verified with a real Playwright/Chromium browser; not yet deployed.**
+
+A new per-browser reading preference, asked for specifically for Today's questions but built the same way theme/read-aloud settings already are — a real feature (persisted, adjustable any time in Settings), not a one-off CSS bump. Four sizes — Small (14px, today's existing size — nobody's view changes unless they opt in), Medium (16px), Large (18px), Extra large (21px) — applied via a single CSS custom property (`--answer-font-size` on `:root`), so every `.q-answer` anywhere (Today, Daily Review, the admin question-review panel) picks it up for free from one shared rule instead of needing per-page wiring.
+
+New Settings card ("Answer text size") with four buttons, each one rendered *in* its own size as a built-in preview (the "Extra large" button's own label is visibly bigger than "Small"'s) — clicking a button applies it immediately (no page reload needed, since the CSS variable updates live) and persists it to `localStorage`, same pattern as theme/read-aloud prefs. Applies everywhere (not mobile-gated) — a readability preference benefits every device equally, unlike the app-shell/gesture work in recent phases.
+
+| Item | Status |
+|---|---|
+| New `getAnswerFontSize()`/`setAnswerFontSize()` in `app.js`, applied via a `--answer-font-size` CSS custom property that `.q-answer`'s existing `font-size` rule now reads | Done |
+| New "Answer text size" card in Settings with four size options, each previewed at its own actual size | Done |
+| Default (Small/14px) is pixel-identical to the answer text's size before this feature existed | Done |
+| Verified: default confirmed 14px: selecting "Extra large" confirmed the active button updates, confirmed the *already-revealed* answer's computed font-size actually becomes 21px without a reload, and confirmed the choice survives a full page reload | Done |
+| Deploy | Not yet — pending |

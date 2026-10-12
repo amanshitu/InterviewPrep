@@ -1,6 +1,6 @@
 // Account, prep profile, AI provider (BYOK), password/sessions, question
 // sets (upload + suggestions), and data export.
-import { $, $all, el, escapeHtml, toastSuccess, toastError, toastWarning, formatDate, downloadBlob, api, state, renderShell, renderNav, renderAvatar, refreshBankStats, isSpeechSupported, isWakeLockSupported, getReadAloudPrefs, setReadAloudPrefs, getVoiceOptions, toggleReadAloud, CAMERA_ICON, TRASH_ICON, SAVE_ICON, KEY_ICON, LOGOUT_ICON, DOWNLOAD_ICON, UPLOAD_ICON, SEND_ICON, PLUS_ICON, CLOSE_ICON, SPARKLE_ICON, COPY_ICON, SPEAKER_ICON, STOP_ICON } from "../app.js";
+import { $, $all, el, escapeHtml, toastSuccess, toastError, toastWarning, formatDate, downloadBlob, api, state, renderShell, renderNav, renderAvatar, refreshBankStats, isSpeechSupported, isWakeLockSupported, getReadAloudPrefs, setReadAloudPrefs, getVoiceOptions, toggleReadAloud, getAnswerFontSize, setAnswerFontSize, CAMERA_ICON, TRASH_ICON, SAVE_ICON, KEY_ICON, LOGOUT_ICON, DOWNLOAD_ICON, UPLOAD_ICON, SEND_ICON, PLUS_ICON, CLOSE_ICON, SPARKLE_ICON, COPY_ICON, SPEAKER_ICON, STOP_ICON } from "../app.js";
 
 // Client-side resize keeps the uploaded picture small (well under the
 // server's MAX_AVATAR_DATA_URL_LENGTH backstop) without needing any file
@@ -155,6 +155,8 @@ export function render() {
   `));
 
   view.appendChild(buildAiProviderCard());
+
+  view.appendChild(buildAnswerFontSizeCard());
 
   if (isSpeechSupported()) view.appendChild(buildReadAloudCard());
 
@@ -339,6 +341,7 @@ export function render() {
   wireResumePromptCard(view);
   wireSuggestionsCard(view);
   wireAiProviderCard(view);
+  wireAnswerFontSizeCard(view);
   if (isSpeechSupported()) wireReadAloudCard(view);
   renderNav();
 }
@@ -444,6 +447,34 @@ function wireAiProviderCard(view) {
       errBox.textContent = err.message;
       errBox.hidden = false;
     }
+  });
+}
+
+// ---------- Answer text size ----------
+const ANSWER_FONT_SIZE_LABELS = [
+  { size: "small", label: "Small", px: 14 },
+  { size: "medium", label: "Medium", px: 16 },
+  { size: "large", label: "Large", px: 18 },
+  { size: "xlarge", label: "Extra large", px: 21 },
+];
+
+function buildAnswerFontSizeCard() {
+  const current = getAnswerFontSize();
+  const buttons = ANSWER_FONT_SIZE_LABELS.map(
+    (opt) => `<button type="button" class="font-size-option${opt.size === current ? " is-active" : ""}" data-size="${opt.size}" style="font-size:${opt.px}px;">${opt.label}</button>`,
+  ).join("");
+  return el(`
+    <div class="card">
+      <div class="section-title">Answer text size</div>
+      <p class="section-sub" style="margin-top:6px;">Controls how large revealed answers appear on Today's questions, Daily Review, and anywhere else an answer is shown. Saved to this browser.</p>
+      <div class="font-size-options" id="font-size-options" style="margin-top:14px;">${buttons}</div>
+    </div>
+  `);
+}
+
+function wireAnswerFontSizeCard(view) {
+  $all("#font-size-options .font-size-option", view).forEach((btn) => {
+    btn.addEventListener("click", () => setAnswerFontSize(btn.dataset.size));
   });
 }
 
