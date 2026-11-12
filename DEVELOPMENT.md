@@ -1134,3 +1134,19 @@ The frontend piece that makes Phases 7.0–7.3's backend work actually usable: a
 | **Bug found and fixed**: `userPayloadWithCategories()` extracted and applied to every endpoint that hands the frontend a user object (signup, login, password change, account/profile updates) — not just `/api/me` | Done |
 | Verified via Playwright on both desktop (profile dropdown) and mobile (profile sheet) viewports: enrolled categories list correctly (including immediately after signup), enrolling in a new category and switching to it both update the dropdown/sheet and the Today page's actual content (pending/target/questions) live, with no page reload | Done |
 | Deploy | Not yet — pending |
+
+## Phase 7.5 — admin category management + set-category tagging at approval
+
+**Status: implemented and verified end-to-end (curl + a real Playwright/Chromium browser); not yet deployed.**
+
+Admin's piece of the platform: a new "Categories" card at the top of the Admin page lets an admin create categories (name + optional description, slugified into an id with a collision-safe suffix), shown as pills. Each pending question set in the approval queue now shows a checkbox per existing category — checking one or more and clicking Approve tags the set into exactly those categories via `question_set_categories`, which is also how a genuinely shared set (e.g. "General Knowledge" serving both Railway and Police) gets created: there's no earlier submitter-side tagging step, so this is the one place sharing actually happens, as a deliberate admin action.
+
+`handleApproveSet` gained an optional `categoryIds` array in its request body (defaults to empty — tagging is optional, a set can still be approved with none selected, matching existing behavior for anyone not using the new checkboxes); when provided, it replaces (not just adds to) the set's existing category tags, so re-approving/re-tagging an already-shared set is one call. New admin-only `POST /api/admin/categories` creates a category; the existing `GET /api/categories` (from Phase 7.1) is reused for listing — no new read endpoint needed.
+
+| Item | Status |
+|---|---|
+| New "Categories" management card on the Admin page (create category, shown as pills) | Done |
+| `POST /api/admin/categories`: name → slugified id (collision-safe), optional description | Done |
+| Per-category checkboxes on each pending set; `handleApproveSet` tags `question_set_categories` from the selected ones, replacing any existing tags | Done |
+| **Verified end-to-end**: created a category via curl and via the actual admin UI form; submitted a question set for review and approved it with `categoryIds: ["interview-prep", "railway-exam"]` via curl — confirmed both `question_set_categories` rows were created, directly proving the "GK shared between Railway and Police" scenario from the original request; separately approved a second set through the real browser UI with only one checkbox ticked and confirmed via D1 that only that one category was tagged | Done |
+| Deploy | Not yet — pending |

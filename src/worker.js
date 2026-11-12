@@ -352,6 +352,27 @@ async function handleSwitchCategory(request, env, user) {
   return json({ ok: true, activeCategoryId: categoryId });
 }
 
+async function handleCreateCategory(request, env, user) {
+  const parsed = await readJsonBody(request, 2000);
+  if (!parsed.ok) return json({ error: parsed.error }, { status: parsed.status });
+  const name = (parsed.body.name || "").toString().trim().slice(0, 80);
+  const description = parsed.body.description ? String(parsed.body.description).trim().slice(0, 300) : null;
+  if (!name) return json({ error: "Please enter a category name." }, { status: 400 });
+
+  const slugBase = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "category";
+  let id = slugBase;
+  let suffix = 1;
+  while (await env.DB.prepare("SELECT id FROM categories WHERE id = ?").bind(id).first()) {
+    suffix += 1;
+    id = `${slugBase}-${suffix}`;
+  }
+
+  await env.DB.prepare("INSERT INTO categories (id, name, description) VALUES (?, ?, ?)")
+    .bind(id, name, description)
+    .run();
+  return json({ ok: true, category: { id, name, description } });
+}
+
 // Every response that hands the frontend a user object (signup, login,
 // password change, /api/me) needs enrolledCategories for the category
 // switcher — it's not part of userPayload() itself since it's a list, not
@@ -1331,7 +1352,17 @@ async function handleAdminPendingSets(request, env, user) {
   return json({ sets: rows.results || [] });
 }
 
+// categoryIds is optional — lets an admin tag a newly-approved set into one
+// or more categories (e.g. a shared "General Knowledge" set serving both
+// Railway and Police) right at approval time, since there's no earlier
+// submitter-side tagging step. Replaces any existing tags for the set
+// rather than only adding, so re-tagging an already-shared set is one call.
 async function handleApproveSet(request, env, user, setId) {
+  const parsed = await readJsonBody(request, 2000);
+  const categoryIds = parsed.ok && Array.isArray(parsed.body.categoryIds)
+    ? parsed.body.categoryIds.map((c) => String(c)).filter(Boolean).slice(0, 20)
+    : [];
+
   const row = await env.DB.prepare("SELECT visibility FROM question_sets WHERE id = ?").bind(setId).first();
   if (!row || row.visibility !== "pending") return json({ error: "This set isn't pending review." }, { status: 400 });
   await env.DB.prepare(
@@ -1340,6 +1371,17 @@ async function handleApproveSet(request, env, user, setId) {
   )
     .bind(new Date().toISOString(), user.id, setId)
     .run();
+
+  if (categoryIds.length) {
+    await env.DB.prepare("DELETE FROM question_set_categories WHERE set_id = ?").bind(setId).run();
+    const stmts = categoryIds.map((categoryId) =>
+      env.DB.prepare(
+        "INSERT INTO question_set_categories (set_id, category_id) VALUES (?, ?) ON CONFLICT(set_id, category_id) DO NOTHING",
+      ).bind(setId, categoryId),
+    );
+    await env.DB.batch(stmts);
+  }
+
   return json({ ok: true });
 }
 
@@ -2407,6 +2449,10 @@ export default {
         if (adminSetQuestions && request.method === "GET") {
           if (user.role !== "admin") return applySecurityHeaders(json({ error: "Forbidden." }, { status: 403 }));
           return applySecurityHeaders(await handleAdminGetSetQuestions(request, env, user, adminSetQuestions[1]));
+        }
+        if (url.pathname === "/api/admin/categories" && request.method === "POST") {
+          if (user.role !== "admin") return applySecurityHeaders(json({ error: "Forbidden." }, { status: 403 }));
+          return applySecurityHeaders(await handleCreateCategory(request, env, user));
         }
 
         if (url.pathname === "/api/test/today" && request.method === "GET") {
