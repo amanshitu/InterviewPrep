@@ -3,12 +3,13 @@
 // from the Daily Test (MCQ) and Daily Review (spaced repetition): this is
 // the one place in the app that practices actually *producing* an answer,
 // not just recognizing one.
-import { $, el, escapeHtml, toastSuccess, toastError, api, state, renderNav, navigate, getSpeechRecognitionCtor, BACK_ICON, MIC_ICON, SPARKLE_ICON, SHUFFLE_ICON } from "../app.js";
+import { $, el, escapeHtml, toastSuccess, toastError, api, state, renderNav, navigate, getSpeechRecognitionCtor, renderChatBubble, BACK_ICON, MIC_ICON, SPARKLE_ICON, SHUFFLE_ICON } from "../app.js";
 
 let current = null; // { id, q, a, topic_label }
 let quota = null; // { unlimited, used, quota, remaining }
 let feedback = null; // { score, strengths, gaps, suggestion, star } once analyzed
 let modelAnswer = null; // revealed only after analysis
+let submittedAnswer = null; // the answer text shown in the user's chat bubble once analyzed
 let analyzing = false;
 let recognizer = null;
 let listening = false;
@@ -22,6 +23,7 @@ export async function render() {
 
   feedback = null;
   modelAnswer = null;
+  submittedAnswer = null;
   analyzing = false;
 
   const [questionResult, quotaResult] = await Promise.allSettled([
@@ -68,36 +70,50 @@ function paint() {
   }
 
   const sttSupported = !!getSpeechRecognitionCtor();
-  const card = el(`
-    <div class="card">
-      <div class="q-topic-tag">${escapeHtml(current.topic_label || "")}</div>
-      <div class="q-text" style="margin-top:6px;">${escapeHtml(current.q)}</div>
-      <label class="field" style="margin-top:14px;">
-        <span>Your answer</span>
-        <textarea id="self-test-answer" rows="8" placeholder="Type your answer here${sttSupported ? ", or use the mic" : ""}." ${analyzing ? "disabled" : ""}></textarea>
-      </label>
-      <div class="q-actions">
-        ${sttSupported ? `<button type="button" class="btn btn-secondary btn-small btn-icon-label" id="self-test-mic-btn">${MIC_ICON} ${listening ? "Stop" : "Speak answer"}</button>` : ""}
-        <button type="button" class="btn btn-ghost btn-small btn-icon-label" id="self-test-skip-btn">${SHUFFLE_ICON} New question</button>
-      </div>
-      <button class="btn btn-primary btn-icon-label" id="self-test-analyze-btn" style="margin-top:14px;" ${analyzing ? "disabled" : ""}>${SPARKLE_ICON} ${analyzing ? "Analyzing…" : "Analyze my answer"}</button>
-    </div>
-  `);
-  view.appendChild(card);
 
+  const questionBubble = renderChatBubble("ai", `<div class="q-topic-tag">${escapeHtml(current.topic_label || "")}</div><div class="q-text" style="margin-top:6px;">${escapeHtml(current.q)}</div>`);
+  const answerBubble = submittedAnswer ? renderChatBubble("user", escapeHtml(submittedAnswer).replace(/\n/g, "<br/>")) : "";
+  let feedbackBubble = "";
   if (feedback) {
     const scoreLine = feedback.score !== null ? `<div class="stat-tile" style="display:inline-block;margin-bottom:10px;"><div class="stat-tile-value">${feedback.score}/10</div><div class="stat-tile-label">Score</div></div>` : "";
+    feedbackBubble = renderChatBubble("ai", `
+      ${scoreLine}
+      <p style="margin-top:4px;"><strong>Strengths:</strong> ${escapeHtml(feedback.strengths || "—")}</p>
+      <p style="margin-top:8px;"><strong>Gaps:</strong> ${escapeHtml(feedback.gaps || "—")}</p>
+      <p style="margin-top:8px;"><strong>Try this next:</strong> ${escapeHtml(feedback.suggestion || "—")}</p>
+      ${feedback.star ? `<p style="margin-top:8px;"><strong>STAR structure:</strong> ${escapeHtml(feedback.star)}</p>` : ""}
+      <div class="q-answer" style="margin-top:14px;">
+        <strong>Model answer:</strong><br/>${escapeHtml(modelAnswer || "")}
+      </div>
+    `);
+  }
+
+  view.appendChild(el(`
+    <div class="card">
+      ${questionBubble}
+      ${answerBubble}
+      ${feedbackBubble}
+    </div>
+  `));
+
+  if (!feedback) {
     view.appendChild(el(`
       <div class="card">
-        <div class="section-title" style="font-size:16px;">Feedback</div>
-        ${scoreLine}
-        <p style="margin-top:4px;"><strong>Strengths:</strong> ${escapeHtml(feedback.strengths || "—")}</p>
-        <p style="margin-top:8px;"><strong>Gaps:</strong> ${escapeHtml(feedback.gaps || "—")}</p>
-        <p style="margin-top:8px;"><strong>Try this next:</strong> ${escapeHtml(feedback.suggestion || "—")}</p>
-        ${feedback.star ? `<p style="margin-top:8px;"><strong>STAR structure:</strong> ${escapeHtml(feedback.star)}</p>` : ""}
-        <div class="q-answer" style="margin-top:14px;">
-          <strong>Model answer:</strong><br/>${escapeHtml(modelAnswer || "")}
+        <label class="field">
+          <span>Your answer</span>
+          <textarea id="self-test-answer" rows="8" placeholder="Type your answer here${sttSupported ? ", or use the mic" : ""}." ${analyzing ? "disabled" : ""}></textarea>
+        </label>
+        <div class="q-actions">
+          ${sttSupported ? `<button type="button" class="btn btn-secondary btn-small btn-icon-label" id="self-test-mic-btn">${MIC_ICON} ${listening ? "Stop" : "Speak answer"}</button>` : ""}
+          <button type="button" class="btn btn-ghost btn-small btn-icon-label" id="self-test-skip-btn">${SHUFFLE_ICON} New question</button>
         </div>
+        <button class="btn btn-primary btn-icon-label" id="self-test-analyze-btn" style="margin-top:14px;" ${analyzing ? "disabled" : ""}>${SPARKLE_ICON} ${analyzing ? "Analyzing…" : "Analyze my answer"}</button>
+      </div>
+    `));
+  } else {
+    view.appendChild(el(`
+      <div class="card">
+        <button type="button" class="btn btn-ghost btn-small btn-icon-label" id="self-test-skip-btn">${SHUFFLE_ICON} Try another question</button>
       </div>
     `));
   }
@@ -106,7 +122,8 @@ function paint() {
 
   $("#self-test-back-btn", view).addEventListener("click", () => { stopListening(); navigate("/"); });
   $("#self-test-skip-btn", view).addEventListener("click", skipQuestion);
-  $("#self-test-analyze-btn", view).addEventListener("click", analyzeAnswer);
+  const analyzeBtn = $("#self-test-analyze-btn", view);
+  if (analyzeBtn) analyzeBtn.addEventListener("click", analyzeAnswer);
   const micBtn = $("#self-test-mic-btn", view);
   if (micBtn) micBtn.addEventListener("click", toggleListening);
 
@@ -120,6 +137,7 @@ async function skipQuestion() {
     current = data.question;
     feedback = null;
     modelAnswer = null;
+    submittedAnswer = null;
     paint();
   } catch (err) {
     toastError(err.message);
@@ -141,6 +159,7 @@ async function analyzeAnswer() {
     });
     feedback = data.feedback;
     modelAnswer = data.modelAnswer;
+    submittedAnswer = answer;
     quota = data.quota;
     toastSuccess("Analyzed — see the feedback below.");
   } catch (err) {

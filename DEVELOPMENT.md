@@ -895,3 +895,20 @@ New page `public/pages/mockinterview.js`: the user picks a session length (3/5/8
 | Entry points: Today-page card + mobile FAB quick action | Done |
 | Verified end-to-end via Playwright: since local Workers AI has no inference simulator (same known limitation as Self Test/MCQ generation), the `/api/self-test/analyze` network call was intercepted and stubbed with synthetic scores (6, 8, 10) to exercise the actual page logic — confirmed all 3 questions were distinct, the session correctly advanced through "Question 1 of 3" → "2 of 3" → "3 of 3," and the summary screen showed the exact average (8.0/10) with 3 correctly-scored per-question rows | Done |
 | Deploy | Not yet — pending |
+
+## Phase 6.4 — Chat-bubble framing for Self Test + Mock Interview
+
+**Status: implemented and verified with a real Playwright/Chromium browser; not yet deployed.**
+
+Reframed both AI-conversation pages as an actual conversation rather than a form-plus-result-card: a left-aligned AI bubble for the question, a right-aligned user bubble showing the submitted answer once analyzed, and a left-aligned AI bubble for the feedback (score/strengths/gaps/suggestion/STAR). New shared `renderChatBubble(role, html)` helper in `app.js` and `.chat-bubble`/`.chat-bubble-ai`/`.chat-bubble-user` CSS classes (reusing existing design tokens — `--surface-2`/`--border` for AI, `--primary-soft`/`--primary` for the user side) used by both pages.
+
+This surfaced a real gap in Mock Interview (Phase 6.3): it previously auto-advanced to the next question immediately after a successful analysis, so the per-question feedback was computed but never actually shown to the user. Fixed as part of this phase: analyzing a question now pauses on a "Next question" / "See session summary" button so the feedback bubble is genuinely read before moving on — `analyzeAndAdvance` was split into `analyzeAnswer` (shows feedback, stays put) and a new `advanceToNext` (clears state and loads the next question or finishes the session). The session summary's per-question list also now renders as compact AI/user bubble pairs (question, then score) instead of plain stat cards.
+
+| Item | Status |
+|---|---|
+| Shared `renderChatBubble` helper + chat-bubble CSS classes | Done |
+| Self Test: question/answer/feedback rendered as a 3-bubble conversation | Done |
+| Mock Interview: same 3-bubble conversation per question, now with an explicit pause-to-read step before advancing (fixes a gap where feedback was computed but never shown) | Done |
+| Mock Interview summary: per-question list as compact bubble pairs | Done |
+| Verified via Playwright (network-stubbed analyze responses, same approach as Phase 6.3): Self Test shows exactly 3 bubbles in AI/user/AI order; Mock Interview correctly stays on "Question N of 3" after analyzing (does not auto-advance), updates the continue button's label on the final question ("See session summary"), and the summary renders 6 bubbles (3 question/score pairs) with the correct average | Done |
+| Deploy | Not yet — pending |

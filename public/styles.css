@@ -350,6 +350,12 @@ img { max-width: 100%; }
 .q-text { font-weight: 700; font-size: 15.5px; margin-bottom: 4px; }
 .q-answer { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border); color: var(--text); font-size: var(--answer-font-size, 14px); line-height: 1.6; }
 
+/* ---------- Chat bubbles (Self Test / Mock Interview) ---------- */
+.chat-bubble { width: fit-content; max-width: 85%; padding: 14px 16px; border-radius: var(--radius-lg); margin-top: 12px; }
+.chat-bubble:first-child { margin-top: 0; }
+.chat-bubble-ai { background: var(--surface-2); border: 1px solid var(--border); margin-right: auto; }
+.chat-bubble-user { background: var(--primary-soft); border: 1px solid var(--primary); color: var(--text); margin-left: auto; }
+
 .font-size-options { display: flex; gap: 8px; flex-wrap: wrap; }
 .font-size-option {
   background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm);

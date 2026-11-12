@@ -3,7 +3,7 @@
 // reuses Self Test's existing single-question endpoints (question + analyze)
 // in sequence rather than a new batch-fetch endpoint, so it draws from the
 // same token quota and gets STAR coaching on HR questions for free.
-import { $, el, escapeHtml, toastSuccess, toastError, api, state, renderNav, navigate, getSpeechRecognitionCtor, BACK_ICON, MIC_ICON, SPARKLE_ICON } from "../app.js";
+import { $, el, escapeHtml, toastSuccess, toastError, api, state, renderNav, navigate, getSpeechRecognitionCtor, renderChatBubble, BACK_ICON, MIC_ICON, SPARKLE_ICON } from "../app.js";
 
 let sessionTotal = 5;
 let sessionIndex = 0; // 0-based position of the question currently shown
@@ -11,6 +11,7 @@ let current = null; // { id, q, a, topic_label }
 let quota = null;
 let feedback = null;
 let modelAnswer = null;
+let submittedAnswer = null; // the answer text shown in the user's chat bubble once analyzed
 let analyzing = false;
 let finished = false;
 let results = []; // [{ q, topic_label, score }] — one per answered question
@@ -23,6 +24,7 @@ export async function render(count) {
   sessionIndex = 0;
   feedback = null;
   modelAnswer = null;
+  submittedAnswer = null;
   analyzing = false;
   finished = false;
   results = [];
@@ -77,35 +79,49 @@ function paint() {
   }
 
   const sttSupported = !!getSpeechRecognitionCtor();
-  const card = el(`
-    <div class="card">
-      <div class="q-topic-tag">${escapeHtml(current.topic_label || "")}</div>
-      <div class="q-text" style="margin-top:6px;">${escapeHtml(current.q)}</div>
-      <label class="field" style="margin-top:14px;">
-        <span>Your answer</span>
-        <textarea id="mock-answer" rows="8" placeholder="Type your answer here${sttSupported ? ", or use the mic" : ""}." ${analyzing ? "disabled" : ""}></textarea>
-      </label>
-      <div class="q-actions">
-        ${sttSupported ? `<button type="button" class="btn btn-secondary btn-small btn-icon-label" id="mock-mic-btn">${MIC_ICON} ${listening ? "Stop" : "Speak answer"}</button>` : ""}
-      </div>
-      <button class="btn btn-primary btn-icon-label" id="mock-analyze-btn" style="margin-top:14px;" ${analyzing ? "disabled" : ""}>${SPARKLE_ICON} ${analyzing ? "Analyzing…" : (sessionIndex + 1 === sessionTotal ? "Analyze & finish" : "Analyze & next question")}</button>
-    </div>
-  `);
-  view.appendChild(card);
 
+  const questionBubble = renderChatBubble("ai", `<div class="q-topic-tag">${escapeHtml(current.topic_label || "")}</div><div class="q-text" style="margin-top:6px;">${escapeHtml(current.q)}</div>`);
+  const answerBubble = submittedAnswer ? renderChatBubble("user", escapeHtml(submittedAnswer).replace(/\n/g, "<br/>")) : "";
+  let feedbackBubble = "";
   if (feedback) {
     const scoreLine = feedback.score !== null ? `<div class="stat-tile" style="display:inline-block;margin-bottom:10px;"><div class="stat-tile-value">${feedback.score}/10</div><div class="stat-tile-label">Score</div></div>` : "";
+    feedbackBubble = renderChatBubble("ai", `
+      ${scoreLine}
+      <p style="margin-top:4px;"><strong>Strengths:</strong> ${escapeHtml(feedback.strengths || "—")}</p>
+      <p style="margin-top:8px;"><strong>Gaps:</strong> ${escapeHtml(feedback.gaps || "—")}</p>
+      <p style="margin-top:8px;"><strong>Try this next:</strong> ${escapeHtml(feedback.suggestion || "—")}</p>
+      ${feedback.star ? `<p style="margin-top:8px;"><strong>STAR structure:</strong> ${escapeHtml(feedback.star)}</p>` : ""}
+      <div class="q-answer" style="margin-top:14px;">
+        <strong>Model answer:</strong><br/>${escapeHtml(modelAnswer || "")}
+      </div>
+    `);
+  }
+
+  view.appendChild(el(`
+    <div class="card">
+      ${questionBubble}
+      ${answerBubble}
+      ${feedbackBubble}
+    </div>
+  `));
+
+  if (!feedback) {
     view.appendChild(el(`
       <div class="card">
-        <div class="section-title" style="font-size:16px;">Feedback</div>
-        ${scoreLine}
-        <p style="margin-top:4px;"><strong>Strengths:</strong> ${escapeHtml(feedback.strengths || "—")}</p>
-        <p style="margin-top:8px;"><strong>Gaps:</strong> ${escapeHtml(feedback.gaps || "—")}</p>
-        <p style="margin-top:8px;"><strong>Try this next:</strong> ${escapeHtml(feedback.suggestion || "—")}</p>
-        ${feedback.star ? `<p style="margin-top:8px;"><strong>STAR structure:</strong> ${escapeHtml(feedback.star)}</p>` : ""}
-        <div class="q-answer" style="margin-top:14px;">
-          <strong>Model answer:</strong><br/>${escapeHtml(modelAnswer || "")}
+        <label class="field">
+          <span>Your answer</span>
+          <textarea id="mock-answer" rows="8" placeholder="Type your answer here${sttSupported ? ", or use the mic" : ""}." ${analyzing ? "disabled" : ""}></textarea>
+        </label>
+        <div class="q-actions">
+          ${sttSupported ? `<button type="button" class="btn btn-secondary btn-small btn-icon-label" id="mock-mic-btn">${MIC_ICON} ${listening ? "Stop" : "Speak answer"}</button>` : ""}
         </div>
+        <button class="btn btn-primary btn-icon-label" id="mock-analyze-btn" style="margin-top:14px;" ${analyzing ? "disabled" : ""}>${SPARKLE_ICON} ${analyzing ? "Analyzing…" : "Analyze my answer"}</button>
+      </div>
+    `));
+  } else {
+    view.appendChild(el(`
+      <div class="card">
+        <button type="button" class="btn btn-primary btn-icon-label" id="mock-continue-btn">${SPARKLE_ICON} ${sessionIndex + 1 === sessionTotal ? "See session summary" : "Next question"}</button>
       </div>
     `));
   }
@@ -113,7 +129,10 @@ function paint() {
   main.appendChild(view);
 
   $("#mock-back-btn", view).addEventListener("click", () => { stopListening(); navigate("/"); });
-  $("#mock-analyze-btn", view).addEventListener("click", analyzeAndAdvance);
+  const analyzeBtn = $("#mock-analyze-btn", view);
+  if (analyzeBtn) analyzeBtn.addEventListener("click", analyzeAnswer);
+  const continueBtn = $("#mock-continue-btn", view);
+  if (continueBtn) continueBtn.addEventListener("click", advanceToNext);
   const micBtn = $("#mock-mic-btn", view);
   if (micBtn) micBtn.addEventListener("click", toggleListening);
 
@@ -143,13 +162,9 @@ function paintSummary() {
   const listCard = el(`<div class="card"><div class="section-title" style="font-size:16px;">Per-question results</div></div>`);
   const list = el(`<div style="margin-top:10px;"></div>`);
   results.forEach((r, i) => {
-    list.appendChild(el(`
-      <div class="q-card" style="margin-top:${i === 0 ? 0 : 10}px;">
-        <div class="q-topic-tag">${escapeHtml(r.topic_label || "")}</div>
-        <div class="q-text" style="margin-top:4px;font-size:14px;">${escapeHtml(r.q)}</div>
-        <div class="stat-tile" style="display:inline-block;margin-top:8px;"><div class="stat-tile-value">${r.score !== null && r.score !== undefined ? r.score + "/10" : "—"}</div><div class="stat-tile-label">Score</div></div>
-      </div>
-    `));
+    const questionBubble = renderChatBubble("ai", `<div class="q-topic-tag">${escapeHtml(r.topic_label || "")}</div><div class="q-text" style="margin-top:4px;font-size:14px;">${escapeHtml(r.q)}</div>`);
+    const scoreBubble = renderChatBubble("user", `Score: ${r.score !== null && r.score !== undefined ? r.score + "/10" : "—"}`);
+    list.appendChild(el(`<div style="margin-top:${i === 0 ? 0 : 16}px;">${questionBubble}${scoreBubble}</div>`));
   });
   listCard.appendChild(list);
   view.appendChild(listCard);
@@ -169,7 +184,7 @@ function paintSummary() {
   renderNav();
 }
 
-async function analyzeAndAdvance() {
+async function analyzeAnswer() {
   const textarea = $("#mock-answer");
   const answer = textarea ? textarea.value.trim() : "";
   if (!answer) { toastError("Write or speak an answer first."); return; }
@@ -184,25 +199,29 @@ async function analyzeAndAdvance() {
     });
     feedback = data.feedback;
     modelAnswer = data.modelAnswer;
+    submittedAnswer = answer;
     quota = data.quota;
     results.push({ q: current.q, topic_label: current.topic_label, score: feedback.score });
     toastSuccess("Analyzed.");
-    analyzing = false;
-
-    if (sessionIndex + 1 >= sessionTotal) {
-      finished = true;
-      paint();
-    } else {
-      sessionIndex += 1;
-      feedback = null;
-      modelAnswer = null;
-      await loadQuestion();
-    }
   } catch (err) {
     toastError(err.message);
+  } finally {
     analyzing = false;
     paint();
   }
+}
+
+async function advanceToNext() {
+  if (sessionIndex + 1 >= sessionTotal) {
+    finished = true;
+    paint();
+    return;
+  }
+  sessionIndex += 1;
+  feedback = null;
+  modelAnswer = null;
+  submittedAnswer = null;
+  await loadQuestion();
 }
 
 // Dictates into the textarea rather than auto-submitting — same "review

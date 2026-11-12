@@ -23,6 +23,12 @@ export function el(html) { const t = document.createElement("template"); t.inner
 export function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
+// Shared chat-bubble markup for Self Test / Mock Interview's conversation-style
+// framing — role is "ai" (left-aligned) or "user" (right-aligned). innerHtml
+// is trusted, already-escaped markup (caller's job), not raw user text.
+export function renderChatBubble(role, innerHtml) {
+  return `<div class="chat-bubble chat-bubble-${role}">${innerHtml}</div>`;
+}
 // type is one of "info" (default, neutral), "success", "error", "warning" —
 // styled via .toast-{type} in styles.css. Plain toast(msg) still works
 // exactly as before for anywhere that doesn't care about styling.
