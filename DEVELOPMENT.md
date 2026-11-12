@@ -1039,3 +1039,18 @@ Ported the two directly-applicable pieces: a new `#offline-banner` (shown on aut
 | Pull-to-refresh gated on `isOnline()` — never arms while offline | Done |
 | Verified via Playwright (`page.context().setOffline()`): banner correctly shows/hides across the online→offline→online transitions, visible on the pre-login auth screen too; confirmed a full touch drag sequence while offline does not add the `is-dragging` class (gesture never armed) | Done |
 | Deploy | Not yet — pending |
+
+## Phase 7.0 — multi-category platform: schema foundation
+
+**Status: implemented and verified against local D1; not yet deployed. First phase of a planned 7.0–7.6 batch (see the approved plan for the full design) to let one account prepare for multiple distinct purposes — today's Interview Prep content, plus future categories like Railway Exam / Police Exam / other govt exams — each with its own daily quota and streak, with specific content shareable across categories (e.g. a "General Knowledge" set serving both Railway and Police).**
+
+Today every user got the exact same combined pool of 5 official sets, auto-subscribed at signup with no choice — `question_sets.track`/`users.track` are both free text with almost no functional effect (confirmed: `track` only nudges suggestion sort order, gates nothing). This phase introduces `categories` as a first-class concept without touching any existing behavior: new `categories`, `question_set_categories` (many-to-many — a set can serve 2+ categories), and `user_categories` (per-user-per-category enrollment + quota/streak) tables, plus `users.active_category_id`. Migration backfills exactly one category (`interview-prep`), tags all 5 existing official sets into it, and copies every existing user's current `daily_quota`/`streak_count`/`streak_longest`/`streak_last_active` into a `user_categories` row for it, setting it active.
+
+Key design decisions locked in with the user before this was built: progress on a shared question is **global, not per-category** (completing a shared question marks it done everywhere it's shared — this is also why `user_question_progress` needed zero changes); a user can be enrolled in **multiple categories at once with a switcher** (not one category per account); streak/quota become **per-category** (consistent practice in Railway vs. Interview Prep are distinct accomplishments) while the existing AI quotas (`ai_usage`, `ai_token_usage`) **stay global per user** (cost-control — making them per-category would let one account multiply its free AI budget by enrolling in more categories). "Active category" is stored server-side (`users.active_category_id`, same pattern as the existing `users.timezone`) rather than threaded as a parameter through every request — this is what keeps the remaining phases from needing to touch ~40 existing endpoint signatures.
+
+| Item | Status |
+|---|---|
+| `categories`, `question_set_categories`, `user_categories` tables + `users.active_category_id` | Done |
+| Backfill: one `interview-prep` category, all 5 official sets tagged into it, every existing user enrolled with current quota/streak copied across, set active | Done |
+| Verified zero behavior change: compared `users` vs. the new `user_categories` row for several existing accounts — `daily_quota`/`streak_count`/`streak_longest`/`streak_last_active` match exactly, `active_category_id` correctly set to `interview-prep` | Done |
+| Deploy | Not yet — pending |
