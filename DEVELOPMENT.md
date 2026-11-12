@@ -965,3 +965,35 @@ Each non-default accent gets the same 3-block CSS pattern the base light/dark th
 | Inline flash-prevention `<head>` script extended to also replay the saved accent; CSP `script-src` hash recomputed to match | Done |
 | Verified: default (Terracotta) matches the Phase 6.0 rebrand exactly; switching to another accent (Ocean) live-updates `--primary` and every element that reads it (brand wordmark, buttons, avatar, active nav) while leaving the base cream/brown surfaces untouched; confirmed via Chromium console that the recomputed CSP hash didn't break the inline script (no CSP-violation console errors, only the expected pre-login 401) | Done |
 | Deploy | Not yet — pending |
+
+## Phase 6.8 — collapsible, categorized Settings page
+
+**Status: implemented and verified with a real Playwright/Chromium browser; not yet deployed.**
+
+Settings had grown to ~16 cards in one long scroll (Account, Prep profile, AI provider, Accent color, Answer text size, Self Test usage, Read aloud, Notifications, Change password, Sessions, My question sets, Generate from resume, Suggested sets, Export data). Grouped into 7 categories — Account, Prep profile, Appearance & Accessibility, AI & Usage, Notifications, Question Sets, Data — each a native `<details>`/`<summary>` element rather than a hand-rolled accordion, which gives keyboard/accessibility support for free and makes "expand all / collapse all" trivial (just setting `.open` on every `<details>`). All categories default to expanded, so nothing that was visible before is hidden unless the user chooses to collapse it.
+
+Existing card-building functions (`buildAiProviderCard()`, `buildQuestionSetsCard()`, etc.) were untouched — `render()` now just collects each category's card elements into an array and wraps them with a new `buildSettingsCategory(title, cards)` helper instead of appending them directly to the page. No per-field event wiring changed, since `$(id, view)` already searches the whole subtree regardless of nesting depth.
+
+| Item | Status |
+|---|---|
+| 7 categories, each a native `<details>`, defaulting to open | Done |
+| "Expand all" / "Collapse all" toolbar buttons | Done |
+| Individual category toggling independent of the others | Done |
+| Verified via Playwright: all 7 category titles present and open on load; Collapse all closes every one; Expand all reopens every one; clicking a single category's summary toggles only that one while the rest stay open | Done |
+| Deploy | Not yet — pending |
+
+## Phase 6.9 — pull-to-refresh on mobile
+
+**Status: implemented and verified with a real Playwright/Chromium browser (synthetic touch events); not yet deployed.**
+
+Reported as "fluctuating" — the browser's own rubber-band bounce at the top of `#main` (the actual scroll container, `overflow-y:auto`, not `body`) had no purpose since nothing used it, just visual jank. Replaced with a real pull-to-refresh gesture, mobile-only (same `isMobileLayout()` convention as the rest of the mobile shell): `overscroll-behavior-y: contain` on `.main` stops the native bounce so it can't fight the custom gesture, and a new `wirePullToRefresh()` (wired once at boot, alongside `wireMobileShell()`) tracks touch drags on `#main`.
+
+A pull only engages when the drag starts at `scrollTop === 0` and is clearly vertical (`|deltaY| > |deltaX|`) — guards against hijacking a horizontal swipe-to-grade gesture on a question card, and against doing anything once the page has scrolled at all. A damped pull (0.5×) drives a small floating indicator (reusing `--surface`/`--border`/`--primary` tokens) that fades in, flips its arrow 180° once past a 70px threshold to signal "release to refresh," and spins on release. The refresh itself is a real `location.reload()` rather than a soft per-page re-render — deliberately, so it behaves identically regardless of what's on screen, including mid-session pages like Mock Interview, instead of needing special-cased "safe to soft-refresh" logic per page. Service worker cache bumped to v4 (shell assets changed).
+
+| Item | Status |
+|---|---|
+| `overscroll-behavior-y: contain` on `.main` (mobile only) replaces the native bounce | Done |
+| New floating pull indicator, hidden by default outside the mobile breakpoint (fixed a real bug caught during testing: without an explicit desktop `display:none`, it rendered as a stray unstyled icon above `<main>` on desktop) | Done |
+| `wirePullToRefresh()`: starts only at `scrollTop === 0`, dominant-direction guard against horizontal swipes, damped drag, threshold-based "ready" state, real `location.reload()` on release | Done |
+| Verified via synthetic `TouchEvent`s in a real Chromium browser (mobile viewport): a vertical drag past the 70px damped threshold correctly reaches the "ready" state (arrow flips) and triggers an actual page reload (confirmed via the console log resetting after reload, not just a state flag); a mostly-horizontal drag correctly does **not** engage the gesture; confirmed the indicator is fully hidden (`display: none`) on a desktop-width viewport and `flex` on mobile | Done |
+| Deploy | Not yet — pending |

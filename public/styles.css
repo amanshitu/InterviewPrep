@@ -434,12 +434,34 @@ img { max-width: 100%; }
 
 .main { flex: 1; min-width: 0; overflow-y: auto; padding: 28px 32px 60px; }
 .view { max-width: 880px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+/* Pull-to-refresh indicator: mobile-only (full rules + sizing in the
+   640px media query below) — hidden entirely here so it isn't just an
+   unstyled stray icon sitting above <main> on desktop. */
+.ptr-indicator { display: none; }
 
 /* ---------- Cards ---------- */
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 22px; box-shadow: var(--shadow-1); }
 .card-hero { background: linear-gradient(155deg, var(--primary-soft), var(--surface) 60%); }
 .card-row { display: flex; gap: 18px; flex-wrap: wrap; }
 .card-row > .card { flex: 1 1 260px; }
+
+/* ---------- Settings categories (collapsible, native <details>) ---------- */
+.settings-toolbar { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 14px; }
+.settings-category {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1); margin-bottom: 18px; overflow: hidden;
+}
+.settings-category-summary {
+  display: flex; align-items: center; gap: 10px; padding: 18px 22px; cursor: pointer;
+  font-family: var(--font-display); font-weight: 800; font-size: 17px;
+  list-style: none; user-select: none;
+}
+.settings-category-summary::-webkit-details-marker { display: none; }
+.settings-category-summary:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.settings-category-chevron { transition: transform .15s ease; flex-shrink: 0; color: var(--text-muted); }
+.settings-category[open] .settings-category-chevron { transform: rotate(90deg); }
+.settings-category-body { padding: 0 22px 22px; display: flex; flex-direction: column; gap: 18px; }
+.settings-category-body .card { box-shadow: none; }
 
 .section-title { font-family: var(--font-display); font-weight: 800; font-size: 20px; margin-bottom: 4px; }
 .section-sub { color: var(--text-muted); font-size: 13.5px; }
@@ -641,7 +663,26 @@ input[type="range"] { accent-color: var(--primary); width: 160px; }
      640px, so there's room to bring the name back. */
   .topbar-brand span { display: inline; }
   .topbar { padding-top: max(10px, env(safe-area-inset-top)); }
-  .main { padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
+  .main { padding-bottom: calc(80px + env(safe-area-inset-bottom)); overscroll-behavior-y: contain; }
+
+  /* ---------- Pull-to-refresh (app.js wirePullToRefresh) ----------
+     overscroll-behavior-y: contain above stops the browser's own rubbery
+     bounce at the top of #main (the "fluctuating" glitch) so it can't
+     fight this custom gesture — app.js is the only thing that moves
+     .ptr-indicator / translates #main while pulling. */
+  .ptr-indicator {
+    display: flex; position: fixed; top: max(8px, env(safe-area-inset-top)); left: 50%;
+    width: 36px; height: 36px; border-radius: 999px; z-index: 60;
+    background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-2);
+    align-items: center; justify-content: center; color: var(--text-muted);
+    transform: translate(-50%, -60px); opacity: 0; pointer-events: none;
+  }
+  .ptr-indicator.is-dragging { transition: none; }
+  .ptr-indicator.is-ready { color: var(--primary); }
+  .ptr-indicator.is-ready svg { transform: rotate(180deg); }
+  .ptr-indicator.is-refreshing svg { animation: ptr-spin .7s linear infinite; }
+  .ptr-indicator.is-refreshing { color: var(--primary); }
+  @keyframes ptr-spin { to { transform: rotate(360deg); } }
 
   .mobile-tab-bar {
     display: flex; align-items: flex-start;

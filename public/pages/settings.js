@@ -87,6 +87,22 @@ function buildTimezoneOptionsHtml(currentTz) {
     .join("");
 }
 
+// A native <details> per category — free keyboard/a11y support, and
+// "expand/collapse all" is just setting .open on every one of them.
+const SETTINGS_CATEGORY_CHEVRON = `<svg class="settings-category-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
+function buildSettingsCategory(title, cards) {
+  const details = el(`
+    <details class="settings-category" open>
+      <summary class="settings-category-summary">${SETTINGS_CATEGORY_CHEVRON}${escapeHtml(title)}</summary>
+      <div class="settings-category-body"></div>
+    </details>
+  `);
+  const body = $(".settings-category-body", details);
+  cards.forEach((c) => body.appendChild(c));
+  return details;
+}
+
 export function render() {
   state.currentView = "settings";
   const currentUser = state.currentUser;
@@ -94,7 +110,7 @@ export function render() {
   main.innerHTML = "";
   const view = el(`<div class="view"></div>`);
 
-  view.appendChild(el(`
+  const accountCard = el(`
     <div class="card">
       <div class="section-title">Account</div>
       <p class="section-sub" style="margin-top:6px;">${escapeHtml(currentUser.email)} · member since ${formatDate(currentUser.createdAt)}</p>
@@ -117,9 +133,37 @@ export function render() {
       <p class="form-note" id="name-success" hidden></p>
       <button class="btn btn-primary btn-icon-label" id="save-name-btn">${SAVE_ICON} Save name</button>
     </div>
-  `));
+  `);
 
-  view.appendChild(el(`
+  const changePasswordCard = el(`
+    <div class="card">
+      <div class="section-title">Change password</div>
+      <form id="change-password-form" style="margin-top:12px;">
+        <label class="field">
+          <span>Current password</span>
+          <input type="password" id="current-password" autocomplete="current-password" required />
+        </label>
+        <label class="field">
+          <span>New password</span>
+          <input type="password" id="new-password" autocomplete="new-password" minlength="8" required />
+          <small>At least 8 characters.</small>
+        </label>
+        <p class="form-error" id="password-error" hidden></p>
+        <p class="form-note" id="password-success" hidden></p>
+        <button type="submit" class="btn btn-primary btn-icon-label">${KEY_ICON} Update password</button>
+      </form>
+    </div>
+  `);
+
+  const sessionsCard = el(`
+    <div class="card">
+      <div class="section-title">Sessions</div>
+      <p class="section-sub" style="margin-top:6px;">Sign out everywhere this account is logged in, including this device.</p>
+      <button class="btn btn-warn btn-icon-label" id="revoke-all-btn" style="margin-top:12px;">${LOGOUT_ICON} Sign out of all devices</button>
+    </div>
+  `);
+
+  const prepProfileCard = el(`
     <div class="card">
       <div class="section-title">Prep profile</div>
       <p class="section-sub" style="margin-top:6px;">What you're preparing for, your background, and how many questions you want per day. The background fields are optional but help personalize your Stats coaching insight.</p>
@@ -152,61 +196,42 @@ export function render() {
       <p class="form-note" id="profile-success" hidden></p>
       <button class="btn btn-primary btn-icon-label" id="save-profile-btn">${SAVE_ICON} Save profile</button>
     </div>
-  `));
+  `);
 
-  view.appendChild(buildAiProviderCard());
-
-  view.appendChild(buildAccentCard());
-
-  view.appendChild(buildAnswerFontSizeCard());
-
-  view.appendChild(buildSelfTestQuotaCard());
-
-  if (isSpeechSupported()) view.appendChild(buildReadAloudCard());
-
-  view.appendChild(buildNotificationsCard());
-
-  view.appendChild(el(`
-    <div class="card">
-      <div class="section-title">Change password</div>
-      <form id="change-password-form" style="margin-top:12px;">
-        <label class="field">
-          <span>Current password</span>
-          <input type="password" id="current-password" autocomplete="current-password" required />
-        </label>
-        <label class="field">
-          <span>New password</span>
-          <input type="password" id="new-password" autocomplete="new-password" minlength="8" required />
-          <small>At least 8 characters.</small>
-        </label>
-        <p class="form-error" id="password-error" hidden></p>
-        <p class="form-note" id="password-success" hidden></p>
-        <button type="submit" class="btn btn-primary btn-icon-label">${KEY_ICON} Update password</button>
-      </form>
-    </div>
-  `));
-
-  view.appendChild(el(`
-    <div class="card">
-      <div class="section-title">Sessions</div>
-      <p class="section-sub" style="margin-top:6px;">Sign out everywhere this account is logged in, including this device.</p>
-      <button class="btn btn-warn btn-icon-label" id="revoke-all-btn" style="margin-top:12px;">${LOGOUT_ICON} Sign out of all devices</button>
-    </div>
-  `));
-
-  view.appendChild(buildQuestionSetsCard());
-  view.appendChild(buildResumePromptCard());
-  view.appendChild(buildSuggestionsCard());
-
-  view.appendChild(el(`
+  const exportDataCard = el(`
     <div class="card">
       <div class="section-title">Export data</div>
       <p class="section-sub" style="margin-top:6px;">Download your progress as a JSON file.</p>
       <button class="btn btn-secondary btn-icon-label" id="export-progress-btn" style="margin-top:12px;">${DOWNLOAD_ICON} Export my progress (JSON)</button>
     </div>
+  `);
+
+  const appearanceCards = [buildAccentCard(), buildAnswerFontSizeCard()];
+  if (isSpeechSupported()) appearanceCards.push(buildReadAloudCard());
+
+  view.appendChild(el(`
+    <div class="settings-toolbar">
+      <button type="button" class="btn btn-ghost btn-small" id="settings-expand-all-btn">Expand all</button>
+      <button type="button" class="btn btn-ghost btn-small" id="settings-collapse-all-btn">Collapse all</button>
+    </div>
   `));
 
+  view.appendChild(buildSettingsCategory("Account", [accountCard, changePasswordCard, sessionsCard]));
+  view.appendChild(buildSettingsCategory("Prep profile", [prepProfileCard]));
+  view.appendChild(buildSettingsCategory("Appearance & Accessibility", appearanceCards));
+  view.appendChild(buildSettingsCategory("AI & Usage", [buildAiProviderCard(), buildSelfTestQuotaCard()]));
+  view.appendChild(buildSettingsCategory("Notifications", [buildNotificationsCard()]));
+  view.appendChild(buildSettingsCategory("Question Sets", [buildQuestionSetsCard(), buildResumePromptCard(), buildSuggestionsCard()]));
+  view.appendChild(buildSettingsCategory("Data", [exportDataCard]));
+
   main.appendChild(view);
+
+  $("#settings-expand-all-btn", view).addEventListener("click", () => {
+    $all(".settings-category", view).forEach((d) => { d.open = true; });
+  });
+  $("#settings-collapse-all-btn", view).addEventListener("click", () => {
+    $all(".settings-category", view).forEach((d) => { d.open = false; });
+  });
 
   renderAvatar($("#avatar-preview", view), currentUser);
 

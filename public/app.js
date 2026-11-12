@@ -513,6 +513,105 @@ function wireMobileShell() {
   wireCompactThemeToggle();
 }
 
+// Pull-to-refresh, mobile only. #main is the actual scroll container
+// (overflow-y:auto — see .main in styles.css, not body), and its
+// overscroll-behavior-y:contain (mobile media query) stops the browser's
+// own rubber-band bounce there so it can't fight this gesture — that
+// native bounce-with-no-purpose was the "fluctuating" glitch being
+// replaced here with an actual refresh action. A real `location.reload()`
+// is used on release (not a soft per-page re-render) so this behaves the
+// same regardless of what page/mid-session state is on screen (e.g. a
+// Mock Interview session), exactly like pulling to refresh any mobile
+// browser tab.
+const PTR_THRESHOLD = 70; // px of (damped) pull before release triggers a refresh
+const PTR_MAX_PULL = 110; // px — caps how far the indicator can be dragged
+
+function wirePullToRefresh() {
+  const main = $("#main");
+  const indicator = $("#ptr-indicator");
+  if (!main || !indicator) return;
+
+  let startX = null;
+  let startY = null;
+  let pulling = false;
+  let ready = false;
+
+  function setPull(px) {
+    indicator.style.transform = `translate(-50%, ${-60 + px}px)`;
+    indicator.style.opacity = String(Math.min(1, px / PTR_THRESHOLD));
+    const nowReady = px >= PTR_THRESHOLD;
+    if (nowReady !== ready) {
+      ready = nowReady;
+      indicator.classList.toggle("is-ready", ready);
+    }
+  }
+
+  function reset() {
+    startX = null;
+    startY = null;
+    pulling = false;
+    ready = false;
+    indicator.classList.remove("is-dragging", "is-ready");
+    indicator.style.transform = "";
+    indicator.style.opacity = "";
+  }
+
+  main.addEventListener(
+    "touchstart",
+    (e) => {
+      if (!isMobileLayout() || main.scrollTop > 0 || e.touches.length !== 1) {
+        startX = null;
+        startY = null;
+        return;
+      }
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      pulling = false;
+    },
+    { passive: true },
+  );
+
+  main.addEventListener(
+    "touchmove",
+    (e) => {
+      if (startY === null) return;
+      const deltaY = e.touches[0].clientY - startY;
+      const deltaX = e.touches[0].clientX - startX;
+      // Only a clearly-vertical downward drag from the very top counts as a
+      // pull — anything more horizontal than vertical is left alone so a
+      // diagonal swipe on a question card (swipe-to-grade) isn't hijacked.
+      if (deltaY <= 0 || main.scrollTop > 0 || Math.abs(deltaX) > Math.abs(deltaY)) {
+        if (pulling) reset();
+        return;
+      }
+      pulling = true;
+      indicator.classList.add("is-dragging");
+      e.preventDefault(); // committed to the pull gesture now, not a page scroll
+      setPull(Math.min(PTR_MAX_PULL, deltaY * 0.5));
+    },
+    { passive: false },
+  );
+
+  function onTouchEnd() {
+    if (!pulling) {
+      reset();
+      return;
+    }
+    if (ready) {
+      indicator.classList.remove("is-dragging", "is-ready");
+      indicator.classList.add("is-refreshing");
+      indicator.style.transform = `translate(-50%, ${-60 + PTR_THRESHOLD}px)`;
+      indicator.style.opacity = "1";
+      setTimeout(() => location.reload(), 300); // brief so the spinner is actually visible
+    } else {
+      reset();
+    }
+  }
+
+  main.addEventListener("touchend", onTouchEnd);
+  main.addEventListener("touchcancel", reset);
+}
+
 // The topbar's theme toggle (mobile only — the profile sheet's own copy
 // always shows all three, it has the room) starts collapsed to just the
 // current choice (System by default) and expands to reveal the other two
@@ -821,6 +920,7 @@ async function boot(user) {
   initAnswerFontSize();
   wireProfileMenu();
   wireMobileShell();
+  wirePullToRefresh();
   renderShell();
   refreshBankStats(); // fire-and-forget — pill pops in once loaded, doesn't block first render
   await dispatchRoute(location.pathname);
