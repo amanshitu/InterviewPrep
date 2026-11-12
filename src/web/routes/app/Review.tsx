@@ -107,7 +107,7 @@ function ReviewContent() {
               <div className="mt-0.5 font-medium text-foreground">{item.q}</div>
               {item.revealed ? (
                 <>
-                  <div className="mt-3 rounded-md bg-muted p-3 text-sm text-foreground">{item.a}</div>
+                  <div className="answer-text mt-3 rounded-md bg-muted p-3 text-sm text-foreground">{item.a}</div>
                   {item.graded ? (
                     <p className="mt-2 text-sm text-muted-foreground">Graded: {item.graded === "got_it" ? "Got it" : "Review again soon"}</p>
                   ) : (

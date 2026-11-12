@@ -64,6 +64,7 @@ export interface MyQuestionSet {
   created_at: string;
   rejected_reason: string | null;
   question_count: number;
+  category_names: string | null;
 }
 
 export function getMyQuestionSets(): Promise<{ sets: MyQuestionSet[] }> {

@@ -1,16 +1,21 @@
 import { useEffect, useRef, useState } from "react";
+import type { User } from "../../api/types";
 import { createQuestionSet, getMyQuestionSets, submitQuestionSet, type MyQuestionSet, type QuestionSetSection } from "../../api/queue";
 import { csvRowsToSections, parseCsv } from "../../lib/csv";
 import { useToast } from "../../hooks/use-toast";
 import { CloseIcon, DownloadIcon, PlusIcon, SendIcon, TrashIcon, UploadIcon } from "./icons";
 import { ErrorText, PrimaryButton, SecondaryButton, SectionCard } from "./SectionCard";
 
+function activeCategoryName(user: User): string {
+  return user.enrolledCategories.find((c) => c.id === user.activeCategoryId)?.name || "your current category";
+}
+
 function downloadCsvTemplate() {
   const csv = [
     "section,question,answer",
-    '"Behavioral","Tell me about a time you disagreed with a teammate.","Frame it as a structured disagreement with a resolution, not a conflict story."',
-    '"Behavioral","Tell me about a project that failed.","Own the failure briefly, then focus on what changed afterward."',
-    '"System Design","How would you design a URL shortener?","Cover the hashing scheme, storage, and read/write scaling trade-offs."',
+    '"Topic area one","First question in this topic.","A model answer explaining what a strong response covers."',
+    '"Topic area one","Second question in this topic.","Another model answer."',
+    '"Topic area two","A question from a different topic/section.","Its model answer — add as many sections and rows as you need."',
   ].join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
@@ -70,6 +75,13 @@ function MySetsList({ refreshKey, onChanged }: { refreshKey: number; onChanged: 
                 {s.question_count || 0} question{s.question_count === 1 ? "" : "s"}
               </span>
               <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${status.className}`}>{status.text}</span>
+              {s.category_names ? (
+                <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground">{s.category_names}</span>
+              ) : (
+                <span className="rounded-full bg-warning/15 px-2 py-0.5 text-xs font-medium text-warning" title="This set isn't tagged into any category, so it won't appear in any daily queue.">
+                  No category
+                </span>
+              )}
               {s.visibility === "private" || s.visibility === "rejected" ? (
                 <button
                   type="button"
@@ -98,10 +110,10 @@ interface DraftSection {
 }
 
 function ManualUploadForm({ onDone, onCancel }: { onDone: () => void; onCancel: () => void }) {
+  const toast = useToast();
   const [title, setTitle] = useState("");
   const [track, setTrack] = useState("");
   const [sections, setSections] = useState<DraftSection[]>([{ label: "", questions: [{ q: "", a: "" }] }]);
-  const [error, setError] = useState<string | null>(null);
 
   function updateSection(i: number, patch: Partial<DraftSection>) {
     setSections((prev) => prev.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
@@ -113,7 +125,6 @@ function ManualUploadForm({ onDone, onCancel }: { onDone: () => void; onCancel: 
   }
 
   async function handleSubmit() {
-    setError(null);
     const payloadSections: QuestionSetSection[] = sections.map((s) => ({
       label: s.label.trim(),
       questions: s.questions.map((q) => ({ q: q.q.trim(), a: q.a.trim() })).filter((q) => q.q || q.a),
@@ -122,7 +133,7 @@ function ManualUploadForm({ onDone, onCancel }: { onDone: () => void; onCancel: 
       await createQuestionSet({ title: title.trim(), track: track.trim() || null, sections: payloadSections });
       onDone();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't upload that question set.");
+      toast.error(err instanceof Error ? err.message : "Couldn't upload that question set.");
     }
   }
 
@@ -177,8 +188,6 @@ function ManualUploadForm({ onDone, onCancel }: { onDone: () => void; onCancel: 
         <PlusIcon /> Add section
       </SecondaryButton>
 
-      {error ? <ErrorText>{error}</ErrorText> : null}
-
       <div className="mt-3 flex gap-2">
         <PrimaryButton type="button" onClick={() => void handleSubmit()}>
           <SendIcon /> Submit
@@ -192,18 +201,17 @@ function ManualUploadForm({ onDone, onCancel }: { onDone: () => void; onCancel: 
 }
 
 function CsvImportForm({ fileName, sections, skipped, onDone, onCancel }: { fileName: string; sections: QuestionSetSection[]; skipped: number; onDone: () => void; onCancel: () => void }) {
+  const toast = useToast();
   const [title, setTitle] = useState(fileName.replace(/\.csv$/i, ""));
   const [track, setTrack] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const questionCount = sections.reduce((n, s) => n + s.questions.length, 0);
 
   async function handleImport() {
-    setError(null);
     try {
       await createQuestionSet({ title: title.trim(), track: track.trim() || null, sections });
       onDone();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't import that CSV.");
+      toast.error(err instanceof Error ? err.message : "Couldn't import that CSV.");
     }
   }
 
@@ -221,7 +229,6 @@ function CsvImportForm({ fileName, sections, skipped, onDone, onCancel }: { file
         <span>Track (optional)</span>
         <input className="rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground" value={track} onChange={(e) => setTrack(e.target.value)} placeholder="e.g. tech" />
       </label>
-      {error ? <ErrorText>{error}</ErrorText> : null}
       <div className="flex gap-2">
         <PrimaryButton type="button" onClick={() => void handleImport()}>
           <UploadIcon /> Import
@@ -234,7 +241,7 @@ function CsvImportForm({ fileName, sections, skipped, onDone, onCancel }: { file
   );
 }
 
-export function QuestionSetsSection() {
+export function QuestionSetsSection({ user }: { user: User }) {
   const toast = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -261,7 +268,10 @@ export function QuestionSetsSection() {
   }
 
   return (
-    <SectionCard title="My question sets" subtitle="Upload your own set of questions, grouped into sections. New sets start private to you; sharing them with other users needs admin approval.">
+    <SectionCard
+      title="My question sets"
+      subtitle={`Upload your own set of questions, grouped into sections. New sets start private to you and are added to your current category (${activeCategoryName(user)}) — switch categories first if you want a set to go somewhere else. Sharing them with other users needs admin approval.`}
+    >
       <MySetsList refreshKey={refreshKey} onChanged={() => setRefreshKey((k) => k + 1)} />
 
       {mode === "none" ? (

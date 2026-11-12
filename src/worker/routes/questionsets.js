@@ -40,6 +40,21 @@ export async function handleCreateQuestionSet(request, env, user) {
     .run();
 
   const stmts = [];
+  // Tag the new set into whichever category the user is currently working
+  // in, so it actually shows up in that category's daily queue - the
+  // queue-building query (getTodayQueueQuestions) requires a
+  // question_set_categories row for every category, with no exception for
+  // a user's own private sets, so without this a freshly uploaded set was
+  // previously invisible everywhere until an admin separately approved and
+  // category-tagged it (which only happens for sets submitted for
+  // *sharing*, not for private personal use).
+  if (user.activeCategoryId) {
+    stmts.push(
+      env.DB.prepare(
+        "INSERT INTO question_set_categories (set_id, category_id) VALUES (?, ?) ON CONFLICT(set_id, category_id) DO NOTHING",
+      ).bind(setId, user.activeCategoryId),
+    );
+  }
   sections.forEach((section, topicOrder) => {
     const label = String(section.label).trim();
     section.questions.forEach((q, sortOrder) => {
@@ -63,7 +78,8 @@ export async function handleCreateQuestionSet(request, env, user) {
 export async function handleListMySets(request, env, user) {
   const rows = await env.DB.prepare(
     `SELECT qs.id as id, qs.title as title, qs.track as track, qs.visibility as visibility, qs.created_at as created_at, qs.rejected_reason as rejected_reason,
-            (SELECT COUNT(*) FROM questions q WHERE q.set_id = qs.id) as question_count
+            (SELECT COUNT(*) FROM questions q WHERE q.set_id = qs.id) as question_count,
+            (SELECT GROUP_CONCAT(c.name, ', ') FROM question_set_categories qsc JOIN categories c ON c.id = qsc.category_id WHERE qsc.set_id = qs.id) as category_names
      FROM question_sets qs WHERE qs.owner_user_id = ? ORDER BY qs.created_at DESC`,
   )
     .bind(user.id)
@@ -114,16 +130,20 @@ export async function handleSubscribeSet(request, env, user, setId) {
 export async function handleListSuggestions(request, env, user) {
   // Shared, user-submitted sets (not the official ones, which everyone is
   // already auto-subscribed to) that this user hasn't picked up yet — sets
-  // matching the user's own track are surfaced first.
+  // matching the user's own track are surfaced first. Scoped to the user's
+  // active category (same question_set_categories join the daily queue
+  // itself uses) so a user working on Railway Exam isn't suggested a set
+  // an admin only ever tagged into Police Exam, and vice versa.
   const rows = await env.DB.prepare(
     `SELECT qs.id as id, qs.title as title, qs.track as track, u.name as owner_name
      FROM question_sets qs
+     JOIN question_set_categories qsc ON qsc.set_id = qs.id AND qsc.category_id = ?
      LEFT JOIN users u ON u.id = qs.owner_user_id
      WHERE qs.visibility = 'shared' AND qs.owner_user_id IS NOT NULL
        AND NOT EXISTS (SELECT 1 FROM user_question_sets WHERE user_id = ? AND set_id = qs.id)
      ORDER BY (qs.track IS NOT NULL AND qs.track = ?) DESC, qs.created_at DESC`,
   )
-    .bind(user.id, user.track || "")
+    .bind(user.activeCategoryId, user.id, user.track || "")
     .all();
   return json({ sets: rows.results || [] });
 }

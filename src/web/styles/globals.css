@@ -84,6 +84,28 @@
   --sidebar-border: oklch(0.32 0.02 50);
 }
 
+/* Accent swatches (Settings -> Appearance). Only --primary/--ring change -
+   the active-nav-item background uses --sidebar-accent (a deliberately
+   separate herb-green token), not the brand accent, so it's untouched.
+   Placed after .dark so an accent choice still wins while dark mode is
+   also active (equal specificity to .dark - :root[attr] vs .dark both
+   single-selector - so source order decides the tie). */
+:root[data-accent="ocean"] { --primary: #1f6f9c; --ring: #1f6f9c; }
+:root[data-accent="forest"] { --primary: #1f7a4d; --ring: #1f7a4d; }
+:root[data-accent="plum"] { --primary: #7a3a9c; --ring: #7a3a9c; }
+:root[data-accent="rose"] { --primary: #b8305a; --ring: #b8305a; }
+:root[data-accent="slate"] { --primary: #3f5468; --ring: #3f5468; }
+
+/* Answer text size (Settings -> Appearance). Set as a CSS var by
+   appearance-prefs.ts's setAnswerFontSize(); applied here to every
+   revealed-answer element across Today/Review/Self Test/Mock Interview
+   (each has this class - see those files). Source order after Tailwind's
+   own utilities (text-sm etc., imported at the top of this file) lets
+   this win at equal specificity without !important. */
+.answer-text {
+  font-size: var(--answer-font-size, inherit);
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -126,4 +148,43 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
+}
+
+/* Browsers don't give <button> a pointer cursor by default (only <a
+   href> gets one natively) - apply it globally to every clickable
+   element instead of wiring cursor-pointer onto each one individually. */
+button:not(:disabled),
+a[href],
+[role="button"]:not([aria-disabled="true"]) {
+  cursor: pointer;
+}
+button:disabled,
+[role="button"][aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+/* A quick "press" animation on any button's icon when clicked, applied
+   globally rather than wired into every button individually - every icon
+   in this app is an inline <svg> (see components/layout/icons.tsx and the
+   settings/admin-local icon sets), so this one rule covers all of them. */
+button:not(:disabled) svg {
+  transition: transform 0.12s ease;
+}
+button:not(:disabled):active svg {
+  transform: scale(0.82);
+}
+
+/* Cross-document View Transitions (enabled per-page via <meta
+   name="view-transition" content="same-origin"> in every page's <head>):
+   Chromium browsers crossfade between the old and new page automatically
+   once that meta tag is present, instead of the default blank-flash
+   full-reload - this is what actually fixes "the page flashes/reloads"
+   for a true multi-page app without abandoning the architecture.
+   Customize the default (very fast, slightly abrupt) timing to feel more
+   intentional. Browsers without this API ignore these rules entirely and
+   keep the normal navigation they already had - no fallback needed. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.18s;
+  animation-timing-function: ease-out;
 }

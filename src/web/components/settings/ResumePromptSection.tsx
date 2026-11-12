@@ -4,7 +4,7 @@ import type { User } from "../../api/types";
 import { ApiError } from "../../api/client";
 import { useToast } from "../../hooks/use-toast";
 import { CopyIcon, PlusIcon, SparkleIcon, UploadIcon } from "./icons";
-import { ErrorText, PrimaryButton, SecondaryButton, SectionCard } from "./SectionCard";
+import { PrimaryButton, SecondaryButton, SectionCard } from "./SectionCard";
 
 const DEFAULT_RESUME_CATEGORIES = [
   "HR & Behavioral",
@@ -53,7 +53,6 @@ export function ResumePromptSection({ user }: { user: User }) {
   const [perCategory, setPerCategory] = useState(10);
   const [pdfStatus, setPdfStatus] = useState("");
   const [suggesting, setSuggesting] = useState(false);
-  const [roleError, setRoleError] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [prompt, setPrompt] = useState<string | null>(null);
 
@@ -89,7 +88,6 @@ export function ResumePromptSection({ user }: { user: User }) {
   }
 
   async function handleSuggestRole() {
-    setRoleError(null);
     if (!resumeText.trim()) {
       toast.warning("Paste your resume text first.");
       return;
@@ -100,7 +98,7 @@ export function ResumePromptSection({ user }: { user: User }) {
       setTargetRole(role);
       toast.success("Suggested a target role from your resume — edit it if you'd like something else.");
     } catch (err) {
-      setRoleError(err instanceof Error ? err.message : "Couldn't suggest a role.");
+      toast.error(err instanceof Error ? err.message : "Couldn't suggest a role.");
     } finally {
       setSuggesting(false);
     }
@@ -197,7 +195,6 @@ export function ResumePromptSection({ user }: { user: User }) {
             <SparkleIcon /> {suggesting ? "Thinking…" : "Suggest from resume"}
           </SecondaryButton>
         </div>
-        {roleError ? <ErrorText>{roleError}</ErrorText> : null}
       </label>
 
       <div className="mb-3">

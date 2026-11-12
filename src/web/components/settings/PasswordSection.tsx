@@ -1,25 +1,23 @@
 import { useState } from "react";
 import { changePassword, revokeAllSessions } from "../../api/auth";
-import { ErrorText, PrimaryButton, SecondaryButton, SectionCard, SuccessText, inputClass } from "./SectionCard";
+import { useToast } from "../../hooks/use-toast";
+import { PrimaryButton, SecondaryButton, SectionCard, inputClass } from "./SectionCard";
 import { KeyIcon, LogoutIcon } from "./icons";
 
 export function PasswordSection() {
+  const toast = useToast();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
-    setSuccess(false);
     try {
       await changePassword(currentPassword, newPassword);
-      setSuccess(true);
+      toast.success("Password updated.");
       setCurrentPassword("");
       setNewPassword("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't update your password.");
+      toast.error(err instanceof Error ? err.message : "Couldn't update your password.");
     }
   }
 
@@ -35,8 +33,6 @@ export function PasswordSection() {
           <input className={inputClass()} type="password" autoComplete="new-password" minLength={8} required value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
           <small className="font-normal">At least 8 characters.</small>
         </label>
-        {error ? <ErrorText>{error}</ErrorText> : null}
-        {success ? <SuccessText>Password updated.</SuccessText> : null}
         <PrimaryButton type="submit">
           <KeyIcon /> Update password
         </PrimaryButton>

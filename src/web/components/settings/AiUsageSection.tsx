@@ -3,7 +3,8 @@ import { updateProfile } from "../../api/account";
 import type { User } from "../../api/types";
 import { getAiUsage } from "../../api/stats";
 import { getSelfTestQuota, type SelfTestQuota } from "../../api/selftest";
-import { ErrorText, PrimaryButton, SectionCard, SuccessText, inputClass } from "./SectionCard";
+import { useToast } from "../../hooks/use-toast";
+import { PrimaryButton, SectionCard, inputClass } from "./SectionCard";
 import { SaveIcon } from "./icons";
 
 const AI_PROVIDER_LABELS: Record<string, string> = { "workers-ai": "Workers AI (free, default)", openai: "OpenAI", anthropic: "Anthropic" };
@@ -22,13 +23,12 @@ const WORKERS_AI_MODEL_OPTIONS = [
 ];
 
 function AiProviderCard({ user, onUserChange }: { user: User; onUserChange: (user: User) => void }) {
+  const toast = useToast();
   const provider = user.aiProvider || "workers-ai";
   const [selectedProvider, setSelectedProvider] = useState(provider);
   const [model, setModel] = useState(user.workersAiModel);
   const [apiKey, setApiKey] = useState("");
   const [usageLine, setUsageLine] = useState("Checking today's AI usage…");
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
 
   useEffect(() => {
     getAiUsage()
@@ -41,8 +41,6 @@ function AiProviderCard({ user, onUserChange }: { user: User; onUserChange: (use
   }, []);
 
   async function handleSave() {
-    setError(null);
-    setSuccess(false);
     const body: Parameters<typeof updateProfile>[0] = { aiProvider: selectedProvider as "workers-ai" | "openai" | "anthropic", workersAiModel: model };
     if (selectedProvider === "workers-ai") {
       body.aiApiKey = "";
@@ -52,9 +50,9 @@ function AiProviderCard({ user, onUserChange }: { user: User; onUserChange: (use
     try {
       const { user: updated } = await updateProfile(body);
       onUserChange(updated);
-      setSuccess(true);
+      toast.success("AI provider saved.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't save your AI provider.");
+      toast.error(err instanceof Error ? err.message : "Couldn't save your AI provider.");
     }
   }
 
@@ -104,8 +102,6 @@ function AiProviderCard({ user, onUserChange }: { user: User; onUserChange: (use
         </label>
       )}
 
-      {error ? <ErrorText>{error}</ErrorText> : null}
-      {success ? <SuccessText>Saved.</SuccessText> : null}
       <PrimaryButton onClick={() => void handleSave()}>
         <SaveIcon /> Save AI provider
       </PrimaryButton>

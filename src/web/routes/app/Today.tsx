@@ -82,7 +82,7 @@ function QuestionCard({
               <span className="rounded-full bg-warning/20 px-2 py-0.5 text-xs font-semibold text-foreground">Needs review</span>
             </div>
           ) : null}
-          <div className="mt-3 rounded-md bg-muted p-3 text-sm text-foreground">{q.a}</div>
+          <div className="answer-text mt-3 rounded-md bg-muted p-3 text-sm text-foreground">{q.a}</div>
           <div className="mt-3 flex flex-wrap gap-2">
             <button type="button" onClick={onComplete} className="inline-flex items-center gap-1.5 rounded-md bg-success px-3 py-1.5 text-sm font-semibold text-success-foreground"><CheckIcon width={16} height={16} /> Got it</button>
             <button type="button" onClick={onFlagReview} className="inline-flex items-center gap-1.5 rounded-md bg-warning px-3 py-1.5 text-sm font-semibold text-foreground"><RefreshIcon width={16} height={16} /> Review again soon</button>
@@ -274,7 +274,7 @@ function TodayContent({ user }: { user: User }) {
                     </div>
                     <span className="shrink-0 rounded-full bg-success/20 px-2 py-0.5 text-xs font-semibold text-foreground">Done</span>
                   </div>
-                  <div className="mt-3 rounded-md bg-card p-3 text-sm text-foreground">{q.a}</div>
+                  <div className="answer-text mt-3 rounded-md bg-card p-3 text-sm text-foreground">{q.a}</div>
                   <button type="button" onClick={() => handleMoveBackToReview(q.id)} className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-warning px-3 py-1.5 text-sm font-semibold text-foreground">
                     <RefreshIcon width={16} height={16} /> Need Review
                   </button>

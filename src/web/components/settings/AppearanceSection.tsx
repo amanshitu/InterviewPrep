@@ -1,16 +1,41 @@
 import { useEffect, useState } from "react";
 import { useReadAloud } from "../../hooks/use-read-aloud";
-import { SpeakerIcon, StopIcon } from "./icons";
+import { MonitorIcon, MoonIcon, SpeakerIcon, StopIcon, SunIcon } from "./icons";
 import { SectionCard } from "./SectionCard";
 import { ACCENT_OPTIONS, ANSWER_FONT_SIZES, getAccent, getAnswerFontSize, setAccent, setAnswerFontSize } from "./appearance-prefs";
+import { getTheme, setTheme, type ThemeValue } from "./theme-prefs";
 
-// NOTE (flagged gap, not a bug): the accent swatches below set
-// `data-accent` + persist the choice exactly like the old app did, but
-// the new MealSathi-token globals.css doesn't yet define `[data-accent="X"]`
-// recoloring rules (only the base saffron-terracotta palette was ported in
-// the theme phase) — so picking a non-default accent here currently has no
-// visible effect until that CSS is added in a follow-up pass. The control
-// is wired correctly and will "just work" once those rules exist.
+const THEME_OPTIONS: { id: ThemeValue; label: string; icon: typeof SunIcon }[] = [
+  { id: "system", label: "System", icon: MonitorIcon },
+  { id: "light", label: "Light", icon: SunIcon },
+  { id: "dark", label: "Dark", icon: MoonIcon },
+];
+
+function ThemeCard() {
+  const [current, setCurrent] = useState(getTheme());
+  return (
+    <SectionCard title="Theme" subtitle="System follows your device's light/dark setting automatically. Saved to this browser.">
+      <div className="flex flex-wrap gap-2">
+        {THEME_OPTIONS.map((opt) => (
+          <button
+            key={opt.id}
+            type="button"
+            onClick={() => {
+              setTheme(opt.id);
+              setCurrent(opt.id);
+            }}
+            className={`flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm font-medium ${
+              current === opt.id ? "border-primary bg-muted text-foreground" : "border-border text-muted-foreground hover:bg-muted"
+            }`}
+          >
+            <opt.icon /> {opt.label}
+          </button>
+        ))}
+      </div>
+    </SectionCard>
+  );
+}
+
 function AccentCard() {
   const [current, setCurrent] = useState(getAccent());
   return (
@@ -152,6 +177,7 @@ function ReadAloudCard() {
 export function AppearanceSection() {
   return (
     <div className="flex flex-col gap-4">
+      <ThemeCard />
       <AccentCard />
       <AnswerFontSizeCard />
       <ReadAloudCard />

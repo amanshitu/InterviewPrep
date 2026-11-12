@@ -52,7 +52,7 @@ function SettingsContent({ user }: { user: User }) {
       case "questionsets":
         return (
           <div className="flex flex-col gap-4">
-            <QuestionSetsSection />
+            <QuestionSetsSection user={currentUser} />
             <ResumePromptSection user={currentUser} />
             <SuggestedSetsSection />
           </div>

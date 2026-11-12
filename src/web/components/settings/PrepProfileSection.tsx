@@ -1,28 +1,43 @@
 import { useState } from "react";
 import { updateProfile } from "../../api/account";
 import type { User } from "../../api/types";
-import { ErrorText, PrimaryButton, SectionCard, SuccessText, inputClass } from "./SectionCard";
+import { useToast } from "../../hooks/use-toast";
+import { PrimaryButton, SectionCard, inputClass } from "./SectionCard";
 import { SaveIcon } from "./icons";
 import { canonicalTz, timezoneSelectOptions } from "./timezones";
 
+const QUOTA_MIN = 5;
+const QUOTA_MAX = 50;
+const YEARS_MIN = 0;
+const YEARS_MAX = 60;
+
 export function PrepProfileSection({ user, onUserChange }: { user: User; onUserChange: (user: User) => void }) {
+  const toast = useToast();
   const [track, setTrack] = useState(user.track ?? "");
   const [headline, setHeadline] = useState(user.headline ?? "");
   const [years, setYears] = useState(user.yearsExperience != null ? String(user.yearsExperience) : "");
   const [bio, setBio] = useState(user.bio ?? "");
   const [timezone, setTimezone] = useState(user.timezone || "UTC");
   const [quota, setQuota] = useState(String(user.dailyQuota));
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
 
   const tzOptions = timezoneSelectOptions(user.timezone || "UTC");
   const canonicalCurrent = canonicalTz(timezone);
 
   async function handleSave() {
-    setError(null);
-    setSuccess(false);
-    const dailyQuota = parseInt(quota, 10) || 10;
-    const yearsExperience = years.trim() === "" ? null : parseInt(years, 10);
+    const dailyQuota = parseInt(quota, 10);
+    if (!Number.isFinite(dailyQuota) || dailyQuota < QUOTA_MIN || dailyQuota > QUOTA_MAX) {
+      toast.error(`Questions per day must be between ${QUOTA_MIN} and ${QUOTA_MAX}.`);
+      return;
+    }
+    let yearsExperience: number | null = null;
+    if (years.trim() !== "") {
+      const parsedYears = parseInt(years, 10);
+      if (!Number.isFinite(parsedYears) || parsedYears < YEARS_MIN || parsedYears > YEARS_MAX) {
+        toast.error(`Years of experience must be between ${YEARS_MIN} and ${YEARS_MAX}.`);
+        return;
+      }
+      yearsExperience = parsedYears;
+    }
     try {
       const { user: updated } = await updateProfile({
         track: track.trim(),
@@ -33,9 +48,9 @@ export function PrepProfileSection({ user, onUserChange }: { user: User; onUserC
         timezone: timezone.trim() || "UTC",
       });
       onUserChange(updated);
-      setSuccess(true);
+      toast.success("Profile saved.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't save your profile.");
+      toast.error(err instanceof Error ? err.message : "Couldn't save your profile.");
     }
   }
 
@@ -75,8 +90,6 @@ export function PrepProfileSection({ user, onUserChange }: { user: User; onUserC
         <span>Questions per day</span>
         <input className={inputClass()} type="number" min={5} max={50} value={quota} onChange={(e) => setQuota(e.target.value)} />
       </label>
-      {error ? <ErrorText>{error}</ErrorText> : null}
-      {success ? <SuccessText>Saved.</SuccessText> : null}
       <PrimaryButton onClick={() => void handleSave()}>
         <SaveIcon /> Save profile
       </PrimaryButton>

@@ -3,7 +3,7 @@ import { updateAccount } from "../../api/account";
 import type { User } from "../../api/types";
 import { useToast } from "../../hooks/use-toast";
 import { CameraIcon, SaveIcon, TrashIcon } from "./icons";
-import { ErrorText, PrimaryButton, SecondaryButton, SectionCard, SuccessText, inputClass } from "./SectionCard";
+import { PrimaryButton, SecondaryButton, SectionCard, inputClass } from "./SectionCard";
 import { resizeImageToDataUrl } from "./image-resize";
 
 function formatDate(iso: string): string {
@@ -18,15 +18,11 @@ export function AccountSection({ user, onUserChange }: { user: User; onUserChang
   const toast = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState(user.name);
-  const [avatarError, setAvatarError] = useState<string | null>(null);
-  const [nameError, setNameError] = useState<string | null>(null);
-  const [nameSaved, setNameSaved] = useState(false);
 
   async function handleAvatarChange(file: File | undefined) {
     if (!file) return;
-    setAvatarError(null);
     if (file.size > 8 * 1024 * 1024) {
-      setAvatarError("That image is too large — please choose one under 8MB.");
+      toast.error("That image is too large — please choose one under 8MB.");
       return;
     }
     try {
@@ -35,35 +31,32 @@ export function AccountSection({ user, onUserChange }: { user: User; onUserChang
       onUserChange(updated);
       toast.success("Profile picture updated.");
     } catch (err) {
-      setAvatarError(err instanceof Error ? err.message : "Couldn't update your picture.");
+      toast.error(err instanceof Error ? err.message : "Couldn't update your picture.");
     }
   }
 
   async function handleRemoveAvatar() {
-    setAvatarError(null);
     try {
       const { user: updated } = await updateAccount({ name: user.name, avatarData: null });
       onUserChange(updated);
       toast.success("Profile picture removed.");
     } catch (err) {
-      setAvatarError(err instanceof Error ? err.message : "Couldn't remove your picture.");
+      toast.error(err instanceof Error ? err.message : "Couldn't remove your picture.");
     }
   }
 
   async function handleSaveName() {
-    setNameError(null);
-    setNameSaved(false);
     const trimmed = name.trim();
     if (!trimmed) {
-      setNameError("Please enter your name.");
+      toast.error("Please enter your name.");
       return;
     }
     try {
       const { user: updated } = await updateAccount({ name: trimmed });
       onUserChange(updated);
-      setNameSaved(true);
+      toast.success("Name saved.");
     } catch (err) {
-      setNameError(err instanceof Error ? err.message : "Couldn't save your name.");
+      toast.error(err instanceof Error ? err.message : "Couldn't save your name.");
     }
   }
 
@@ -95,14 +88,11 @@ export function AccountSection({ user, onUserChange }: { user: User; onUserChang
           ) : null}
         </div>
       </div>
-      {avatarError ? <ErrorText>{avatarError}</ErrorText> : null}
 
       <label className="mt-5 flex flex-col gap-1.5 text-sm font-medium text-muted-foreground">
         <span>Display name</span>
         <input className={inputClass()} value={name} onChange={(e) => setName(e.target.value)} />
       </label>
-      {nameError ? <ErrorText>{nameError}</ErrorText> : null}
-      {nameSaved ? <SuccessText>Saved.</SuccessText> : null}
       <PrimaryButton className="mt-3" onClick={() => void handleSaveName()}>
         <SaveIcon /> Save name
       </PrimaryButton>

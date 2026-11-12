@@ -77,7 +77,7 @@ export function FeedbackBubble({ feedback, modelAnswer }: { feedback: SelfTestFe
           <strong>STAR structure:</strong> {feedback.star}
         </p>
       ) : null}
-      <div className="mt-3.5 rounded-md bg-card p-3 text-card-foreground">
+      <div className="answer-text mt-3.5 rounded-md bg-card p-3 text-card-foreground">
         <strong>Model answer:</strong>
         <br />
         {modelAnswer}
