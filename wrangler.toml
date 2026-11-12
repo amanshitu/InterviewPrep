@@ -1,11 +1,24 @@
 name = "interviewprep"
-main = "src/worker.js"
+main = "src/worker/index.js"
 compatibility_date = "2025-01-01"
 
+[build]
+# Cloudflare Workers Builds (the git-push CI integration) and `wrangler
+# deploy`/`wrangler dev` all run this before anything else — this is the
+# one place that's guaranteed to build dist/ regardless of how the
+# Cloudflare dashboard's own build-command setting is configured (which
+# this repo can't inspect or verify), unlike package.json's predeploy
+# hook, which only fires for `npm run deploy` specifically.
+command = "npm run build:web"
+
 [assets]
-directory = "./public"
+# Built by `npm run build:web` (Vite, multi-page mode — see vite.config.ts)
+# from src/web/. Every route is now a real document (true MPA, not a
+# client-side-routed SPA), so unlike the old app, an unmatched path should
+# genuinely 404 rather than falling back to index.html.
+directory = "./dist"
 binding = "ASSETS"
-not_found_handling = "single-page-application"
+not_found_handling = "404-page"
 # Without this, Cloudflare serves static files directly and never invokes
 # fetch() below for them, so security headers (CSP, nosniff, etc.) would
 # never get attached to index.html or other static responses.
@@ -33,7 +46,7 @@ binding = "AI"
 # let this one binding hit the real Cloudflare AI service under plain
 # `wrangler dev` while D1 stays local, but as of wrangler 4.135 the AI
 # binding reports Mode "not supported" for that and calls just fail
-# locally — generateMcq() in src/worker.js falls back to a generic MCQ in
+# locally — generateMcq() in src/worker/lib/mcq.js falls back to a generic MCQ in
 # that case, so local dev still works end-to-end, just without real AI
 # output. To test the real provider calls, use `wrangler dev --remote`
 # (touches the real D1 too) or test after `wrangler deploy`.
