@@ -1185,3 +1185,23 @@ Content was authored directly (not CSV-round-tripped) but validated against the 
 | `migrations/0016_seed_railway_exam.sql`: new `railway-exam` category, `railway-exam-bank` question set (official, pre-approved), tagged via `question_set_categories`, all 40 questions, retroactive `user_question_sets` backfill for existing users | Done |
 | **Verified end-to-end against local D1**: a brand-new signup auto-subscribed to the new set exactly like the original 5 (no special-casing needed — `handleSignup`'s existing `WHERE owner_user_id IS NULL` query already picks up any officially-seeded set); enrolling in and switching to "Railway Exam" via the real UI showed exactly the 40 new questions round-robined across all 4 topics in Today's queue, Self Test correctly drew from the same pool, and Stats showed all 4 topics at 10/10/0-completed with `totalQuestions: 40` | Done |
 | Deploy | **Not yet — needs `npx wrangler d1 migrations apply interview-prep-db --remote` run manually** (same command used to fix today's incident; every write path to production is sandbox-blocked for this session) |
+
+## Phase 7.8 — Police Exam content + cross-category sharing
+
+**Status: migration written and fully verified against local D1 (curl, both directions); not yet applied to production.**
+
+This phase adds a second new exam category, Police Exam (Constable/SI-style GK, reasoning, and law awareness), and — more importantly — is the first real demonstration of the content-sharing behavior the whole multi-category platform (7.0–7.6) was built for: *"GK questions for Railways can be shared with other category like police jobs."* `migrations/0017_police_exam_and_sharing.sql` exercises all three ways a question set can relate to a category:
+
+1. **Purpose-built shared content**: `shared-gk-bank` (15 questions — Indian Polity, Geography, History, Economy, Current Affairs & General Knowledge) is authored once and tagged via `question_set_categories` into *both* `railway-exam` and `police-exam` from the start.
+2. **Category-exclusive content**: `police-exam-bank` (15 questions — Police Organization & Structure, Law & Legal Awareness, Current Affairs & Law Updates) is tagged only into `police-exam`.
+3. **Retroactive sharing of pre-existing content**: the Railway reasoning/numerical-ability/science set from Phase 7.7 (`railway-exam-bank`, already committed and seeded) is tagged into the brand-new `police-exam` category via one more `question_set_categories` row — the same action an admin takes from the Settings → Categories admin UI (Phase 7.5) when approving a submission into multiple categories, just done here as a migration since this is platform-seeded starter content, not a live community approval.
+
+Seeded with the same convention as 0016 (`owner_user_id = NULL`, pre-approved/`visibility = 'shared'`, retroactive `user_question_sets` backfill for existing users via the same `INSERT ... SELECT id FROM users` pattern as `migrations/backfill.sql`). Both new CSVs (15 rows each) were validated against the exact client-side `parseCsv`/`csvRowsToSections` logic before being converted to SQL, same as Phase 7.7 — zero skipped rows on the first attempt.
+
+| Item | Status |
+|---|---|
+| 30 new questions (15 shared GK + 15 Police-exclusive) written to match existing answer quality | Done |
+| Validated against the exact CSV parser logic (0 skipped rows) before being converted to SQL | Done |
+| `migrations/0017_police_exam_and_sharing.sql`: new `police-exam` category, `shared-gk-bank` (shared into Railway + Police), `police-exam-bank` (Police-only), retroactive tag of `railway-exam-bank` into `police-exam`, retroactive `user_question_sets` backfill | Done |
+| **Verified end-to-end against local D1, both directions**: a test user enrolled+switched to Police Exam saw `totalQuestions: 70` (40 retroactively-shared Railway + 15 shared GK + 15 Police-exclusive), with all 12 expected topics present; the same user switched back to Railway Exam saw `totalQuestions: 55` (its original 40 + the 15 shared GK), with **zero** Police-exclusive topics (Police Organization & Structure / Law & Legal Awareness / Current Affairs & Law Updates) leaking through — confirming sharing is correctly scoped per the `question_set_categories` tags on each set, not accidentally global | Done |
+| Deploy | **Not yet — needs `npx wrangler d1 migrations apply interview-prep-db --remote` run manually**, same as Phase 7.7 (which also hasn't been applied to production yet — check `wrangler d1 migrations list --remote` before assuming either is live) |
