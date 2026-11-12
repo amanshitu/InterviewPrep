@@ -1,6 +1,6 @@
 // Question-set approval queue + review history — only reachable/visible
 // for role='admin'.
-import { $, $all, el, escapeHtml, toastSuccess, toastError, api, state, renderNav, EYE_ICON, CHECK_ICON, CLOSE_ICON, promptRejectReason } from "../app.js";
+import { $, $all, el, escapeHtml, toastSuccess, toastError, api, state, renderNav, EYE_ICON, CHECK_ICON, CLOSE_ICON, PLUS_ICON, promptRejectReason } from "../app.js";
 
 // Cache fetched question lists per set within this page load so toggling
 // a review panel open/closed repeatedly doesn't re-fetch every time.
@@ -15,16 +15,19 @@ export async function render() {
 
   let sets = [];
   let history = [];
-  const [pendingResult, historyResult] = await Promise.allSettled([
+  let categories = [];
+  const [pendingResult, historyResult, categoriesResult] = await Promise.allSettled([
     api("/api/admin/pending-sets"),
     api("/api/admin/approval-history"),
+    api("/api/categories"),
   ]);
   if (pendingResult.status === "fulfilled") sets = pendingResult.value.sets || [];
   else toastError(pendingResult.reason.message);
   if (historyResult.status === "fulfilled") history = historyResult.value.history || [];
   else toastError(historyResult.reason.message);
+  if (categoriesResult.status === "fulfilled") categories = categoriesResult.value.categories || [];
 
-  paint(sets, history);
+  paint(sets, history, categories);
 }
 
 function buildQuestionReviewPanel(setId) {
@@ -61,10 +64,31 @@ async function loadQuestionsInto(panel, setId) {
   }
 }
 
-function paint(sets, history) {
+function paint(sets, history, categories) {
   const main = $("#main");
   main.innerHTML = "";
   const view = el(`<div class="view"></div>`);
+
+  view.appendChild(el(`
+    <div class="card">
+      <div class="section-title">Categories</div>
+      <p class="section-sub" style="margin-top:6px;">Interview Prep, Railway Exam, Police Exam, etc. A pending set can be tagged into one or more of these when you approve it below — e.g. a shared "General Knowledge" set serving both Railway and Police.</p>
+      <div class="q-actions" style="margin-top:10px;flex-wrap:wrap;">
+        ${categories.map((c) => `<span class="pill pill-not_started" title="${escapeHtml(c.description || "")}">${escapeHtml(c.name)}</span>`).join("") || `<span class="section-sub">No categories yet.</span>`}
+      </div>
+      <form id="create-category-form" style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+        <label class="field" style="flex:1 1 180px;margin:0;">
+          <span>New category name</span>
+          <input type="text" id="new-category-name" placeholder="e.g. Railway Exam" required />
+        </label>
+        <label class="field" style="flex:2 1 240px;margin:0;">
+          <span>Description (optional)</span>
+          <input type="text" id="new-category-description" placeholder="Shown as a tooltip above" />
+        </label>
+        <button type="submit" class="btn btn-primary btn-icon-label">${PLUS_ICON} Create category</button>
+      </form>
+    </div>
+  `));
 
   view.appendChild(el(`
     <div class="card">
@@ -77,10 +101,21 @@ function paint(sets, history) {
     view.appendChild(el(`<div class="card empty-state"><p>Nothing pending review.</p></div>`));
   } else {
     sets.forEach((s) => {
+      const categoryCheckboxes = categories
+        .map(
+          (c) => `
+        <label class="field-checkbox" style="margin-top:6px;">
+          <input type="checkbox" data-approve-category="${s.id}" value="${c.id}" />
+          <span>${escapeHtml(c.name)}</span>
+        </label>
+      `,
+        )
+        .join("");
       const card = el(`
         <div class="card">
           <div class="section-title" style="font-size:16px;">${escapeHtml(s.title)}</div>
           <p class="section-sub" style="margin-top:4px;">${s.question_count} question${s.question_count === 1 ? "" : "s"}${s.track ? ` · ${escapeHtml(s.track)}` : ""} · by ${escapeHtml(s.owner_name || "unknown")} (${escapeHtml(s.owner_email || "")})</p>
+          ${categories.length ? `<p class="section-sub" style="margin-top:10px;"><strong>Tag into categories (optional):</strong></p>${categoryCheckboxes}` : ""}
           <div class="q-actions" style="margin-top:12px;">
             <button class="btn btn-ghost btn-small btn-icon-label" data-review="${s.id}">${EYE_ICON}<span class="review-toggle-label">Review questions</span></button>
             <button class="btn btn-success btn-small btn-icon-label" data-approve="${s.id}">${CHECK_ICON} Approve</button>
@@ -146,14 +181,45 @@ function paint(sets, history) {
       if (opening) await loadQuestionsInto(panel, btn.dataset.review);
     });
   });
-  $all("[data-approve]", view).forEach((btn) => btn.addEventListener("click", () => approveSet(btn.dataset.approve)));
+  $all("[data-approve]", view).forEach((btn) =>
+    btn.addEventListener("click", () => {
+      const categoryIds = $all(`[data-approve-category="${btn.dataset.approve}"]:checked`, view).map((cb) => cb.value);
+      approveSet(btn.dataset.approve, categoryIds);
+    }),
+  );
   $all("[data-reject]", view).forEach((btn) => btn.addEventListener("click", () => rejectSet(btn.dataset.reject)));
+
+  const createCategoryForm = $("#create-category-form", view);
+  if (createCategoryForm) {
+    createCategoryForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const name = $("#new-category-name", view).value.trim();
+      const description = $("#new-category-description", view).value.trim();
+      if (!name) return;
+      try {
+        await api("/api/admin/categories", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ name, description }),
+        });
+        toastSuccess("Category created.");
+        render();
+      } catch (err) {
+        toastError(err.message);
+      }
+    });
+  }
+
   renderNav();
 }
 
-async function approveSet(id) {
+async function approveSet(id, categoryIds) {
   try {
-    await api(`/api/admin/question-sets/${id}/approve`, { method: "POST" });
+    await api(`/api/admin/question-sets/${id}/approve`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ categoryIds: categoryIds || [] }),
+    });
     toastSuccess("Approved — now shows up as a suggestion for other users.");
     render();
   } catch (err) {

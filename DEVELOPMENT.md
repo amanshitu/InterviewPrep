@@ -1039,3 +1039,131 @@ Ported the two directly-applicable pieces: a new `#offline-banner` (shown on aut
 | Pull-to-refresh gated on `isOnline()` — never arms while offline | Done |
 | Verified via Playwright (`page.context().setOffline()`): banner correctly shows/hides across the online→offline→online transitions, visible on the pre-login auth screen too; confirmed a full touch drag sequence while offline does not add the `is-dragging` class (gesture never armed) | Done |
 | Deploy | Not yet — pending |
+
+## Phase 7.0 — multi-category platform: schema foundation
+
+**Status: implemented and verified against local D1; not yet deployed. First phase of a planned 7.0–7.6 batch (see the approved plan for the full design) to let one account prepare for multiple distinct purposes — today's Interview Prep content, plus future categories like Railway Exam / Police Exam / other govt exams — each with its own daily quota and streak, with specific content shareable across categories (e.g. a "General Knowledge" set serving both Railway and Police).**
+
+Today every user got the exact same combined pool of 5 official sets, auto-subscribed at signup with no choice — `question_sets.track`/`users.track` are both free text with almost no functional effect (confirmed: `track` only nudges suggestion sort order, gates nothing). This phase introduces `categories` as a first-class concept without touching any existing behavior: new `categories`, `question_set_categories` (many-to-many — a set can serve 2+ categories), and `user_categories` (per-user-per-category enrollment + quota/streak) tables, plus `users.active_category_id`. Migration backfills exactly one category (`interview-prep`), tags all 5 existing official sets into it, and copies every existing user's current `daily_quota`/`streak_count`/`streak_longest`/`streak_last_active` into a `user_categories` row for it, setting it active.
+
+Key design decisions locked in with the user before this was built: progress on a shared question is **global, not per-category** (completing a shared question marks it done everywhere it's shared — this is also why `user_question_progress` needed zero changes); a user can be enrolled in **multiple categories at once with a switcher** (not one category per account); streak/quota become **per-category** (consistent practice in Railway vs. Interview Prep are distinct accomplishments) while the existing AI quotas (`ai_usage`, `ai_token_usage`) **stay global per user** (cost-control — making them per-category would let one account multiply its free AI budget by enrolling in more categories). "Active category" is stored server-side (`users.active_category_id`, same pattern as the existing `users.timezone`) rather than threaded as a parameter through every request — this is what keeps the remaining phases from needing to touch ~40 existing endpoint signatures.
+
+| Item | Status |
+|---|---|
+| `categories`, `question_set_categories`, `user_categories` tables + `users.active_category_id` | Done |
+| Backfill: one `interview-prep` category, all 5 official sets tagged into it, every existing user enrolled with current quota/streak copied across, set active | Done |
+| Verified zero behavior change: compared `users` vs. the new `user_categories` row for several existing accounts — `daily_quota`/`streak_count`/`streak_longest`/`streak_last_active` match exactly, `active_category_id` correctly set to `interview-prep` | Done |
+| Deploy | Not yet — pending |
+
+## Phase 7.1 — category-aware queue, quota, streak, and category endpoints
+
+**Status: implemented and verified end-to-end via curl against local D1; not yet deployed.**
+
+Makes the daily queue, quota ledger, and streak actually scope to a user's active category, on top of Phase 7.0's schema foundation. `daily_quota_ledger`'s primary key had to be rebuilt from `(user_id, date)` to `(user_id, category_id, date)` (migration `0013_category_scoped_ledger.sql`) — SQLite can't alter a primary key in place, and the old PK would otherwise reject a second category's ledger row for the same calendar day. Existing rows backfilled to `interview-prep`, same as Phase 7.0.
+
+Every query that decides "what's in today's queue for this category" now joins through the new `question_set_categories` table, filtered to `user.activeCategoryId` — `ensureTodayQueueFilled`'s fresh-candidate query, its backlog-carryover priority query, the already-queued count, `getTodayQueueQuestions`, and `getTodayCompletedQuestions`. Crucially, `user_question_progress` itself needed **zero** schema change: a shared question's set is simply tagged into 2+ categories, so the existing `WHERE p.question_id IS NULL` exclusion (globally keyed) is what makes "progress shared globally" fall out for free — once a shared question is done via one category, it's automatically excluded from every other category's queue too, with no extra code.
+
+Streak and quota moved off `users` onto `user_categories`, read via a `LEFT JOIN user_categories uc ON uc.user_id = u.id AND uc.category_id = u.active_category_id` added to `getUserFromRequest` and `handleLogin`'s queries (with `COALESCE(uc.*, u.*)` as a defensive fallback) — this is the key simplification from the plan: every other handler that reads `user.dailyQuota`/`user.streakCount`/etc. needed **zero changes**, since they just keep reading the same in-memory `user` object, which now transparently reflects the active category.
+
+New endpoints: `GET /api/categories` (list + enrollment status), `POST /api/categories/enroll`, `POST /api/categories/switch` (validates the user is actually enrolled first). `GET /api/me` now returns `activeCategoryId` and `enrolledCategories`.
+
+| Item | Status |
+|---|---|
+| `daily_quota_ledger` rebuilt with `category_id` in its primary key | Done |
+| Queue-fill, carryover, and completed/active question queries all scoped via `question_set_categories` | Done |
+| Streak/quota read from `user_categories` (active category), with every existing handler reading `user.dailyQuota`/`streakCount` unchanged | Done |
+| `handleCompleteQuestion`/`handleFlagQuestionForReview`/`handleRequestMore`/`handleUpdateProfile` updated to write to the active category's ledger/enrollment row instead of `users` | Done |
+| New `GET /api/categories`, `POST /api/categories/enroll`, `POST /api/categories/switch`; `GET /api/me` gains `activeCategoryId` + `enrolledCategories` | Done |
+| **Verified end-to-end against local D1**: seeded a second category ("Railway Exam") with a Railway-only question set and a question set shared between Railway and Interview Prep (simulating "GK shared with Police/Railway"). Confirmed: (1) switching active category to Railway shows *only* Railway + shared-GK questions — zero leakage of Interview Prep's hr/pm/em/tech/ai content; (2) completing the shared GK question under Railway bumps Railway's completed count; (3) switching back to Interview Prep shows its streak/quota completely untouched (still 0/0, independent of Railway's activity); (4) the shared GK question does not reappear in Interview Prep's *active* queue (globally done) but correctly still shows in Interview Prep's "completed today" list too, since it really was completed today regardless of which category surfaced it | Done |
+| Deploy | Not yet — pending |
+
+## Phase 7.2 — category-aware Self Test, Mock Interview, and Daily Test
+
+**Status: implemented and verified end-to-end via curl against local D1; not yet deployed.**
+
+Extends category-scoping to the remaining practice surfaces. `daily_test_results`' `UNIQUE(user_id, date, question_id)` had to be rebuilt into `UNIQUE(user_id, category_id, date, question_id)` (migration `0014_test_history_categories.sql`, same table-rebuild requirement as Phase 7.1's ledger — SQLite can't alter a UNIQUE constraint in place) so each category gets its own daily MCQ test. `self_test_results` got a plain additive `category_id` column.
+
+`handleGetSelfTestQuestion` and `handleSelfTestAnalyze`'s question lookup both gained the same `question_set_categories` join used in Phase 7.1's queue, scoped to `user.activeCategoryId`. `handleGetSelfTestHistory` now filters by `category_id` too, so the Stats "Self Test score trend" chart (Phase 6.1) only ever shows the active category's scores. `handleGetTodayTest`'s MCQ pool-building query (drawn from `status='done'` questions) gained the same category join, and `handleAnswerTest`/the pool-insert both key on `(user_id, category_id, date, question_id)`. Mock Interview needed **zero changes** — it already reuses `handleSelfTestAnalyze`/`handleGetSelfTestQuestion` as-is (by design, from Phase 6.3), so it inherits category-scoping for free.
+
+| Item | Status |
+|---|---|
+| `daily_test_results` rebuilt with `category_id` in its unique key | Done |
+| `self_test_results` gains an additive `category_id` column | Done |
+| Self Test question selection + analyze-question-lookup scoped to the active category | Done |
+| Self Test history (`/api/self-test/history`) filtered by active category | Done |
+| Daily Test's MCQ pool-building and answer-persistence scoped to the active category | Done |
+| Mock Interview inherits category-scoping automatically (reuses Self Test's endpoints, no changes needed) | Done |
+| **Verified end-to-end against local D1**: seeded a Railway-only question; confirmed Self Test under Railway returns *only* that question (not Interview Prep's); completed it, confirmed Railway's Daily Test pool contains exactly that one question while Interview Prep's Daily Test stays empty (zero leakage); inserted category-tagged `self_test_results` rows and confirmed `/api/self-test/history` returns only the active category's scores when switching between categories | Done |
+| Deploy | Not yet — pending |
+
+## Phase 7.3 — category-aware Stats and Daily Review
+
+**Status: implemented and verified end-to-end via curl against local D1; not yet deployed.**
+
+Finishes category-scoping the remaining read surfaces. `activity_log` gained a plain additive `category_id` column (not part of any key — every row's `id INTEGER PRIMARY KEY AUTOINCREMENT` was never involved in a uniqueness constraint tying category in, so no table rebuild needed here, unlike the ledger/test-results tables in Phases 7.1/7.2). `ai_stats_insights`' `PRIMARY KEY (user_id, date)` did need the same rebuild treatment as before, becoming `(user_id, category_id, date)` — one cached AI coaching insight per category per day, not one blended insight across everything (migration `0015_stats_categories.sql`).
+
+`handleGetStatsProgress`'s topic-totals query gained the `question_set_categories` join, and its accuracy query now filters `activity_log` by `category_id` too — this specifically matters because two categories could reuse the same `topic_label` string (e.g. both have a "Behavioral" topic) and would otherwise blend their progress/accuracy into one row. All four of the live `activity_log` insert sites (`handleCompleteQuestion`, `handleFlagQuestionForReview`, `handleReviewResult`, `handleAnswerTest`) now carry `category_id = user.activeCategoryId`; the legacy, unused `PUT /api/state` insert path is deliberately left without one (dead code, not worth entangling). `handleGetActivity` (`/api/activity`, which feeds Stats' "This week" and "Accuracy trend" charts) and `handleGetStatsInsight`'s cache read/write both filter by active category too.
+
+Also brought **Daily Review** (`handleGetReview`) into the category-scoping pattern — it wasn't explicitly called out in the plan's Phase 7.2 list, but the same `question_set_categories` join was clearly needed for consistency: without it, switching to Railway and opening Daily Review would have pulled from the user's entire completed-question history across every category, not just Railway's.
+
+| Item | Status |
+|---|---|
+| `activity_log` gains a plain additive `category_id` column | Done |
+| `ai_stats_insights` rebuilt with `category_id` in its primary key | Done |
+| `handleGetStatsProgress`'s topic totals + accuracy both scoped to the active category | Done |
+| All 4 live `activity_log` insert sites now carry the active category | Done |
+| `handleGetActivity` (Stats' chart data feed) and `handleGetStatsInsight`'s cache both filtered by active category | Done |
+| Daily Review (`handleGetReview`) brought into the same category-scoping pattern, for consistency with Self Test/Daily Test | Done |
+| **Verified end-to-end against local D1**: completing a Railway-only question shows it (and only it) in Stats' topic breakdown, the raw activity feed, and Daily Review's pool while active=Railway; switching back to Interview Prep shows all three as completely empty for that same activity — zero cross-category leakage anywhere in Stats | Done |
+| Deploy | Not yet — pending |
+
+## Phase 7.4 — category switcher (profile dropdown + mobile sheet)
+
+**Status: implemented and verified with a real Playwright/Chromium browser; not yet deployed.**
+
+The frontend piece that makes Phases 7.0–7.3's backend work actually usable: a category switcher in the desktop profile dropdown and the mobile profile sheet (the two places identity-scoped chrome already lives — both already fully re-rendered by the existing `renderShell()`). Lists every category the user is enrolled in (the active one highlighted and disabled), plus an "Enroll in another category" row that expands an inline list of not-yet-enrolled categories fetched from `GET /api/categories`. Picking an enrolled category calls `POST /api/categories/switch`; picking a new one calls `POST /api/categories/enroll` then `switch`. Either way, a shared `refreshUserAndCurrentPage()` helper re-fetches `/api/me`, updates `state.currentUser`, re-renders the shell, and re-dispatches the current route — so Today/Stats/everything else immediately reflects the new active category with no manual page reload.
+
+**Found and fixed a real bug while testing**: the switcher initially rendered with *zero* enrolled categories listed, even for a user who should have had "Interview Prep." Root cause — `handleSignup`/`handleLogin`/`handleChangePassword`/`handleUpdateAccount`/`handleUpdateProfile` all built their response's `user` object via the plain `userPayload()` helper, which only `handleGetMe` had been extended (in Phase 7.1) to wrap with `enrolledCategories`. Since the frontend sets `state.currentUser` directly from whichever response it's currently handling (never re-fetching `/api/me` separately after signup/login), every path *except* a later explicit `/api/me` call was silently missing the category list. Fixed by extracting a shared `userPayloadWithCategories(env, user)` helper and using it everywhere a user object is handed back to the frontend, not just in `handleGetMe`.
+
+**Deliberately not built this pass** (two items from the plan's Phase 7.4 scope, both superseded once the switcher proved itself fully functional): a signup-time category picker (would need a new unauthenticated `/api/categories`-style endpoint just for the signup form, for a capability the post-signup switcher already covers completely with zero friction — new accounts still auto-enroll into `interview-prep` exactly as before, and can add more the moment they want to); and a duplicate "Categories" card in Settings (the profile-menu switcher is reachable from literally every page already, so a second copy of the same enroll/switch UI would be pure redundancy, not new capability).
+
+| Item | Status |
+|---|---|
+| Category switcher rendered into both the desktop dropdown and mobile sheet from the same shared logic | Done |
+| Switch / enroll-then-switch, both re-rendering the shell and the current route live | Done |
+| **Bug found and fixed**: `userPayloadWithCategories()` extracted and applied to every endpoint that hands the frontend a user object (signup, login, password change, account/profile updates) — not just `/api/me` | Done |
+| Verified via Playwright on both desktop (profile dropdown) and mobile (profile sheet) viewports: enrolled categories list correctly (including immediately after signup), enrolling in a new category and switching to it both update the dropdown/sheet and the Today page's actual content (pending/target/questions) live, with no page reload | Done |
+| Deploy | Not yet — pending |
+
+## Phase 7.5 — admin category management + set-category tagging at approval
+
+**Status: implemented and verified end-to-end (curl + a real Playwright/Chromium browser); not yet deployed.**
+
+Admin's piece of the platform: a new "Categories" card at the top of the Admin page lets an admin create categories (name + optional description, slugified into an id with a collision-safe suffix), shown as pills. Each pending question set in the approval queue now shows a checkbox per existing category — checking one or more and clicking Approve tags the set into exactly those categories via `question_set_categories`, which is also how a genuinely shared set (e.g. "General Knowledge" serving both Railway and Police) gets created: there's no earlier submitter-side tagging step, so this is the one place sharing actually happens, as a deliberate admin action.
+
+`handleApproveSet` gained an optional `categoryIds` array in its request body (defaults to empty — tagging is optional, a set can still be approved with none selected, matching existing behavior for anyone not using the new checkboxes); when provided, it replaces (not just adds to) the set's existing category tags, so re-approving/re-tagging an already-shared set is one call. New admin-only `POST /api/admin/categories` creates a category; the existing `GET /api/categories` (from Phase 7.1) is reused for listing — no new read endpoint needed.
+
+| Item | Status |
+|---|---|
+| New "Categories" management card on the Admin page (create category, shown as pills) | Done |
+| `POST /api/admin/categories`: name → slugified id (collision-safe), optional description | Done |
+| Per-category checkboxes on each pending set; `handleApproveSet` tags `question_set_categories` from the selected ones, replacing any existing tags | Done |
+| **Verified end-to-end**: created a category via curl and via the actual admin UI form; submitted a question set for review and approved it with `categoryIds: ["interview-prep", "railway-exam"]` via curl — confirmed both `question_set_categories` rows were created, directly proving the "GK shared between Railway and Police" scenario from the original request; separately approved a second set through the real browser UI with only one checkbox ticked and confirmed via D1 that only that one category was tagged | Done |
+| Deploy | Not yet — pending |
+
+## Phase 7.6 — per-category push reminders
+
+**Status: implemented and verified against local D1 (same local-cron-trigger technique as Phase 6.6); not yet deployed. Closes out the multi-category platform batch (Phases 7.0–7.6).**
+
+The daily streak-reminder push (Phase 6.6) computed one combined "N questions left today" count across a user's entire queue — now that the queue is per-category, that count needs to be too, or it would just be wrong (either double-counting or missing categories depending on how the old query happened to interact with the new schema). `handleScheduled` now fetches each subscriber's enrolled categories and computes pending count per category via the same `question_set_categories` join every other category-scoped query uses, then combines any non-zero ones into a single reminder (`"Railway Exam: 4 left, Interview Prep: 2 left today."`) rather than sending one push per category — still exactly one notification per user per local day, just with accurate, category-aware content.
+
+| Item | Status |
+|---|---|
+| `handleScheduled` computes pending count per enrolled category (not one blended count) | Done |
+| Multiple non-zero categories combine into one message; a single pending category keeps the original, simpler wording | Done |
+| Verified via the local cron trigger (`/cdn-cgi/local/scheduled` + the Workers Logs observability API, same technique as Phase 6.6): a test user enrolled in both Interview Prep (10 pending) and Railway Exam (2 pending) produced the message "Interview Prep: 10 left, Railway Exam: 2 left today."; confirmed the send attempt against a fake endpoint failed gracefully as expected (no network simulator for push services locally either) and `last_push_sent_date` correctly stayed unset for retry | Done |
+| Deploy | Not yet — pending |
+
+---
+
+**Multi-category platform (Phases 7.0–7.6) — batch complete.** The app now supports a user enrolling in and switching between multiple distinct practice categories (today's Interview Prep content, plus any new categories like "Railway Exam"/"Police Exam" an admin creates), with queue/quota/streak/Self-Test/Daily-Test/Stats/push-reminders all correctly scoped per category, content shareable across categories via admin tagging, and zero behavior change for existing users/data. See the approved plan (multi-category platform) for the full design rationale and the three decisions locked in before building: shared-globally progress on shared content, multi-enrollment with a switcher, and architecture-only scope (no invented exam content).

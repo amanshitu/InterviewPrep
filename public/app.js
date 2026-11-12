@@ -362,11 +362,130 @@ export function renderAvatar(node, user) {
   }
 }
 
+// ---------- category switcher (profile dropdown + mobile profile sheet) ----------
+// A user can be enrolled in multiple categories (Interview Prep, Railway
+// Exam, etc.) at once — the backend scopes everything (queue/streak/quota/
+// stats) to whichever one is "active" server-side. This renders the same
+// switcher markup into both the desktop dropdown and mobile sheet.
+const CATEGORY_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.6"/><rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.6"/><rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.6"/><rect x="14" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.6"/></svg>`;
+
+async function refreshUserAndCurrentPage() {
+  try {
+    const me = await api("/api/me");
+    state.currentUser = me.user;
+    renderShell();
+  } catch {
+    /* best-effort — the route re-render below still runs */
+  }
+  await dispatchRoute(location.pathname);
+}
+
+function renderCategorySwitcherInto(container, rowClass, subClass) {
+  if (!container) return;
+  const enrolled = state.currentUser.enrolledCategories || [];
+  const activeId = state.currentUser.activeCategoryId;
+  const addBtnId = `${container.id}-add-btn`;
+  const addListId = `${container.id}-add-list`;
+
+  container.innerHTML =
+    enrolled
+      .map(
+        (c) => `
+      <button type="button" class="${rowClass}${c.id === activeId ? " is-active" : ""}" data-switch-category="${c.id}" ${c.id === activeId ? "disabled" : ""}>
+        ${CATEGORY_ICON}<span>${escapeHtml(c.name)}</span>
+      </button>
+    `,
+      )
+      .join("") +
+    `
+    <button type="button" class="${rowClass}" id="${addBtnId}">
+      ${PLUS_ICON}<span>Enroll in another category</span>
+    </button>
+    <div id="${addListId}" hidden></div>
+  `;
+
+  $all("[data-switch-category]", container).forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const categoryId = btn.dataset.switchCategory;
+      try {
+        await api("/api/categories/switch", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ categoryId }),
+        });
+        closeMobileSheets();
+        await refreshUserAndCurrentPage();
+        toastSuccess("Switched category.");
+      } catch (err) {
+        toastError(err.message);
+      }
+    });
+  });
+
+  const addBtn = $(`#${addBtnId}`, container);
+  const addList = $(`#${addListId}`, container);
+  addBtn.addEventListener("click", async () => {
+    if (!addList.hidden) {
+      addList.hidden = true;
+      return;
+    }
+    addList.hidden = false;
+    addList.innerHTML = `<p class="${subClass}" style="padding:6px 10px;">Loading…</p>`;
+    try {
+      const data = await api("/api/categories");
+      const available = (data.categories || []).filter((c) => !c.enrolled);
+      if (!available.length) {
+        addList.innerHTML = `<p class="${subClass}" style="padding:6px 10px;">You're enrolled in everything available.</p>`;
+        return;
+      }
+      addList.innerHTML = available
+        .map(
+          (c) => `
+        <button type="button" class="${rowClass}" data-enroll-category="${c.id}">
+          ${PLUS_ICON}<span>${escapeHtml(c.name)}</span>
+        </button>
+      `,
+        )
+        .join("");
+      $all("[data-enroll-category]", addList).forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const categoryId = btn.dataset.enrollCategory;
+          try {
+            await api("/api/categories/enroll", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ categoryId }),
+            });
+            await api("/api/categories/switch", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ categoryId }),
+            });
+            closeMobileSheets();
+            await refreshUserAndCurrentPage();
+            toastSuccess("Enrolled — you're now viewing it.");
+          } catch (err) {
+            toastError(err.message);
+          }
+        });
+      });
+    } catch (err) {
+      addList.innerHTML = `<p class="${subClass}" style="padding:6px 10px;color:var(--danger);">${escapeHtml(err.message)}</p>`;
+    }
+  });
+}
+
+function renderCategorySwitcher() {
+  renderCategorySwitcherInto($("#profile-categories"), "profile-dropdown-item btn-icon-label", "profile-dropdown-item-sub");
+  renderCategorySwitcherInto($("#sheet-categories"), "app-sheet-row", "app-sheet-row-sub");
+}
+
 export function renderShell() {
   $("#user-name-label").textContent = state.currentUser.name;
   renderAvatar($("#profile-avatar"), state.currentUser);
   renderTopStats();
   renderNav();
+  renderCategorySwitcher();
   updateDocumentTitle();
   // Mobile profile sheet mirrors the same identity (desktop's profile
   // dropdown has no equivalent of these two rows, so only present there).
