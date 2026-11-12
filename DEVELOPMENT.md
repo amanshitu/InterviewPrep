@@ -1225,3 +1225,22 @@ Same seeding convention and CSV-validate-before-SQL-generate workflow as Phases 
 | **Verified end-to-end against local D1**: SSC Exam and Banking Exam both correctly show `totalQuestions: 70` (40 Railway + 15 shared GK + 15 own-exclusive); Teaching Exam correctly shows `totalQuestions: 30` (15 shared GK + 15 own-exclusive, with no Railway content); re-checked Railway Exam (`55`, unchanged) and Police Exam (`70`, unchanged) to confirm adding three more categories didn't disturb any existing category's totals | Done |
 | Deploy | **Not yet — needs `npx wrangler d1 migrations apply interview-prep-db --remote`**, along with 0016 and 0017, which are also still pending on production |
 
+## Phase 7.10 — more questions in every existing exam category
+
+**Status: migration written and fully verified against local D1 (curl, all 5 categories); not yet applied to production.**
+
+Expands every category's own exclusive content pool (`migrations/0019_more_questions_all_categories.sql`): +20 to `railway-exam-bank` (5 more per existing topic), +15 to `police-exam-bank` (5 more per existing topic), +15 each to `ssc-english-bank`, `banking-awareness-bank`, and `teaching-pedagogy-bank`. Also expands the shared `shared-gk-bank` by +10 — one more question in each of the 4 existing GK topics, plus 3 brand-new topics (Science & Technology, Sports, Awards & Honours) — which benefits all five non-Interview-Prep categories at once since they already share that set.
+
+New rows for an existing topic label reuse that topic's exact original `topic_order` (looked up from the live schema before writing the CSVs, not re-derived from file order, since a same-named topic appearing only in a new, separate CSV would otherwise start a fresh `topic_order` count from 0 and interleave wrong); brand-new topic labels get the next available `topic_order` for that set. `sort_order` and question ids continue from each set's existing max (verified via a direct `MAX(sort_order)` query first) rather than restarting at 0, to avoid collisions.
+
+Same CSV-validate-before-SQL-generate workflow as the previous three phases — all 90 new rows parsed with 0 skipped rows before conversion.
+
+| Item | Status |
+|---|---|
+| 90 new questions: +20 Railway, +15 Police, +15 SSC, +15 Banking, +15 Teaching, +10 shared GK | Done |
+| Validated against the exact CSV parser logic (0 skipped rows) before conversion to SQL | Done |
+| `migrations/0019_more_questions_all_categories.sql`: topic_order/sort_order/id-numbering continued correctly from each set's existing max (verified via direct DB queries before generating) | Done |
+| **Verified end-to-end against local D1**: a fresh test user enrolled across all 5 categories showed the exact expected new totals — Railway 85 (was 55, +30 from own +20 and shared GK +10), Police 115 (was 70, +45), SSC 115 (was 70, +45), Banking 115 (was 70, +45), Teaching 55 (was 30, +25) — matching the arithmetic for every category exactly | Done |
+| Deploy | **Not yet — needs `npx wrangler d1 migrations apply interview-prep-db --remote`** (0016–0018 were applied to production earlier in this session; 0019 is the only one still pending) |
+
+
