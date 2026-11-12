@@ -879,3 +879,19 @@ Both question-fetching queries (`handleGetSelfTestQuestion` and `handleSelfTestA
 | Verified via a temporary debug log (removed before commit): confirmed an `hr`-track question's prompt includes the STAR instruction and a `pm`-track question's does not | Done |
 | Verified `parseSelfTestFeedback` against two hand-written synthetic replies (with and without a STAR line) via a disposable Node script — both parsed correctly | Done |
 | Deploy | Not yet — pending |
+
+## Phase 6.3 — Mock Interview mode
+
+**Status: implemented and verified with a real Playwright/Chromium browser; not yet deployed.**
+
+A new batch mode built entirely on top of Self Test's existing single-question endpoints (`GET /api/self-test/question`, `POST /api/self-test/analyze`) rather than a new batch-fetch endpoint — deliberately avoids the dedup complexity a true batch endpoint would need (`ORDER BY RANDOM() LIMIT 1` has no "exclude already served" concept today), and means Mock Interview draws from the same Self Test token quota and gets STAR coaching on HR questions for free (Phase 6.2's work applies automatically).
+
+New page `public/pages/mockinterview.js`: the user picks a session length (3/5/8 questions, default 5) from new buttons on a new Today-page card, then answers one question at a time exactly like Self Test (typed or dictated), with each successful analysis pushed into an in-memory `results` array and auto-advancing to the next random question. After the last question, a **session summary** screen shows the average score and a per-question list with individual scores, plus "Start new mock interview" and "Back to Today" actions. Entry points added: a new Today-page card (next to Self Test) and a mobile FAB quick action, mirroring exactly how Self Test's own entry points were added in Phase 5.6. New `/mock-interview` route in `app.js`'s `PAGE_LOADERS`.
+
+| Item | Status |
+|---|---|
+| New Mock Interview page: sequential questions, per-question analyze, session summary with average score | Done |
+| Session-length picker (3/5/8, default 5) on the Today page card | Done |
+| Entry points: Today-page card + mobile FAB quick action | Done |
+| Verified end-to-end via Playwright: since local Workers AI has no inference simulator (same known limitation as Self Test/MCQ generation), the `/api/self-test/analyze` network call was intercepted and stubbed with synthetic scores (6, 8, 10) to exercise the actual page logic — confirmed all 3 questions were distinct, the session correctly advanced through "Question 1 of 3" → "2 of 3" → "3 of 3," and the summary screen showed the exact average (8.0/10) with 3 correctly-scored per-question rows | Done |
+| Deploy | Not yet — pending |

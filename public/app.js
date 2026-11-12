@@ -70,6 +70,7 @@ const PAGE_LOADERS = {
   "/review": () => import("./pages/review.js"),
   "/test": () => import("./pages/test.js"),
   "/self-test": () => import("./pages/selftest.js"),
+  "/mock-interview": () => import("./pages/mockinterview.js"),
   "/settings": () => import("./pages/settings.js"),
   "/stats": () => import("./pages/stats.js"),
   "/admin": () => import("./pages/admin.js"),
@@ -501,6 +502,7 @@ function wireMobileShell() {
   $("#fab-review-btn").addEventListener("click", () => { closeMobileSheets(); navigate("/review"); });
   $("#fab-test-btn").addEventListener("click", () => { closeMobileSheets(); navigate("/test"); });
   $("#fab-selftest-btn").addEventListener("click", () => { closeMobileSheets(); navigate("/self-test"); });
+  $("#fab-mockinterview-btn").addEventListener("click", () => { closeMobileSheets(); navigate("/mock-interview"); });
 
   wireCompactThemeToggle();
 }
