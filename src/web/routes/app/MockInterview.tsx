@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { AppShell } from "../../components/layout/AppShell";
-import { BackIcon, MicIcon, SparkleIcon } from "../../components/layout/icons";
+import { ArrowRightIcon, BackIcon, MicIcon, SparkleIcon } from "../../components/layout/icons";
 import { useToast } from "../../hooks/use-toast";
 import {
   analyzeSelfTestAnswer,
@@ -223,7 +223,7 @@ function MockInterviewBody() {
                 onClick={() => void advance()}
                 className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
               >
-                <SparkleIcon width={16} height={16} /> {sessionIndex + 1 === SESSION_TOTAL ? "See session summary" : "Next question"}
+                <ArrowRightIcon width={16} height={16} /> {sessionIndex + 1 === SESSION_TOTAL ? "See session summary" : "Next question"}
               </button>
             </div>
           )}

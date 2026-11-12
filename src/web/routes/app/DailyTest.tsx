@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { AppShell } from "../../components/layout/AppShell";
-import { BackIcon } from "../../components/layout/icons";
+import { BackIcon, CheckIcon, CloseIcon } from "../../components/layout/icons";
 import { useToast } from "../../hooks/use-toast";
 import { answerTestQuestion, getTodaysTest, type DailyTestQuestion } from "../../api/dailytest";
 
@@ -102,11 +102,16 @@ function DailyTestBody() {
                     <button
                       key={optIdx}
                       type="button"
-                      className={cls}
+                      className={`${cls} flex items-center gap-2`}
                       disabled={item.answered}
                       onClick={() => void answer(idx, optIdx)}
                     >
-                      {opt}
+                      {item.answered && optIdx === item.correctIndex ? (
+                        <CheckIcon width={15} height={15} className="shrink-0 text-success" />
+                      ) : item.answered && optIdx === item.selectedIndex ? (
+                        <CloseIcon width={15} height={15} className="shrink-0 text-destructive" />
+                      ) : null}
+                      <span>{opt}</span>
                     </button>
                   );
                 })}

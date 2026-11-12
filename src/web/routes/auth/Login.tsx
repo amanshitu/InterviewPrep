@@ -1,7 +1,8 @@
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ComponentType, type ReactNode, type SVGProps } from "react";
 import { forgotPassword, login, resetPassword, signup } from "../../api/auth";
 import { ApiError } from "../../api/client";
 import { markAuthed } from "../../lib/auth-flag";
+import { BackIcon, CheckIcon, KeyIcon, PlusIcon, SendIcon } from "../../components/layout/icons";
 
 type FormKind = "login" | "signup" | "forgot" | "reset";
 
@@ -124,12 +125,13 @@ function SuccessText({ children }: { children: string | null }) {
   return <p className="mb-3 text-sm font-medium text-success">{children}</p>;
 }
 
-function SubmitButton({ children }: { children: React.ReactNode }) {
+function SubmitButton({ children, icon: Icon }: { children: ReactNode; icon: ComponentType<SVGProps<SVGSVGElement>> }) {
   return (
     <button
       type="submit"
-      className="w-full rounded-md bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90"
+      className="flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90"
     >
+      <Icon width={16} height={16} />
       {children}
     </button>
   );
@@ -162,12 +164,13 @@ function LoginForm({ successMessage, onForgot }: { successMessage: string | null
       </Field>
       <ErrorText>{error}</ErrorText>
       <SuccessText>{successMessage}</SuccessText>
-      <SubmitButton>Sign in</SubmitButton>
+      <SubmitButton icon={SendIcon}>Sign in</SubmitButton>
       <button
         type="button"
         onClick={onForgot}
-        className="mt-2 w-full rounded-md px-4 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted"
+        className="mt-2 flex w-full items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted"
       >
+        <KeyIcon width={15} height={15} />
         Forgot password?
       </button>
     </form>
@@ -224,7 +227,7 @@ function SignupForm() {
         <input type="number" min={5} max={50} className={inputClass} value={dailyQuota} onChange={(e) => setDailyQuota(parseInt(e.target.value, 10) || 10)} />
       </Field>
       <ErrorText>{error}</ErrorText>
-      <SubmitButton>Create account</SubmitButton>
+      <SubmitButton icon={PlusIcon}>Create account</SubmitButton>
     </form>
   );
 }
@@ -254,8 +257,9 @@ function ForgotForm({ onCancel }: { onCancel: () => void }) {
       </Field>
       <ErrorText>{error}</ErrorText>
       <SuccessText>{success}</SuccessText>
-      <SubmitButton>Send reset link</SubmitButton>
-      <button type="button" onClick={onCancel} className="mt-2 w-full rounded-md px-4 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted">
+      <SubmitButton icon={KeyIcon}>Send reset link</SubmitButton>
+      <button type="button" onClick={onCancel} className="mt-2 flex w-full items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted">
+        <BackIcon width={15} height={15} />
         Back to sign in
       </button>
     </form>
@@ -284,7 +288,7 @@ function ResetForm({ token, onDone }: { token: string; onDone: () => void }) {
         <input type="password" required minLength={8} autoComplete="new-password" className={inputClass} value={password} onChange={(e) => setPassword(e.target.value)} />
       </Field>
       <ErrorText>{error}</ErrorText>
-      <SubmitButton>Update password</SubmitButton>
+      <SubmitButton icon={CheckIcon}>Update password</SubmitButton>
     </form>
   );
 }
