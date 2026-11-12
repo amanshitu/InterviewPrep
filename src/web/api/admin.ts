@@ -52,3 +52,27 @@ export function rejectSet(id: string, reason: string): Promise<{ ok: true }> {
 export function getSetQuestions(id: string): Promise<{ questions: { q: string; a: string; topic_label: string }[] }> {
   return apiFetch(`/api/admin/question-sets/${encodeURIComponent(id)}/questions`);
 }
+
+export interface AdminOverview {
+  totalUsers: number;
+  totalCategories: number;
+  totalQuestionSets: number;
+  pendingApprovalCount: number;
+}
+
+export function getOverview(): Promise<AdminOverview> {
+  return apiFetch("/api/admin/overview");
+}
+
+export interface AdminUserRow {
+  id: string;
+  name: string;
+  email: string;
+  role: "user" | "admin";
+  createdAt: string;
+  enrolledCategories: { id: string; name: string }[];
+}
+
+export function getUsers(page = 1, pageSize = 50): Promise<{ users: AdminUserRow[]; total: number }> {
+  return apiFetch(`/api/admin/users?page=${page}&pageSize=${pageSize}`);
+}

@@ -70,6 +70,8 @@ import {
   handleRejectSet,
   handleAdminGetSetQuestions,
   handleAdminApprovalHistory,
+  handleAdminOverview,
+  handleAdminUsers,
 } from "./routes/admin.js";
 import { handlePushSubscribe, handlePushUnsubscribe, handleScheduled } from "./routes/push.js";
 
@@ -231,6 +233,14 @@ export default {
         if (url.pathname === "/api/admin/categories" && request.method === "POST") {
           if (user.role !== "admin") return applySecurityHeaders(json({ error: "Forbidden." }, { status: 403 }));
           return applySecurityHeaders(await handleCreateCategory(request, env, user));
+        }
+        if (url.pathname === "/api/admin/overview" && request.method === "GET") {
+          if (user.role !== "admin") return applySecurityHeaders(json({ error: "Forbidden." }, { status: 403 }));
+          return applySecurityHeaders(await handleAdminOverview(request, env, user));
+        }
+        if (url.pathname === "/api/admin/users" && request.method === "GET") {
+          if (user.role !== "admin") return applySecurityHeaders(json({ error: "Forbidden." }, { status: 403 }));
+          return applySecurityHeaders(await handleAdminUsers(request, env, user));
         }
 
         if (url.pathname === "/api/test/today" && request.method === "GET") {

@@ -1,6 +1,77 @@
 import { json } from "../lib/http.js";
 import { readJsonBody } from "../lib/request.js";
 
+// ---------- admin: dashboard overview + user directory ----------
+
+// Four cheap COUNT(*) queries for the admin dashboard's KPI row. No single
+// query combines all four cleanly (different tables, different filters),
+// and at this app's scale there's no need to — four COUNTs is still trivial.
+export async function handleAdminOverview(request, env, user) {
+  const [totalUsers, totalCategories, totalQuestionSets, pendingApprovalCount] = await Promise.all([
+    env.DB.prepare("SELECT COUNT(*) as n FROM users").first(),
+    env.DB.prepare("SELECT COUNT(*) as n FROM categories WHERE is_active = 1").first(),
+    env.DB.prepare("SELECT COUNT(*) as n FROM question_sets").first(),
+    env.DB.prepare("SELECT COUNT(*) as n FROM question_sets WHERE visibility = 'pending'").first(),
+  ]);
+  return json({
+    totalUsers: totalUsers?.n || 0,
+    totalCategories: totalCategories?.n || 0,
+    totalQuestionSets: totalQuestionSets?.n || 0,
+    pendingApprovalCount: pendingApprovalCount?.n || 0,
+  });
+}
+
+// Paginated user directory. Enrolled categories are fetched in a second
+// query (IN (...) over the page's user ids) and merged in JS, rather than
+// a JSON-aggregating SQL function, to match this codebase's existing
+// plain-join style (see handleAdminApprovalHistory/handleListCategories).
+export async function handleAdminUsers(request, env, user) {
+  const url = new URL(request.url);
+  const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10) || 1);
+  const pageSize = Math.min(100, Math.max(1, parseInt(url.searchParams.get("pageSize") || "50", 10) || 50));
+  const offset = (page - 1) * pageSize;
+
+  const [totalRow, usersRows] = await Promise.all([
+    env.DB.prepare("SELECT COUNT(*) as n FROM users").first(),
+    env.DB.prepare(
+      "SELECT id, name, email, role, created_at FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?",
+    )
+      .bind(pageSize, offset)
+      .all(),
+  ]);
+
+  const rows = usersRows.results || [];
+  const userIds = rows.map((r) => r.id);
+  let categoriesByUser = new Map();
+  if (userIds.length) {
+    const placeholders = userIds.map(() => "?").join(",");
+    const { results } = await env.DB.prepare(
+      `SELECT uc.user_id as user_id, c.id as id, c.name as name
+       FROM user_categories uc JOIN categories c ON c.id = uc.category_id
+       WHERE uc.user_id IN (${placeholders})`,
+    )
+      .bind(...userIds)
+      .all();
+    categoriesByUser = new Map();
+    for (const r of results || []) {
+      if (!categoriesByUser.has(r.user_id)) categoriesByUser.set(r.user_id, []);
+      categoriesByUser.get(r.user_id).push({ id: r.id, name: r.name });
+    }
+  }
+
+  return json({
+    users: rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      email: r.email,
+      role: r.role,
+      createdAt: r.created_at,
+      enrolledCategories: categoriesByUser.get(r.id) || [],
+    })),
+    total: totalRow?.n || 0,
+  });
+}
+
 // ---------- admin: question-set approval queue ----------
 
 export async function handleAdminPendingSets(request, env, user) {
