@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import type { User } from "../../api/types";
 import { logout } from "../../api/auth";
 import { ToastProvider } from "../../hooks/use-toast";
@@ -6,6 +6,22 @@ import { clearAuthedFlag } from "../../lib/auth-flag";
 import { AuthGate } from "./AuthGate";
 import { MobileHeader } from "./MobileHeader";
 import { Sidebar } from "./Sidebar";
+
+// The old app registered the service worker unconditionally on every load
+// (public/app.js, module scope, not gated behind any feature) so the PWA
+// shell-cache and push-notification plumbing were always live, not just
+// when a visitor happened to open Notifications in Settings. Preserve that
+// here for every page that uses AppShell (NotificationsSection.tsx also
+// calls register(), harmlessly — registering the same URL twice is a no-op).
+function useServiceWorkerRegistration() {
+  useEffect(() => {
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {
+        /* best-effort */
+      });
+    }
+  }, []);
+}
 
 // The authenticated app shell every page under routes/app/* and
 // routes/admin/* renders into: desktop gets a collapsible left sidebar,
@@ -15,6 +31,7 @@ import { Sidebar } from "./Sidebar";
 // own session-check boilerplate; ToastProvider is per-page since each page is
 // its own document in this true-MPA architecture.
 export function AppShell({ children }: { children: (user: User) => ReactNode }) {
+  useServiceWorkerRegistration();
   return (
     <ToastProvider>
       <AuthGate>

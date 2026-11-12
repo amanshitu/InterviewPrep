@@ -19,7 +19,7 @@ export function Sidebar({ user, onLogout }: { user: User; onLogout: () => void }
       className="hidden sm:flex sticky top-0 h-dvh shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-(--rail-dur) ease-(--rail-ease)"
       style={{ width: "var(--sidebar-w)" }}
     >
-      <div className="flex h-14 items-center justify-between gap-2 px-3">
+      <div className="flex h-14 items-center justify-between gap-2 px-3 rail:h-auto rail:flex-col rail:justify-center rail:gap-2 rail:py-3">
         <a href="/" className="flex min-w-0 items-center gap-2 overflow-hidden">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="shrink-0 text-primary">
             <path d="M12 2 3 6.5v6C3 17.2 6.9 21.3 12 22.5 17.1 21.3 21 17.2 21 12.5v-6L12 2Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
