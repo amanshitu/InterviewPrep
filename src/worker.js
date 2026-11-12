@@ -1601,8 +1601,9 @@ async function handleGetSelfTestQuota(request, env, user) {
 
 async function handleGetSelfTestQuestion(request, env, user) {
   const row = await env.DB.prepare(
-    `SELECT q.id as id, q.q as q, q.a as a, q.topic_label as topic_label FROM questions q
+    `SELECT q.id as id, q.q as q, q.a as a, q.topic_label as topic_label, qs.track as track FROM questions q
      JOIN user_question_sets uqs ON uqs.set_id = q.set_id AND uqs.user_id = ?
+     JOIN question_sets qs ON qs.id = q.set_id
      ORDER BY RANDOM() LIMIT 1`,
   )
     .bind(user.id)
@@ -1611,7 +1612,10 @@ async function handleGetSelfTestQuestion(request, env, user) {
   return json({ question: row });
 }
 
-function buildSelfTestAnalysisPrompt(question, modelAnswer, userAnswer) {
+function buildSelfTestAnalysisPrompt(question, modelAnswer, userAnswer, isBehavioral) {
+  const starInstruction = isBehavioral
+    ? `\nSTAR: <1-2 sentences on how well the answer covered Situation/Task/Action/Result structure, naming which part(s) were missing or weak>`
+    : "";
   return `You are an expert interview coach reviewing a candidate's spoken/written practice answer. Compare it to the model answer and give specific, actionable feedback — not generic encouragement.
 
 Question: ${question}
@@ -1624,13 +1628,13 @@ Reply in exactly this plain-text format, no markdown:
 Score: <a number 1-10>
 Strengths: <1-2 sentences on what the candidate did well>
 Gaps: <1-2 sentences on what's missing or weak compared to the model answer>
-Suggestion: <one concrete, specific thing to improve next time>`;
+Suggestion: <one concrete, specific thing to improve next time>${starInstruction}`;
 }
 
 function parseSelfTestFeedback(raw) {
   if (!raw) return null;
   const get = (label) => {
-    const m = raw.match(new RegExp(`${label}:\\s*(.+?)(?:\\n(?:Score|Strengths|Gaps|Suggestion):|$)`, "is"));
+    const m = raw.match(new RegExp(`${label}:\\s*(.+?)(?:\\n(?:Score|Strengths|Gaps|Suggestion|STAR):|$)`, "is"));
     return m ? m[1].trim() : "";
   };
   const scoreText = get("Score");
@@ -1640,6 +1644,7 @@ function parseSelfTestFeedback(raw) {
     strengths: get("Strengths") || "",
     gaps: get("Gaps") || "",
     suggestion: get("Suggestion") || "",
+    star: get("STAR") || "",
   };
 }
 
@@ -1652,8 +1657,9 @@ async function handleSelfTestAnalyze(request, env, user) {
   if (!userAnswer) return json({ error: "Write or speak an answer first." }, { status: 400 });
 
   const question = await env.DB.prepare(
-    `SELECT q.id as id, q.q as q, q.a as a FROM questions q
+    `SELECT q.id as id, q.q as q, q.a as a, qs.track as track FROM questions q
      JOIN user_question_sets uqs ON uqs.set_id = q.set_id AND uqs.user_id = ?
+     JOIN question_sets qs ON qs.id = q.set_id
      WHERE q.id = ?`,
   )
     .bind(user.id, questionId)
@@ -1661,7 +1667,7 @@ async function handleSelfTestAnalyze(request, env, user) {
   if (!question) return json({ error: "Question not found." }, { status: 404 });
 
   const quotaBefore = await getSelfTestQuota(env, user);
-  const prompt = buildSelfTestAnalysisPrompt(question.q, question.a, userAnswer);
+  const prompt = buildSelfTestAnalysisPrompt(question.q, question.a, userAnswer, question.track === "hr");
   const estimatedCost = estimateTokens(prompt) + 350; // + a generous allowance for the reply, charged before the call so a quota check can't be bypassed by a slow/failed request
   if (!quotaBefore.unlimited && quotaBefore.used + estimatedCost > quotaBefore.quota) {
     return json({

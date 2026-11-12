@@ -861,3 +861,21 @@ Stats page adds a third parallel fetch alongside its existing two, buckets score
 | New "Self Test score trend" card on Stats, same bucketing/card pattern as Accuracy trend | Done |
 | Verified end-to-end: seeded 5 days of synthetic scores (6/7/5/8/9) via direct D1, confirmed the history endpoint returns them, confirmed the Stats chart renders with matching bar heights and the correct score labels | Done |
 | Deploy | Not yet — pending |
+
+## Phase 6.2 — STAR-method coaching for HR & Behavioral questions
+
+**Status: implemented and verified via curl + a unit check of the parser; not yet deployed.**
+
+Self Test's AI feedback previously graded every question the same way regardless of category. For the whole "HR & Behavioral" set (`question_sets.track = 'hr'` — locked in directly with the user as the scope, rather than a narrower match on topic labels literally containing "Behavioral"), the analysis prompt now also asks the AI to grade STAR (Situation/Task/Action/Result) structure and return an extra `STAR:` line naming what's missing.
+
+Both question-fetching queries (`handleGetSelfTestQuestion` and `handleSelfTestAnalyze`'s lookup) now join `question_sets` to read `track`; `buildSelfTestAnalysisPrompt` takes a new `isBehavioral` flag that appends the STAR instruction only when true; `parseSelfTestFeedback`'s label-lookahead regex was extended to include `STAR` so the new field doesn't get swallowed into `Suggestion`. The Self Test page renders a "STAR structure" line only when the field is present (i.e. only for HR questions) — Mock Interview (Phase 6.3) will get this for free since it reuses the same `handleSelfTestAnalyze` endpoint.
+
+| Item | Status |
+|---|---|
+| `track` column surfaced through both self-test question queries | Done |
+| `buildSelfTestAnalysisPrompt` conditionally appends the STAR instruction for `track === "hr"` | Done |
+| `parseSelfTestFeedback` extended to parse an optional `STAR:` line | Done |
+| Self Test page shows the STAR line only when present | Done |
+| Verified via a temporary debug log (removed before commit): confirmed an `hr`-track question's prompt includes the STAR instruction and a `pm`-track question's does not | Done |
+| Verified `parseSelfTestFeedback` against two hand-written synthetic replies (with and without a STAR line) via a disposable Node script — both parsed correctly | Done |
+| Deploy | Not yet — pending |

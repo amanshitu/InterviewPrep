@@ -7,7 +7,7 @@ import { $, el, escapeHtml, toastSuccess, toastError, api, state, renderNav, nav
 
 let current = null; // { id, q, a, topic_label }
 let quota = null; // { unlimited, used, quota, remaining }
-let feedback = null; // { score, strengths, gaps, suggestion } once analyzed
+let feedback = null; // { score, strengths, gaps, suggestion, star } once analyzed
 let modelAnswer = null; // revealed only after analysis
 let analyzing = false;
 let recognizer = null;
@@ -94,6 +94,7 @@ function paint() {
         <p style="margin-top:4px;"><strong>Strengths:</strong> ${escapeHtml(feedback.strengths || "—")}</p>
         <p style="margin-top:8px;"><strong>Gaps:</strong> ${escapeHtml(feedback.gaps || "—")}</p>
         <p style="margin-top:8px;"><strong>Try this next:</strong> ${escapeHtml(feedback.suggestion || "—")}</p>
+        ${feedback.star ? `<p style="margin-top:8px;"><strong>STAR structure:</strong> ${escapeHtml(feedback.star)}</p>` : ""}
         <div class="q-answer" style="margin-top:14px;">
           <strong>Model answer:</strong><br/>${escapeHtml(modelAnswer || "")}
         </div>
