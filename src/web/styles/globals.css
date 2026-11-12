@@ -42,12 +42,16 @@
   --sidebar-w: 15rem;
   --rail-dur: 240ms;
   --rail-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  /* Main content column eases wider as the sidebar collapses, so the page
+     doesn't just leave a larger empty gutter on the right. */
+  --main-max: 64rem;
 
   --font-sans: "Inter Variable", system-ui, sans-serif;
 }
 
 :root[data-sidebar="collapsed"] {
   --sidebar-w: 4.5rem;
+  --main-max: 72rem;
 }
 
 .dark {
