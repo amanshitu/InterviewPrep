@@ -1,26 +1,27 @@
 /* ---------- Design tokens ---------- */
 :root {
-  --bg: #f4f5fa;
+  --bg: #fdf6ec;
   --surface: #ffffff;
-  --surface-2: #ecedf6;
-  --border: #dfe2ee;
-  --text: #1b1e2b;
-  --text-muted: #5b6072;
-  --primary: #3730a3;
-  --primary-strong: #2b2680;
-  --primary-soft: #e8e6fb;
-  --on-primary: #ffffff;
-  --accent: #b45309;
-  --accent-soft: #fdf1de;
-  --success: #157a3c;
+  --surface-2: #faf0e1;
+  --border: #ecd9bd;
+  --text: #3a2a1a;
+  --text-muted: #8a7560;
+  --primary: #c2501f;
+  --primary-strong: #9c3c15;
+  --primary-soft: #fbe6d4;
+  --on-primary: #fffaf3;
+  --accent: #2f7a46;
+  --accent-soft: #e4f3e8;
+  --success: #227a4e;
   --success-soft: #e1f6e8;
-  --warn: #b45309;
+  --warn: #b2660a;
   --warn-soft: #fdf1de;
   --danger: #b91c1c;
   --danger-soft: #fbe4e4;
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 18px;
+  --radius-full: 999px;
   --shadow-1: 0 1px 2px rgba(20, 20, 40, 0.06), 0 1px 1px rgba(20,20,40,0.04);
   --shadow-2: 0 8px 24px rgba(20, 20, 40, 0.10);
   --font-display: "Manrope", "Segoe UI", sans-serif;
@@ -29,46 +30,46 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #14151f;
-    --surface: #1c1e2b;
-    --surface-2: #262838;
-    --border: #33364a;
-    --text: #e9e9f2;
-    --text-muted: #9c9fb5;
-    --primary: #a29bf7;
-    --primary-strong: #c3bdfb;
-    --primary-soft: #2a2660;
-    --on-primary: #16142e;
-    --accent: #f0b046;
-    --accent-soft: #3a2c10;
-    --success: #63d495;
-    --success-soft: #11301d;
+    --bg: #1f1710;
+    --surface: #2a2014;
+    --surface-2: #352819;
+    --border: #4a3826;
+    --text: #f5e9d8;
+    --text-muted: #b8a38a;
+    --primary: #e8803f;
+    --primary-strong: #f2995e;
+    --primary-soft: #4a2c14;
+    --on-primary: #1f1710;
+    --accent: #5fae7a;
+    --accent-soft: #1c3324;
+    --success: #6bcf8e;
+    --success-soft: #15301f;
     --warn: #f0b046;
     --warn-soft: #3a2c10;
-    --danger: #f38b8b;
+    --danger: #f3867b;
     --danger-soft: #3a1616;
     --shadow-1: 0 1px 2px rgba(0,0,0,0.4);
     --shadow-2: 0 12px 30px rgba(0,0,0,0.5);
   }
 }
 :root[data-theme="dark"] {
-  --bg: #14151f;
-  --surface: #1c1e2b;
-  --surface-2: #262838;
-  --border: #33364a;
-  --text: #e9e9f2;
-  --text-muted: #9c9fb5;
-  --primary: #a29bf7;
-  --primary-strong: #c3bdfb;
-  --primary-soft: #2a2660;
-  --on-primary: #16142e;
-  --accent: #f0b046;
-  --accent-soft: #3a2c10;
-  --success: #63d495;
-  --success-soft: #11301d;
+  --bg: #1f1710;
+  --surface: #2a2014;
+  --surface-2: #352819;
+  --border: #4a3826;
+  --text: #f5e9d8;
+  --text-muted: #b8a38a;
+  --primary: #e8803f;
+  --primary-strong: #f2995e;
+  --primary-soft: #4a2c14;
+  --on-primary: #1f1710;
+  --accent: #5fae7a;
+  --accent-soft: #1c3324;
+  --success: #6bcf8e;
+  --success-soft: #15301f;
   --warn: #f0b046;
   --warn-soft: #3a2c10;
-  --danger: #f38b8b;
+  --danger: #f3867b;
   --danger-soft: #3a1616;
   --shadow-1: 0 1px 2px rgba(0,0,0,0.4);
   --shadow-2: 0 12px 30px rgba(0,0,0,0.5);
@@ -96,7 +97,7 @@ img { max-width: 100%; }
 .btn {
   appearance: none;
   border: 1px solid transparent;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-full);
   padding: 10px 16px;
   font-weight: 600;
   font-size: 14px;
@@ -348,6 +349,12 @@ img { max-width: 100%; }
 .q-index { font-family: var(--font-display); font-weight: 800; color: var(--primary); font-size: 13px; }
 .q-text { font-weight: 700; font-size: 15.5px; margin-bottom: 4px; }
 .q-answer { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border); color: var(--text); font-size: var(--answer-font-size, 14px); line-height: 1.6; }
+
+/* ---------- Chat bubbles (Self Test / Mock Interview) ---------- */
+.chat-bubble { width: fit-content; max-width: 85%; padding: 14px 16px; border-radius: var(--radius-lg); margin-top: 12px; }
+.chat-bubble:first-child { margin-top: 0; }
+.chat-bubble-ai { background: var(--surface-2); border: 1px solid var(--border); margin-right: auto; }
+.chat-bubble-user { background: var(--primary-soft); border: 1px solid var(--primary); color: var(--text); margin-left: auto; }
 
 .font-size-options { display: flex; gap: 8px; flex-wrap: wrap; }
 .font-size-option {

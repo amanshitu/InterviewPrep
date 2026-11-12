@@ -5,7 +5,7 @@
 //
 // Bump CACHE_NAME whenever static assets change in a way that matters —
 // there's no build step to hash filenames for you.
-const CACHE_NAME = "interview-prep-shell-v2";
+const CACHE_NAME = "interview-prep-shell-v3";
 const SHELL_ASSETS = ["/", "/app.js", "/styles.css", "/manifest.json"];
 
 self.addEventListener("install", (event) => {
@@ -20,6 +20,34 @@ self.addEventListener("activate", (event) => {
       .keys()
       .then((keys) => Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
+  );
+});
+
+self.addEventListener("push", (event) => {
+  let data = { title: "Interview Prep", body: "You have questions waiting today.", url: "/" };
+  try {
+    if (event.data) data = { ...data, ...event.data.json() };
+  } catch { /* keep default */ }
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-32.png",
+      data: { url: data.url || "/" },
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || "/";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientsList) => {
+      for (const client of clientsList) {
+        if ("focus" in client) return client.focus();
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(url);
+    }),
   );
 });
 

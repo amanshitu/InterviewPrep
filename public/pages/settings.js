@@ -162,6 +162,8 @@ export function render() {
 
   if (isSpeechSupported()) view.appendChild(buildReadAloudCard());
 
+  view.appendChild(buildNotificationsCard());
+
   view.appendChild(el(`
     <div class="card">
       <div class="section-title">Change password</div>
@@ -346,6 +348,7 @@ export function render() {
   wireAnswerFontSizeCard(view);
   loadSelfTestQuota(view);
   if (isSpeechSupported()) wireReadAloudCard(view);
+  wireNotificationsCard(view);
   renderNav();
 }
 
@@ -478,6 +481,101 @@ function buildAnswerFontSizeCard() {
 function wireAnswerFontSizeCard(view) {
   $all("#font-size-options .font-size-option", view).forEach((btn) => {
     btn.addEventListener("click", () => setAnswerFontSize(btn.dataset.size));
+  });
+}
+
+// ---------- Notifications (Web Push) ----------
+function urlBase64ToUint8Array(base64Url) {
+  const padding = "=".repeat((4 - (base64Url.length % 4)) % 4);
+  const base64 = (base64Url + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  const output = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) output[i] = raw.charCodeAt(i);
+  return output;
+}
+
+function isPushSupported() {
+  return "serviceWorker" in navigator && "PushManager" in window && typeof Notification !== "undefined";
+}
+
+function buildNotificationsCard() {
+  if (!isPushSupported()) return el(`<div></div>`);
+  return el(`
+    <div class="card">
+      <div class="section-title">Notifications</div>
+      <p class="section-sub" style="margin-top:6px;">Get a browser reminder once a day if you still have questions left for today.</p>
+      <p class="section-sub" id="push-status-line" style="margin-top:10px;">Checking…</p>
+      <button class="btn btn-primary btn-icon-label" id="push-toggle-btn" style="margin-top:10px;">Enable reminders</button>
+    </div>
+  `);
+}
+
+async function pushIsSubscribed() {
+  const reg = await navigator.serviceWorker.ready;
+  const sub = await reg.pushManager.getSubscription();
+  return !!sub;
+}
+
+async function wireNotificationsCard(view) {
+  if (!isPushSupported()) return;
+  const statusLine = $("#push-status-line", view);
+  const toggleBtn = $("#push-toggle-btn", view);
+  if (!statusLine || !toggleBtn) return;
+
+  const refresh = async () => {
+    const subscribed = await pushIsSubscribed();
+    if (subscribed) {
+      statusLine.textContent = "Reminders are on.";
+      toggleBtn.textContent = "Disable reminders";
+      toggleBtn.classList.remove("btn-primary");
+      toggleBtn.classList.add("btn-secondary");
+    } else {
+      statusLine.textContent = Notification.permission === "denied"
+        ? "Blocked — enable notifications for this site in your browser settings first."
+        : "Reminders are off.";
+      toggleBtn.textContent = "Enable reminders";
+      toggleBtn.classList.remove("btn-secondary");
+      toggleBtn.classList.add("btn-primary");
+    }
+  };
+  await refresh();
+
+  toggleBtn.addEventListener("click", async () => {
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const existing = await reg.pushManager.getSubscription();
+      if (existing) {
+        await api("/api/push/unsubscribe", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ endpoint: existing.endpoint }),
+        });
+        await existing.unsubscribe();
+        toastSuccess("Reminders turned off.");
+      } else {
+        const permission = await Notification.requestPermission();
+        if (permission !== "granted") {
+          toastWarning("Notifications permission wasn't granted.");
+          return;
+        }
+        const { publicKey } = await api("/api/push/vapid-public-key");
+        if (!publicKey) { toastError("Push isn't configured on the server yet."); return; }
+        const sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(publicKey),
+        });
+        const subJson = sub.toJSON();
+        await api("/api/push/subscribe", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ endpoint: subJson.endpoint, keys: subJson.keys }),
+        });
+        toastSuccess("Reminders turned on.");
+      }
+    } catch (err) {
+      toastError(err.message || "Couldn't update notification settings.");
+    }
+    await refresh();
   });
 }
 
@@ -792,6 +890,7 @@ async function loadMySets(container) {
       const row = el(`
         <div class="weak-row" style="margin-bottom:8px;">
           <span class="weak-row-label">${escapeHtml(s.title)}${s.track ? ` <span class="section-sub">(${escapeHtml(s.track)})</span>` : ""}</span>
+          <span class="pill pill-not_started">${s.question_count || 0} question${s.question_count === 1 ? "" : "s"}</span>
           ${renderSetStatusPill(s)}
           ${s.visibility === "private" || s.visibility === "rejected"
             ? `<button class="btn btn-ghost btn-small btn-icon-label" data-submit-review="${s.id}">${SEND_ICON} Submit for review</button>`

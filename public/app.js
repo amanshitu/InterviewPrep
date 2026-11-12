@@ -23,6 +23,12 @@ export function el(html) { const t = document.createElement("template"); t.inner
 export function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
+// Shared chat-bubble markup for Self Test / Mock Interview's conversation-style
+// framing — role is "ai" (left-aligned) or "user" (right-aligned). innerHtml
+// is trusted, already-escaped markup (caller's job), not raw user text.
+export function renderChatBubble(role, innerHtml) {
+  return `<div class="chat-bubble chat-bubble-${role}">${innerHtml}</div>`;
+}
 // type is one of "info" (default, neutral), "success", "error", "warning" —
 // styled via .toast-{type} in styles.css. Plain toast(msg) still works
 // exactly as before for anywhere that doesn't care about styling.
@@ -70,6 +76,7 @@ const PAGE_LOADERS = {
   "/review": () => import("./pages/review.js"),
   "/test": () => import("./pages/test.js"),
   "/self-test": () => import("./pages/selftest.js"),
+  "/mock-interview": () => import("./pages/mockinterview.js"),
   "/settings": () => import("./pages/settings.js"),
   "/stats": () => import("./pages/stats.js"),
   "/admin": () => import("./pages/admin.js"),
@@ -501,6 +508,7 @@ function wireMobileShell() {
   $("#fab-review-btn").addEventListener("click", () => { closeMobileSheets(); navigate("/review"); });
   $("#fab-test-btn").addEventListener("click", () => { closeMobileSheets(); navigate("/test"); });
   $("#fab-selftest-btn").addEventListener("click", () => { closeMobileSheets(); navigate("/self-test"); });
+  $("#fab-mockinterview-btn").addEventListener("click", () => { closeMobileSheets(); navigate("/mock-interview"); });
 
   wireCompactThemeToggle();
 }

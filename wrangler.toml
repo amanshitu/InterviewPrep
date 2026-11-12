@@ -16,6 +16,17 @@ binding = "DB"
 database_name = "interview-prep-db"
 database_id = "e68c64ae-fe6a-4935-b665-245aebcad8a3"
 
+[vars]
+# Public VAPID key for Web Push — safe to expose client-side, it's the
+# public half of the key pair. The private half (VAPID_PRIVATE_KEY_JWK)
+# is a secret, set via `wrangler secret put` (local dev: .dev.vars).
+VAPID_PUBLIC_KEY = "BKRfk02EaqQBzr7XJVu1JKtfLqMV_soMk43cXTM-nj6E_I3a7mFwopTYzqE5EaNs4dluO3SwIuiN3HiwsH-98_c"
+
+[triggers]
+# Hourly: checks each push subscriber's local time (via their saved
+# timezone) and sends at most one reminder per user per local day.
+crons = ["0 * * * *"]
+
 [ai]
 binding = "AI"
 # Workers AI has no local inference simulator. `remote = true` is meant to

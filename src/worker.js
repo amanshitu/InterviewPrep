@@ -5,6 +5,8 @@
 // itself is static content shipped with the app (public/questions.js) —
 // only per-user progress lives in the database.
 
+import { sendWebPush } from "./webpush.js";
+
 const SESSION_COOKIE = "session";
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const PASSWORD_RESET_TTL_MS = 30 * 60 * 1000; // 30 minutes
@@ -1130,7 +1132,9 @@ async function handleCreateQuestionSet(request, env, user) {
 
 async function handleListMySets(request, env, user) {
   const rows = await env.DB.prepare(
-    "SELECT id, title, track, visibility, created_at, rejected_reason FROM question_sets WHERE owner_user_id = ? ORDER BY created_at DESC",
+    `SELECT qs.id as id, qs.title as title, qs.track as track, qs.visibility as visibility, qs.created_at as created_at, qs.rejected_reason as rejected_reason,
+            (SELECT COUNT(*) FROM questions q WHERE q.set_id = qs.id) as question_count
+     FROM question_sets qs WHERE qs.owner_user_id = ? ORDER BY qs.created_at DESC`,
   )
     .bind(user.id)
     .all();
@@ -1601,8 +1605,9 @@ async function handleGetSelfTestQuota(request, env, user) {
 
 async function handleGetSelfTestQuestion(request, env, user) {
   const row = await env.DB.prepare(
-    `SELECT q.id as id, q.q as q, q.a as a, q.topic_label as topic_label FROM questions q
+    `SELECT q.id as id, q.q as q, q.a as a, q.topic_label as topic_label, qs.track as track FROM questions q
      JOIN user_question_sets uqs ON uqs.set_id = q.set_id AND uqs.user_id = ?
+     JOIN question_sets qs ON qs.id = q.set_id
      ORDER BY RANDOM() LIMIT 1`,
   )
     .bind(user.id)
@@ -1611,7 +1616,10 @@ async function handleGetSelfTestQuestion(request, env, user) {
   return json({ question: row });
 }
 
-function buildSelfTestAnalysisPrompt(question, modelAnswer, userAnswer) {
+function buildSelfTestAnalysisPrompt(question, modelAnswer, userAnswer, isBehavioral) {
+  const starInstruction = isBehavioral
+    ? `\nSTAR: <1-2 sentences on how well the answer covered Situation/Task/Action/Result structure, naming which part(s) were missing or weak>`
+    : "";
   return `You are an expert interview coach reviewing a candidate's spoken/written practice answer. Compare it to the model answer and give specific, actionable feedback — not generic encouragement.
 
 Question: ${question}
@@ -1624,13 +1632,13 @@ Reply in exactly this plain-text format, no markdown:
 Score: <a number 1-10>
 Strengths: <1-2 sentences on what the candidate did well>
 Gaps: <1-2 sentences on what's missing or weak compared to the model answer>
-Suggestion: <one concrete, specific thing to improve next time>`;
+Suggestion: <one concrete, specific thing to improve next time>${starInstruction}`;
 }
 
 function parseSelfTestFeedback(raw) {
   if (!raw) return null;
   const get = (label) => {
-    const m = raw.match(new RegExp(`${label}:\\s*(.+?)(?:\\n(?:Score|Strengths|Gaps|Suggestion):|$)`, "is"));
+    const m = raw.match(new RegExp(`${label}:\\s*(.+?)(?:\\n(?:Score|Strengths|Gaps|Suggestion|STAR):|$)`, "is"));
     return m ? m[1].trim() : "";
   };
   const scoreText = get("Score");
@@ -1640,6 +1648,7 @@ function parseSelfTestFeedback(raw) {
     strengths: get("Strengths") || "",
     gaps: get("Gaps") || "",
     suggestion: get("Suggestion") || "",
+    star: get("STAR") || "",
   };
 }
 
@@ -1652,8 +1661,9 @@ async function handleSelfTestAnalyze(request, env, user) {
   if (!userAnswer) return json({ error: "Write or speak an answer first." }, { status: 400 });
 
   const question = await env.DB.prepare(
-    `SELECT q.id as id, q.q as q, q.a as a FROM questions q
+    `SELECT q.id as id, q.q as q, q.a as a, qs.track as track FROM questions q
      JOIN user_question_sets uqs ON uqs.set_id = q.set_id AND uqs.user_id = ?
+     JOIN question_sets qs ON qs.id = q.set_id
      WHERE q.id = ?`,
   )
     .bind(user.id, questionId)
@@ -1661,7 +1671,7 @@ async function handleSelfTestAnalyze(request, env, user) {
   if (!question) return json({ error: "Question not found." }, { status: 404 });
 
   const quotaBefore = await getSelfTestQuota(env, user);
-  const prompt = buildSelfTestAnalysisPrompt(question.q, question.a, userAnswer);
+  const prompt = buildSelfTestAnalysisPrompt(question.q, question.a, userAnswer, question.track === "hr");
   const estimatedCost = estimateTokens(prompt) + 350; // + a generous allowance for the reply, charged before the call so a quota check can't be bypassed by a slow/failed request
   if (!quotaBefore.unlimited && quotaBefore.used + estimatedCost > quotaBefore.quota) {
     return json({
@@ -1699,7 +1709,24 @@ async function handleSelfTestAnalyze(request, env, user) {
     quota = await getSelfTestQuota(env, user);
   }
 
+  if (feedback.score !== null) {
+    await env.DB.prepare(
+      `INSERT INTO self_test_results (user_id, question_id, date, score) VALUES (?, ?, ?, ?)`,
+    )
+      .bind(user.id, questionId, todayDateStr(user.timezone), feedback.score)
+      .run();
+  }
+
   return json({ feedback, modelAnswer: question.a, generatedBy, quota });
+}
+
+async function handleGetSelfTestHistory(request, env, user) {
+  const { results } = await env.DB.prepare(
+    `SELECT date, score FROM self_test_results WHERE user_id = ? ORDER BY created_at ASC LIMIT 500`,
+  )
+    .bind(user.id)
+    .all();
+  return json({ history: results || [] });
 }
 
 // ---------- Stats: per-topic progress + accuracy (for "target areas") ----------
@@ -2009,6 +2036,97 @@ async function handleAnswerTest(request, env, user) {
   return json({ ok: true, correct: !!correct, correctIndex: variant.correct_index });
 }
 
+async function handlePushSubscribe(request, env, user) {
+  const parsed = await readJsonBody(request, 4000);
+  if (!parsed.ok) return json({ error: parsed.error }, { status: parsed.status });
+  const { endpoint, keys } = parsed.body || {};
+  if (!endpoint || !keys || !keys.p256dh || !keys.auth) {
+    return json({ error: "Invalid push subscription." }, { status: 400 });
+  }
+  await env.DB.prepare(
+    `INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth) VALUES (?, ?, ?, ?)
+     ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, p256dh = excluded.p256dh, auth = excluded.auth`,
+  )
+    .bind(user.id, endpoint, keys.p256dh, keys.auth)
+    .run();
+  return json({ ok: true });
+}
+
+async function handlePushUnsubscribe(request, env, user) {
+  const parsed = await readJsonBody(request, 4000);
+  if (!parsed.ok) return json({ error: parsed.error }, { status: parsed.status });
+  const { endpoint } = parsed.body || {};
+  if (!endpoint) return json({ error: "Missing endpoint." }, { status: 400 });
+  await env.DB.prepare("DELETE FROM push_subscriptions WHERE endpoint = ? AND user_id = ?")
+    .bind(endpoint, user.id)
+    .run();
+  return json({ ok: true });
+}
+
+// Rough local-hour estimate from an IANA timezone name, reusing the same
+// Intl-based approach as todayDateStr rather than a hardcoded offset table.
+function localHourFor(timezone) {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", { timeZone: timezone || "UTC", hour: "numeric", hour12: false }).formatToParts(new Date());
+    const hourPart = parts.find((p) => p.type === "hour");
+    return hourPart ? parseInt(hourPart.value, 10) % 24 : new Date().getUTCHours();
+  } catch {
+    return new Date().getUTCHours();
+  }
+}
+
+const PUSH_REMINDER_LOCAL_HOUR = 19; // 7pm in each subscriber's own timezone
+
+// Runs hourly (wrangler.toml [triggers]). For each subscription whose
+// owner's local time is currently the reminder hour and who hasn't been
+// sent a reminder yet today (their own local date), sends a nudge if they
+// still have incomplete questions in today's queue. One row's
+// last_push_sent_date prevents double-sends within the same local day.
+async function handleScheduled(env) {
+  const { results: subs } = await env.DB.prepare(
+    `SELECT ps.id as id, ps.endpoint as endpoint, ps.p256dh as p256dh, ps.auth as auth, ps.last_push_sent_date as last_push_sent_date,
+            u.id as user_id, u.timezone as timezone
+     FROM push_subscriptions ps JOIN users u ON u.id = ps.user_id`,
+  ).all();
+  if (!subs || !subs.length) return;
+  if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY_JWK) return;
+  const vapidPrivateJwk = JSON.parse(env.VAPID_PRIVATE_KEY_JWK);
+
+  for (const sub of subs) {
+    const localHour = localHourFor(sub.timezone);
+    if (localHour !== PUSH_REMINDER_LOCAL_HOUR) continue;
+    const today = todayDateStr(sub.timezone);
+    if (sub.last_push_sent_date === today) continue;
+
+    const pending = await env.DB.prepare(
+      "SELECT COUNT(*) as n FROM user_question_progress WHERE user_id = ? AND queued_for_date = ? AND status != 'done'",
+    )
+      .bind(sub.user_id, today)
+      .first();
+    if (!pending || !pending.n) continue;
+
+    try {
+      const resp = await sendWebPush(
+        { endpoint: sub.endpoint, p256dh: sub.p256dh, auth: sub.auth },
+        { title: "Interview Prep", body: `You still have ${pending.n} question${pending.n === 1 ? "" : "s"} left today.`, url: "/" },
+        env.VAPID_PUBLIC_KEY,
+        vapidPrivateJwk,
+        "mailto:support@example.com",
+      );
+      if (resp.status === 404 || resp.status === 410) {
+        // Dead/expired subscription — remove it so future runs don't keep trying it.
+        await env.DB.prepare("DELETE FROM push_subscriptions WHERE id = ?").bind(sub.id).run();
+        continue;
+      }
+      if (resp.ok) {
+        await env.DB.prepare("UPDATE push_subscriptions SET last_push_sent_date = ? WHERE id = ?").bind(today, sub.id).run();
+      }
+    } catch {
+      // Network/crypto failure — leave the subscription as-is, retried next hour.
+    }
+  }
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -2124,6 +2242,9 @@ export default {
         if (url.pathname === "/api/self-test/analyze" && request.method === "POST") {
           return applySecurityHeaders(await handleSelfTestAnalyze(request, env, user));
         }
+        if (url.pathname === "/api/self-test/history" && request.method === "GET") {
+          return applySecurityHeaders(await handleGetSelfTestHistory(request, env, user));
+        }
 
         const setAction = url.pathname.match(/^\/api\/question-sets\/([^/]+)\/(submit|subscribe)$/);
         if (setAction && request.method === "POST") {
@@ -2160,6 +2281,16 @@ export default {
           return applySecurityHeaders(await handleAnswerTest(request, env, user));
         }
 
+        if (url.pathname === "/api/push/vapid-public-key" && request.method === "GET") {
+          return applySecurityHeaders(json({ publicKey: env.VAPID_PUBLIC_KEY || null }));
+        }
+        if (url.pathname === "/api/push/subscribe" && request.method === "POST") {
+          return applySecurityHeaders(await handlePushSubscribe(request, env, user));
+        }
+        if (url.pathname === "/api/push/unsubscribe" && request.method === "POST") {
+          return applySecurityHeaders(await handlePushUnsubscribe(request, env, user));
+        }
+
         return applySecurityHeaders(json({ error: "Not found." }, { status: 404 }));
       } catch (err) {
         return applySecurityHeaders(
@@ -2171,5 +2302,9 @@ export default {
     // Static app (public/) — index.html, app.js, styles.css, questions.js
     const assetResponse = await env.ASSETS.fetch(request);
     return applySecurityHeaders(assetResponse);
+  },
+
+  async scheduled(event, env) {
+    await handleScheduled(env);
   },
 };

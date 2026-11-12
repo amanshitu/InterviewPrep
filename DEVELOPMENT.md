@@ -828,3 +828,124 @@ Dictation (mic button, feature-detected via a new `getSpeechRecognitionCtor()` i
 | Verified empty-answer validation, "New question" skip, and the Settings quota card all render and behave correctly end-to-end via Playwright | Done |
 | AI feedback content itself not visually verified locally — local Workers AI has no inference simulator (same pre-existing limitation documented for MCQ generation); graceful 502 handling confirmed instead | Known limitation |
 | Deploy | Not yet — pending |
+
+## Phase 6.0 — warm visual rebrand (palette + pill buttons)
+
+**Status: implemented and verified with a real Playwright/Chromium browser; not yet deployed.**
+
+First of a planned enhancement batch (Phases 6.0–6.6), prompted by a deep review of the app's full feature set plus a look at a sibling app (MealSathi) for UI inspiration. Decision locked in directly with the user: a full rebrand, not an additive accent picker — the cool indigo default palette is replaced outright with a warm saffron/cream one, and buttons become fully pill-shaped everywhere.
+
+Touched `public/styles.css` only — every color is already referenced through the existing CSS custom-property tokens (`--bg`, `--surface`, `--primary`, etc.), so this was a token-value swap in the `:root` block and both dark-mode override blocks (the `prefers-color-scheme` media query and the explicit `[data-theme="dark"]` override, kept identical to each other as before), not a markup or per-page change. A new `--radius-full: 999px` token was added and wired only into the base `.btn` rule's `border-radius` — deliberately a new token rather than repointing the existing `--radius-sm` (8px), since that token is shared with cards/inputs/tiles which must keep their current rectangular rounding, not become pills.
+
+| Item | Status |
+|---|---|
+| Warm saffron/cream light palette + warm dark-brown dark palette, both token-only changes | Done |
+| All buttons now fully pill-shaped (`--radius-full`), cards/inputs/tiles unaffected | Done |
+| Confirmed no hardcoded hex colors exist outside the token blocks (grepped the whole file) | Done |
+| Verified login screen, Today, and Settings pages in both light and dark via Playwright/Chromium — text legible, buttons pill-shaped, cards still rectangular | Done |
+| Deploy | Not yet — pending |
+
+## Phase 6.1 — Self Test score history + Stats trend chart
+
+**Status: implemented and verified with curl + a real Playwright/Chromium browser; not yet deployed.**
+
+Self Test (Phase 5.6) graded each attempt but never kept a record of past scores. New `self_test_results(user_id, question_id, date, score)` table (`migrations/0010_self_test_history.sql`) — a per-attempt score log, deliberately separate from `ai_token_usage` (which only tracks quota spend, not scores). `handleSelfTestAnalyze` now writes a row after every successfully-parsed analysis; a new `GET /api/self-test/history` returns a user's full history (bounded to the last 500 rows, same bounding convention as `/api/activity?limit=2000`).
+
+Stats page adds a third parallel fetch alongside its existing two, buckets scores by day, averages same-day attempts, and shows the last 14 days with data — the exact bucketing pattern the existing "Accuracy trend" card already uses. Chart rendering reuses that card's hand-built inline-SVG bar chart approach via a small variant (`buildScoreTrendSvg`): bar height still scales 0-100 (score × 10) so it shares the accuracy chart's visual scale, but the printed label is the real 1-10 score, not a percentage.
+
+| Item | Status |
+|---|---|
+| New `self_test_results` table + migration | Done |
+| `handleSelfTestAnalyze` persists a history row per successful analysis | Done |
+| New `GET /api/self-test/history` endpoint | Done |
+| New "Self Test score trend" card on Stats, same bucketing/card pattern as Accuracy trend | Done |
+| Verified end-to-end: seeded 5 days of synthetic scores (6/7/5/8/9) via direct D1, confirmed the history endpoint returns them, confirmed the Stats chart renders with matching bar heights and the correct score labels | Done |
+| Deploy | Not yet — pending |
+
+## Phase 6.2 — STAR-method coaching for HR & Behavioral questions
+
+**Status: implemented and verified via curl + a unit check of the parser; not yet deployed.**
+
+Self Test's AI feedback previously graded every question the same way regardless of category. For the whole "HR & Behavioral" set (`question_sets.track = 'hr'` — locked in directly with the user as the scope, rather than a narrower match on topic labels literally containing "Behavioral"), the analysis prompt now also asks the AI to grade STAR (Situation/Task/Action/Result) structure and return an extra `STAR:` line naming what's missing.
+
+Both question-fetching queries (`handleGetSelfTestQuestion` and `handleSelfTestAnalyze`'s lookup) now join `question_sets` to read `track`; `buildSelfTestAnalysisPrompt` takes a new `isBehavioral` flag that appends the STAR instruction only when true; `parseSelfTestFeedback`'s label-lookahead regex was extended to include `STAR` so the new field doesn't get swallowed into `Suggestion`. The Self Test page renders a "STAR structure" line only when the field is present (i.e. only for HR questions) — Mock Interview (Phase 6.3) will get this for free since it reuses the same `handleSelfTestAnalyze` endpoint.
+
+| Item | Status |
+|---|---|
+| `track` column surfaced through both self-test question queries | Done |
+| `buildSelfTestAnalysisPrompt` conditionally appends the STAR instruction for `track === "hr"` | Done |
+| `parseSelfTestFeedback` extended to parse an optional `STAR:` line | Done |
+| Self Test page shows the STAR line only when present | Done |
+| Verified via a temporary debug log (removed before commit): confirmed an `hr`-track question's prompt includes the STAR instruction and a `pm`-track question's does not | Done |
+| Verified `parseSelfTestFeedback` against two hand-written synthetic replies (with and without a STAR line) via a disposable Node script — both parsed correctly | Done |
+| Deploy | Not yet — pending |
+
+## Phase 6.3 — Mock Interview mode
+
+**Status: implemented and verified with a real Playwright/Chromium browser; not yet deployed.**
+
+A new batch mode built entirely on top of Self Test's existing single-question endpoints (`GET /api/self-test/question`, `POST /api/self-test/analyze`) rather than a new batch-fetch endpoint — deliberately avoids the dedup complexity a true batch endpoint would need (`ORDER BY RANDOM() LIMIT 1` has no "exclude already served" concept today), and means Mock Interview draws from the same Self Test token quota and gets STAR coaching on HR questions for free (Phase 6.2's work applies automatically).
+
+New page `public/pages/mockinterview.js`: the user picks a session length (3/5/8 questions, default 5) from new buttons on a new Today-page card, then answers one question at a time exactly like Self Test (typed or dictated), with each successful analysis pushed into an in-memory `results` array and auto-advancing to the next random question. After the last question, a **session summary** screen shows the average score and a per-question list with individual scores, plus "Start new mock interview" and "Back to Today" actions. Entry points added: a new Today-page card (next to Self Test) and a mobile FAB quick action, mirroring exactly how Self Test's own entry points were added in Phase 5.6. New `/mock-interview` route in `app.js`'s `PAGE_LOADERS`.
+
+| Item | Status |
+|---|---|
+| New Mock Interview page: sequential questions, per-question analyze, session summary with average score | Done |
+| Session-length picker (3/5/8, default 5) on the Today page card | Done |
+| Entry points: Today-page card + mobile FAB quick action | Done |
+| Verified end-to-end via Playwright: since local Workers AI has no inference simulator (same known limitation as Self Test/MCQ generation), the `/api/self-test/analyze` network call was intercepted and stubbed with synthetic scores (6, 8, 10) to exercise the actual page logic — confirmed all 3 questions were distinct, the session correctly advanced through "Question 1 of 3" → "2 of 3" → "3 of 3," and the summary screen showed the exact average (8.0/10) with 3 correctly-scored per-question rows | Done |
+| Deploy | Not yet — pending |
+
+## Phase 6.4 — Chat-bubble framing for Self Test + Mock Interview
+
+**Status: implemented and verified with a real Playwright/Chromium browser; not yet deployed.**
+
+Reframed both AI-conversation pages as an actual conversation rather than a form-plus-result-card: a left-aligned AI bubble for the question, a right-aligned user bubble showing the submitted answer once analyzed, and a left-aligned AI bubble for the feedback (score/strengths/gaps/suggestion/STAR). New shared `renderChatBubble(role, html)` helper in `app.js` and `.chat-bubble`/`.chat-bubble-ai`/`.chat-bubble-user` CSS classes (reusing existing design tokens — `--surface-2`/`--border` for AI, `--primary-soft`/`--primary` for the user side) used by both pages.
+
+This surfaced a real gap in Mock Interview (Phase 6.3): it previously auto-advanced to the next question immediately after a successful analysis, so the per-question feedback was computed but never actually shown to the user. Fixed as part of this phase: analyzing a question now pauses on a "Next question" / "See session summary" button so the feedback bubble is genuinely read before moving on — `analyzeAndAdvance` was split into `analyzeAnswer` (shows feedback, stays put) and a new `advanceToNext` (clears state and loads the next question or finishes the session). The session summary's per-question list also now renders as compact AI/user bubble pairs (question, then score) instead of plain stat cards.
+
+| Item | Status |
+|---|---|
+| Shared `renderChatBubble` helper + chat-bubble CSS classes | Done |
+| Self Test: question/answer/feedback rendered as a 3-bubble conversation | Done |
+| Mock Interview: same 3-bubble conversation per question, now with an explicit pause-to-read step before advancing (fixes a gap where feedback was computed but never shown) | Done |
+| Mock Interview summary: per-question list as compact bubble pairs | Done |
+| Verified via Playwright (network-stubbed analyze responses, same approach as Phase 6.3): Self Test shows exactly 3 bubbles in AI/user/AI order; Mock Interview correctly stays on "Question N of 3" after analyzing (does not auto-advance), updates the continue button's label on the final question ("See session summary"), and the summary renders 6 bubbles (3 question/score pairs) with the correct average | Done |
+| Deploy | Not yet — pending |
+
+## Phase 6.5 — question-count badge on "My question sets"
+
+**Status: implemented and verified with curl + a real Playwright/Chromium browser; not yet deployed.**
+
+"My question sets" already showed a color-coded visibility status pill (`renderSetStatusPill`); the only thing missing per the enhancement batch was a question-count chip. `handleListMySets` now returns a `question_count` per set via a correlated subquery against `questions`; the settings page renders it as a small neutral pill (reusing the existing `.pill-not_started` gray style, visually distinct from the colored status pill) right next to the status badge, with correct singular/plural ("1 question" vs "2 questions").
+
+| Item | Status |
+|---|---|
+| `handleListMySets` returns `question_count` per set | Done |
+| Question-count chip rendered next to the existing status pill, correct singular/plural | Done |
+| Verified via direct D1 seeding of 4 sets (private/pending/shared/rejected, with 2/0/1/0 questions respectively) — confirmed the API returns the right counts and the Settings page renders all 4 badge combinations correctly | Done |
+| Deploy | Not yet — pending |
+
+## Phase 6.6 — Push notifications (daily streak reminder)
+
+**Status: implemented and verified locally (crypto round-trip + a real Chromium browser subscribe/unsubscribe); the VAPID private key secret has NOT yet been registered against the live Cloudflare account — deploy blocked on that step.**
+
+The last and largest item of the enhancement batch: a daily browser notification nudging a user who still has incomplete questions for the day. Built entirely with native WebCrypto — no npm dependency — matching this app's established dependency-light convention (CSV import, PDF text extraction, and the resume-prompt builder all made the same call rather than reaching for a library).
+
+New `push_subscriptions(user_id, endpoint, p256dh, auth, last_push_sent_date)` table (`migrations/0011_push_subscriptions.sql`). New `src/webpush.js` implements RFC 8291 message encryption (ECDH + HKDF + AES-128-GCM) and RFC 8292 VAPID JWT signing (ES256), both via `crypto.subtle` directly. Three new endpoints: `GET /api/push/vapid-public-key`, `POST /api/push/subscribe`, `POST /api/push/unsubscribe`. A new `scheduled` export runs hourly (`wrangler.toml` `[triggers]`); for each subscription it computes the owner's current local hour from their saved timezone (same `Intl`-based approach as `todayDateStr`), and — once per local day, at 7pm local time, only if they still have incomplete questions queued for today — sends a reminder via `sendWebPush`, recording `last_push_sent_date` to prevent double-sends. A dead/expired subscription (404/410 response) is removed automatically. `public/sw.js` gained `push` and `notificationclick` listeners (cache version bumped to v3). Settings gained a "Notifications" card with an enable/disable toggle that requests permission, subscribes via `pushManager.subscribe`, and posts the subscription to the backend.
+
+A VAPID ECDSA P-256 key pair was generated locally (disposable script, not committed). The public key is a plain `wrangler.toml` var (`VAPID_PUBLIC_KEY`, safe to expose); the private key was written directly to the gitignored `.dev.vars` as `VAPID_PRIVATE_KEY_JWK` for local testing — it was never printed to a terminal or committed anywhere.
+
+| Item | Status |
+|---|---|
+| `push_subscriptions` table + migration | Done |
+| `src/webpush.js`: VAPID JWT signing + RFC 8291 message encryption, both via native WebCrypto | Done |
+| Subscribe/unsubscribe/vapid-public-key endpoints | Done |
+| Hourly `scheduled` handler: per-user local-hour gating, once-per-local-day dedup, pending-question check, dead-subscription cleanup | Done |
+| `sw.js` push + notificationclick listeners | Done |
+| Settings "Notifications" card (enable/disable toggle) | Done |
+| **Crypto correctness verified independently of any push service**: a disposable Node script generated a fake "browser" subscriber key pair, called the real `sendWebPush()` with a stubbed `fetch` to capture the encrypted wire body, then decrypted it back using the subscriber's private key exactly as a real browser would — confirmed the decrypted payload matched the original JSON byte-for-byte. The VAPID JWT's ES256 signature was separately verified against its own public key | Done |
+| Verified the `scheduled` handler's gating logic locally via `wrangler dev --local` + `/cdn-cgi/local/scheduled` (local cron trigger) and the Workers Logs observability query API: confirmed local-hour computation, confirmed a real send attempt is made when a pending question exists (correctly failed against a fake unreachable endpoint, left for retry — not marked as sent), and confirmed the send is correctly skipped once all of a user's questions are marked done (all via a temporary debug log, removed before commit) | Done |
+| Verified the full real-browser flow via Playwright/Chromium: enabling reminders actually created a working `PushSubscription` (a real `fcm.googleapis.com` endpoint) and saved it server-side; disabling removed it both client-side (`getSubscription()` returns null afterward) and the server-side D1 row | Done |
+| **VAPID_PRIVATE_KEY_JWK has not been registered as a live Worker secret** — `wrangler secret put` against the real Cloudflare account is a deliberate pause point (writes to shared/production infrastructure), held for explicit confirmation before running | Blocked — pending confirmation |
+| Deploy | Not yet — pending (and blocked on the secret above regardless) |

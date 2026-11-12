@@ -198,6 +198,19 @@ function paint() {
       <button class="btn btn-primary btn-icon-label" style="margin-top:14px;" id="start-selftest-btn">${MIC_ICON} Start self test</button>
     </div>
   `));
+  row2.appendChild(el(`
+    <div class="card">
+      <div class="group-days">AI-generated</div>
+      <div class="section-title" style="font-size:17px;margin-top:2px;">Mock Interview</div>
+      <p class="section-sub" style="margin-top:6px;">A short back-to-back batch of questions, answered one after another, with a session summary at the end.</p>
+      <div class="q-actions" style="margin-top:14px;">
+        <button type="button" class="btn btn-secondary btn-small" data-mock-count="3">3 Qs</button>
+        <button type="button" class="btn btn-primary btn-small" data-mock-count="5">5 Qs</button>
+        <button type="button" class="btn btn-secondary btn-small" data-mock-count="8">8 Qs</button>
+      </div>
+      <button class="btn btn-primary btn-icon-label" style="margin-top:14px;" id="start-mockinterview-btn">${SPARKLE_ICON} Start mock interview</button>
+    </div>
+  `));
   view.appendChild(row2);
 
   main.appendChild(view);
@@ -240,6 +253,19 @@ function paint() {
   $("#start-review-btn", view).addEventListener("click", () => navigate("/review", parseInt(rangeInput.value, 10)));
   $("#start-test-btn", view).addEventListener("click", () => navigate("/test"));
   $("#start-selftest-btn", view).addEventListener("click", () => navigate("/self-test"));
+
+  let mockCount = 5;
+  const mockCountBtns = $all("[data-mock-count]", view);
+  mockCountBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      mockCount = parseInt(btn.dataset.mockCount, 10);
+      mockCountBtns.forEach((b) => {
+        b.classList.toggle("btn-primary", b === btn);
+        b.classList.toggle("btn-secondary", b !== btn);
+      });
+    });
+  });
+  $("#start-mockinterview-btn", view).addEventListener("click", () => navigate("/mock-interview", mockCount));
 
   renderNav();
 }
