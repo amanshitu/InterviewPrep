@@ -231,6 +231,17 @@ img { max-width: 100%; }
 [hidden] { display: none !important; }
 ::selection { background: var(--primary-soft); }
 
+.boot-splash {
+  position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: var(--bg); z-index: 9999;
+}
+.boot-splash-spinner {
+  width: 32px; height: 32px; border-radius: 50%;
+  border: 3px solid var(--border); border-top-color: var(--accent);
+  animation: boot-splash-spin 0.7s linear infinite;
+}
+@keyframes boot-splash-spin { to { transform: rotate(360deg); } }
+
 /* ---------- Buttons & fields ---------- */
 .btn {
   appearance: none;

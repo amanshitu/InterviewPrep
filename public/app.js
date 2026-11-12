@@ -1047,9 +1047,12 @@ function wireProfileMenu() {
 // ---------- boot ----------
 async function boot(user) {
   state.currentUser = user;
+  try { localStorage.setItem("lastKnownAuthed", "1"); } catch (e) { /* localStorage unavailable */ }
+  $("#boot-splash").hidden = true;
   $("#auth-screen").hidden = true;
   $("#app").hidden = false;
   $("#logout-btn").addEventListener("click", async () => {
+    try { localStorage.removeItem("lastKnownAuthed"); } catch (e) { /* localStorage unavailable */ }
     await fetch("/api/logout", { method: "POST" });
     location.reload();
   });
@@ -1098,17 +1101,38 @@ wireConnectionStatus();
   setupAuthScreen();
   const params = new URLSearchParams(location.search);
   if (params.get("reset")) {
+    $("#boot-splash").hidden = true;
     $("#auth-screen").hidden = false;
     showAuthForm("reset");
     return;
   }
+
+  // Previously-authenticated visitors keep seeing the neutral splash (not
+  // the login form) while /api/me confirms their session — this is what
+  // stops a refresh from flashing the login screen at someone who's
+  // already signed in. A visitor with no such hint is most likely logged
+  // out (or visiting for the first time), so there's no reason to make
+  // them stare at a spinner for a network round trip whose answer is
+  // already a safe bet — show the real login screen immediately instead;
+  // checkSession() below still runs and will still boot() them in if a
+  // valid session cookie turns out to exist anyway.
+  let likelyAuthed = false;
+  try { likelyAuthed = localStorage.getItem("lastKnownAuthed") === "1"; } catch (e) { /* localStorage unavailable */ }
+  if (!likelyAuthed) {
+    $("#boot-splash").hidden = true;
+    $("#auth-screen").hidden = false;
+  }
+
   const user = await checkSession();
   if (user) {
     await boot(user);
   } else if (location.pathname === "/about") {
     // Reachable by prospective users too, before they've signed up.
+    $("#boot-splash").hidden = true;
     await dispatchRoute("/about");
   } else {
+    try { localStorage.removeItem("lastKnownAuthed"); } catch (e) { /* localStorage unavailable */ }
+    $("#boot-splash").hidden = true;
     $("#auth-screen").hidden = false;
   }
 })();

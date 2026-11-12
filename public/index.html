@@ -36,8 +36,14 @@
   You're offline — showing what's already loaded.
 </div>
 
+<!-- Shown by default, before app.js has decided whether the visitor is
+     signed in. Neither the auth screen nor the app shell is visible until
+     that decision is made, so a refresh never flashes the login form at an
+     already-signed-in user. -->
+<div id="boot-splash" class="boot-splash" aria-hidden="true"><div class="boot-splash-spinner"></div></div>
+
 <!-- AUTH SCREEN -->
-<section id="auth-screen" class="auth-screen">
+<section id="auth-screen" class="auth-screen" hidden>
 <div class="auth-wrap">
   <div class="auth-card">
     <div class="auth-brand">
