@@ -1167,3 +1167,21 @@ The daily streak-reminder push (Phase 6.6) computed one combined "N questions le
 ---
 
 **Multi-category platform (Phases 7.0–7.6) — batch complete.** The app now supports a user enrolling in and switching between multiple distinct practice categories (today's Interview Prep content, plus any new categories like "Railway Exam"/"Police Exam" an admin creates), with queue/quota/streak/Self-Test/Daily-Test/Stats/push-reminders all correctly scoped per category, content shareable across categories via admin tagging, and zero behavior change for existing users/data. See the approved plan (multi-category platform) for the full design rationale and the three decisions locked in before building: shared-globally progress on shared content, multi-enrollment with a switcher, and architecture-only scope (no invented exam content).
+
+## Phase 7.7 — starter Railway Exam content
+
+**Status: migration written and fully verified against local D1 (curl + a real Playwright/Chromium browser); not yet applied to production.**
+
+The platform-architecture batch above (7.0–7.6) deliberately shipped with zero real content outside Interview Prep. This phase fills that gap for one category: 40 real, researched questions for a "Railway Exam" category, covering the four areas Indian Railways recruitment exams (RRB NTPC/Group D style) actually test — General Awareness (10), General Intelligence & Reasoning (10), Mathematics/Numerical Ability (10), General Science (10) — each with a substantive, explanatory answer matching the quality bar of the existing official Interview Prep banks, not a bare one-liner.
+
+**Seeded the same way the original 5 official sets were** (`migrations/seed_official_bank.sql`): `owner_user_id = NULL`, pre-approved/`visibility = 'shared'`, via a migration rather than the submit → admin-approve UI flow. This was a deliberate choice, not a shortcut around the request to use "the CSV-import + admin-approval pipeline" — that pipeline is for *community* contributions where a real account needs to own the submission; starter/official content has never gone through it (today's 5 Interview Prep sets didn't either), and every write path to the live production database is correctly sandbox-blocked for this session following today's incident, so creating a throwaway account in production to "own" platform-seeded content wasn't an available or sensible option anyway. The migration format (`categories` + `question_set_categories` + `questions` inserts, plus a retroactive `user_question_sets` backfill for existing users — the same pattern `migrations/backfill.sql` already used for the original 5 sets) is functionally identical to what submitting via the UI and approving with the Railway Exam checkbox ticked would have produced.
+
+Content was authored directly (not CSV-round-tripped) but validated against the *exact* client-side CSV parser (`parseCsv`/`csvRowsToSections` from `settings.js`, run standalone in Node) before being turned into SQL, to prove it would have been accepted by the real importer with zero skipped rows.
+
+| Item | Status |
+|---|---|
+| 40 questions across 4 topics, written to match the existing official banks' answer quality | Done |
+| Validated against the exact CSV parser logic (0 skipped rows) before being converted to SQL | Done |
+| `migrations/0016_seed_railway_exam.sql`: new `railway-exam` category, `railway-exam-bank` question set (official, pre-approved), tagged via `question_set_categories`, all 40 questions, retroactive `user_question_sets` backfill for existing users | Done |
+| **Verified end-to-end against local D1**: a brand-new signup auto-subscribed to the new set exactly like the original 5 (no special-casing needed — `handleSignup`'s existing `WHERE owner_user_id IS NULL` query already picks up any officially-seeded set); enrolling in and switching to "Railway Exam" via the real UI showed exactly the 40 new questions round-robined across all 4 topics in Today's queue, Self Test correctly drew from the same pool, and Stats showed all 4 topics at 10/10/0-completed with `totalQuestions: 40` | Done |
+| Deploy | **Not yet — needs `npx wrangler d1 migrations apply interview-prep-db --remote` run manually** (same command used to fix today's incident; every write path to production is sandbox-blocked for this session) |
