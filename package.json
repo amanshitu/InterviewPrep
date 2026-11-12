@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
+    "dev:web": "vite dev",
+    "build:web": "tsc --noEmit && vite build",
     "db:create": "wrangler d1 create interview-prep-db",
     "db:migrate:local": "wrangler d1 execute interview-prep-db --local --file=./migrations/0001_init.sql",
     "db:migrate:remote": "wrangler d1 execute interview-prep-db --remote --file=./migrations/0001_init.sql",
@@ -24,6 +26,15 @@
     "tail": "wrangler tail"
   },
   "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
     "wrangler": "^4.20.0"
+  },
+  "dependencies": {
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
   }
 }

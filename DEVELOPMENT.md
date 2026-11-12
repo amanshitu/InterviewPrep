@@ -1289,4 +1289,28 @@ Fix (no architecture change needed — this was pure client-side timing, not a s
 | **Verified with Playwright**: simulated an 800ms-delayed `/api/me` on a refresh of an authenticated session — mid-flight, the splash was showing and the login screen was NOT (previously it would have been); logged-out visits still show the login screen immediately with no needless spinner wait; the `?reset=` deep link and the public `/about` route both still work correctly | Done |
 | Deploy | **Not yet** — this is a static-asset-only change (no D1 migration), so it just needs the next push to `main` to go live (Cloudflare's build pipeline auto-deploys on push) |
 
+## Phase 8.0 — React/TSX + Vite scaffold (pipeline proof, nothing cut over)
+
+**Status: toolchain proven end-to-end against a production-equivalent `wrangler dev`; `public/` and the live site are completely untouched.**
+
+Begins a multi-phase migration of the frontend (currently ~4,500 lines of hand-rolled vanilla JS in `public/app.js` + `public/pages/*.js`, a custom SPA router) to React + TypeScript (`.tsx`), organized and styled after the sibling project MealSathi's conventions, served as a genuine multi-page app — real `<a href>` navigation + full page reload between sections, not client-side routing — with an enhanced admin section and settings section to follow in later phases. Full plan (phasing 8.0-8.8, scope decisions, MealSathi conventions being borrowed) is in the approved plan doc from this session; summarized here per-phase as each one lands.
+
+Three scope decisions confirmed directly with the user before any code was written: TSX (not plain `.jsx` — MealSathi itself is 100% TypeScript, zero `.jsx` files, despite the initial request saying "jsx"), the existing backend (`src/worker.js`, raw SQL over D1) stays completely unchanged, and navigation between pages is genuinely multi-page (chosen explicitly over an SPA-with-routes alternative that's actually what MealSathi itself does).
+
+This phase is pure scaffolding risk-reduction: prove the whole new pipeline (TypeScript compiles, Vite's multi-page build mode produces correct output, a production-equivalent `wrangler dev` serves that output with clean URLs and correct CSP headers, a real browser renders it with zero console/CSP errors) on the single lowest-risk page — the standalone (pre-login) `/about` page, which has no auth-gated data — before anything else depends on it or `public/` is touched at all.
+
+- Added `web/` (Vite project root): `web/about.html` (first page entry), `web/src/entries/about.tsx` (mount point), `web/src/pages/AboutPage.tsx` (the actual component — a faithful TSX recreation of `public/pages/about.js`'s standalone view), `web/public/{styles.css,manifest.json,favicon.ico,icons/,theme-init.js}` (static assets Vite copies verbatim into `dist/`).
+- `theme-init.js` is the old inline `<head>` theme-flash-prevention script (previously sha256-hash-allowlisted in the CSP), now extracted to its own `'self'`-origin file — avoids needing a per-page CSP hash entry as more pages are added; every new page includes it the same `<script src="/theme-init.js">` way.
+- `vite.config.ts` (repo root): `root: "web"`, multi-page `build.rollupOptions.input` (one HTML entry per route, added incrementally as pages migrate), `outDir: "../dist"` — deliberately **not** `public/`, so the old app stays fully buildable/deployable right up until the Phase 8.8 cutover.
+- `tsconfig.json`, `package.json` scripts `dev:web` / `build:web` (`tsc --noEmit && vite build`). New deps: `react`, `react-dom`, `vite`, `@vitejs/plugin-react`, `typescript`, `@types/react`, `@types/react-dom`. (4 pre-existing high-severity `npm audit` findings are transitive deps of `wrangler`/`miniflare` itself, unrelated to these additions.)
+- `dist/` added to `.gitignore` (build artifact, not committed — matches not committing `.wrangler/`).
+
+| Item | Status |
+|---|---|
+| `npm run build:web` compiles clean (TS strict mode, zero errors) and produces a correct multi-page Vite build | Done |
+| Verified against a **production-equivalent** `wrangler dev` (temporarily pointed `[assets].directory` at `./dist` and `not_found_handling` at `"404-page"`, purely as a local verification step — reverted immediately after, nothing committed): `GET /about` (clean URL, no extension) → 200; `GET /about.html` → 307 redirect to the clean URL (Cloudflare's default); `GET /nonexistent` → 404; `GET /api/me` → 401 (API routing completely unaffected by the assets change) | Done |
+| Verified in a real browser (Playwright): zero console errors, zero CSP violations — the built module script loads from `'self'` with no inline-script hash needed; screenshot confirms pixel-level visual parity with the existing About page | Done |
+| Confirmed the live app (`public/`, original `wrangler.toml`) is byte-for-byte unaffected — re-verified `GET /` → 200 and `GET /api/me` → 401 against the untouched config after reverting | Done |
+| Deploy | **N/A for this phase** — nothing in `public/`, `wrangler.toml`, or any deployed behavior changed; this is net-new, currently-unreferenced source that the live site doesn't serve yet |
+
 
