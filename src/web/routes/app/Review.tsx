@@ -4,6 +4,7 @@ import { useToast } from "../../hooks/use-toast";
 import { getReview, submitReviewResult } from "../../api/queue";
 import { ApiError } from "../../api/client";
 import type { Question } from "../../api/types";
+import { BackIcon, CheckIcon, EyeIcon, RefreshIcon, ShuffleIcon } from "../../components/layout/icons";
 
 const DEFAULT_REVIEW_COUNT = 15;
 
@@ -82,11 +83,11 @@ function ReviewContent() {
           {batch ? batch.length : "…"} random questions pulled from your completed questions.
         </p>
         <div className="mt-3.5 flex flex-wrap gap-2">
-          <button type="button" onClick={reshuffle} className="rounded-md border border-border px-3 py-1.5 text-sm font-semibold text-foreground">
-            New batch
+          <button type="button" onClick={reshuffle} className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-semibold text-foreground">
+            <ShuffleIcon width={16} height={16} /> New batch
           </button>
-          <a href="/" className="rounded-md px-3 py-1.5 text-sm font-semibold text-muted-foreground">
-            Back to Today
+          <a href="/" className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold text-muted-foreground">
+            <BackIcon width={14} height={14} /> Back to Today
           </a>
         </div>
       </div>
@@ -111,18 +112,18 @@ function ReviewContent() {
                     <p className="mt-2 text-sm text-muted-foreground">Graded: {item.graded === "got_it" ? "Got it" : "Review again soon"}</p>
                   ) : (
                     <div className="mt-3 flex flex-wrap gap-2">
-                      <button type="button" onClick={() => grade(idx, "got_it")} className="rounded-md bg-success px-3 py-1.5 text-sm font-semibold text-success-foreground">
-                        Got it
+                      <button type="button" onClick={() => grade(idx, "got_it")} className="inline-flex items-center gap-1.5 rounded-md bg-success px-3 py-1.5 text-sm font-semibold text-success-foreground">
+                        <CheckIcon width={16} height={16} /> Got it
                       </button>
-                      <button type="button" onClick={() => grade(idx, "again")} className="rounded-md bg-warning px-3 py-1.5 text-sm font-semibold text-foreground">
-                        Review again soon
+                      <button type="button" onClick={() => grade(idx, "again")} className="inline-flex items-center gap-1.5 rounded-md bg-warning px-3 py-1.5 text-sm font-semibold text-foreground">
+                        <RefreshIcon width={16} height={16} /> Review again soon
                       </button>
                     </div>
                   )}
                 </>
               ) : (
-                <button type="button" onClick={() => reveal(idx)} className="mt-3 rounded-md border border-border px-3 py-1.5 text-sm font-semibold text-foreground">
-                  Show model answer
+                <button type="button" onClick={() => reveal(idx)} className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-semibold text-foreground">
+                  <EyeIcon width={16} height={16} /> Show model answer
                 </button>
               )}
               {item.times_shown ? <div className="mt-2 text-sm text-muted-foreground">Reviewed {item.times_shown}× before</div> : null}

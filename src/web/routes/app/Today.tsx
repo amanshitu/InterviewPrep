@@ -12,6 +12,7 @@ import {
 } from "../../api/queue";
 import { ApiError } from "../../api/client";
 import type { Question, User } from "../../api/types";
+import { CheckIcon, EyeIcon, PlusIcon, RefreshIcon, ShuffleIcon, SparkleIcon } from "../../components/layout/icons";
 
 const DEFAULT_REVIEW_COUNT = 15;
 
@@ -83,8 +84,8 @@ function QuestionCard({
           ) : null}
           <div className="mt-3 rounded-md bg-muted p-3 text-sm text-foreground">{q.a}</div>
           <div className="mt-3 flex flex-wrap gap-2">
-            <button type="button" onClick={onComplete} className="rounded-md bg-success px-3 py-1.5 text-sm font-semibold text-success-foreground">Got it</button>
-            <button type="button" onClick={onFlagReview} className="rounded-md bg-warning px-3 py-1.5 text-sm font-semibold text-foreground">Review again soon</button>
+            <button type="button" onClick={onComplete} className="inline-flex items-center gap-1.5 rounded-md bg-success px-3 py-1.5 text-sm font-semibold text-success-foreground"><CheckIcon width={16} height={16} /> Got it</button>
+            <button type="button" onClick={onFlagReview} className="inline-flex items-center gap-1.5 rounded-md bg-warning px-3 py-1.5 text-sm font-semibold text-foreground"><RefreshIcon width={16} height={16} /> Review again soon</button>
             {readAloud.isSpeechSupported() ? (
               <button
                 type="button"
@@ -97,8 +98,8 @@ function QuestionCard({
           </div>
         </>
       ) : (
-        <button type="button" onClick={onReveal} className="mt-3 rounded-md border border-border px-3 py-1.5 text-sm font-semibold text-foreground">
-          Show model answer
+        <button type="button" onClick={onReveal} className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-semibold text-foreground">
+          <EyeIcon width={16} height={16} /> Show model answer
         </button>
       )}
     </div>
@@ -248,8 +249,8 @@ function TodayContent({ user }: { user: User }) {
           ))}
         </div>
         {queue.remaining <= 0 ? (
-          <button type="button" onClick={handleRequestMore} className="mt-3.5 rounded-md border border-border px-3 py-1.5 text-sm font-semibold text-foreground">
-            Request 5 more questions
+          <button type="button" onClick={handleRequestMore} className="mt-3.5 inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-semibold text-foreground">
+            <PlusIcon width={16} height={16} /> Request 5 more questions
           </button>
         ) : null}
       </div>
@@ -274,8 +275,8 @@ function TodayContent({ user }: { user: User }) {
                     <span className="shrink-0 rounded-full bg-success/20 px-2 py-0.5 text-xs font-semibold text-foreground">Done</span>
                   </div>
                   <div className="mt-3 rounded-md bg-card p-3 text-sm text-foreground">{q.a}</div>
-                  <button type="button" onClick={() => handleMoveBackToReview(q.id)} className="mt-3 rounded-md bg-warning px-3 py-1.5 text-sm font-semibold text-foreground">
-                    Need Review
+                  <button type="button" onClick={() => handleMoveBackToReview(q.id)} className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-warning px-3 py-1.5 text-sm font-semibold text-foreground">
+                    <RefreshIcon width={16} height={16} /> Need Review
                   </button>
                 </div>
               ))}
@@ -293,21 +294,21 @@ function TodayContent({ user }: { user: User }) {
             <span>Count: <strong className="text-foreground">{reviewCount}</strong></span>
             <input type="range" min={10} max={20} step={1} value={reviewCount} onChange={(e) => setReviewCount(Number(e.target.value))} className="flex-1" />
           </div>
-          <a href={`/review?count=${reviewCount}`} className="mt-3.5 inline-block rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground">
-            Generate today's review
+          <a href={`/review?count=${reviewCount}`} className="mt-3.5 inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground">
+            <ShuffleIcon width={16} height={16} /> Generate today's review
           </a>
         </div>
         <div className="rounded-lg border border-border bg-card p-5">
           <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">AI-generated</div>
           <div className="mt-1 text-base font-bold text-foreground">Daily test</div>
           <p className="mt-1.5 text-sm text-muted-foreground">10 multiple-choice questions drawn from what you've completed — same set all day, so you can pick it back up.</p>
-          <a href="/test" className="mt-3.5 inline-block rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground">Start today's test</a>
+          <a href="/test" className="mt-3.5 inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground"><SparkleIcon width={16} height={16} /> Start today's test</a>
         </div>
         <div className="rounded-lg border border-border bg-card p-5">
           <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">AI-generated</div>
           <div className="mt-1 text-base font-bold text-foreground">Self Test</div>
           <p className="mt-1.5 text-sm text-muted-foreground">Write or speak your own answer to a random question, and get AI feedback on how it compares to the model answer.</p>
-          <a href="/self-test" className="mt-3.5 inline-block rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground">Start self test</a>
+          <a href="/self-test" className="mt-3.5 inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground"><SparkleIcon width={16} height={16} /> Start self test</a>
         </div>
         <div className="rounded-lg border border-border bg-card p-5">
           <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">AI-generated</div>
@@ -325,8 +326,8 @@ function TodayContent({ user }: { user: User }) {
               </button>
             ))}
           </div>
-          <a href={`/mock-interview?count=${mockCount}`} className="mt-3.5 inline-block rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground">
-            Start mock interview
+          <a href={`/mock-interview?count=${mockCount}`} className="mt-3.5 inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground">
+            <SparkleIcon width={16} height={16} /> Start mock interview
           </a>
         </div>
       </div>
