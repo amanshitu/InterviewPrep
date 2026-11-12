@@ -13,6 +13,15 @@ import { resolve } from "node:path";
 export default defineConfig({
   root: "src/web",
   plugins: [react(), tailwindcss()],
+  // `npm run dev:web` proxies /api to a `wrangler dev --local --port 8787`
+  // instance, so pages can be built and tested against the real (unchanged)
+  // backend without a full production build — only the final cutover pass
+  // needs the production-equivalent wrangler-dev-against-dist/ check.
+  server: {
+    proxy: {
+      "/api": "http://127.0.0.1:8787",
+    },
+  },
   build: {
     outDir: "../../dist",
     emptyOutDir: true,
