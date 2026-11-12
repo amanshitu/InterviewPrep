@@ -2,6 +2,7 @@ import { useState } from "react";
 import { approveSet, rejectSet, type PendingQuestionSet } from "../../api/admin";
 import type { Category } from "../../api/types";
 import { useToast } from "../../hooks/use-toast";
+import { CheckIcon, CloseIcon } from "../layout/icons";
 import { QuestionReviewPanel } from "./QuestionReviewPanel";
 
 export function PendingSetsPanel({
@@ -103,17 +104,17 @@ function PendingSetCard({
           type="button"
           onClick={() => void handleApprove()}
           disabled={busy}
-          className="rounded-md bg-success px-3 py-1.5 text-sm font-semibold text-background disabled:opacity-60"
+          className="inline-flex items-center gap-1.5 rounded-md bg-success px-3 py-1.5 text-sm font-semibold text-background disabled:opacity-60"
         >
-          Approve
+          <CheckIcon width={15} height={15} /> Approve
         </button>
         <button
           type="button"
           onClick={() => setRejecting((v) => !v)}
           disabled={busy}
-          className="rounded-md bg-destructive px-3 py-1.5 text-sm font-semibold text-background disabled:opacity-60"
+          className="inline-flex items-center gap-1.5 rounded-md bg-destructive px-3 py-1.5 text-sm font-semibold text-background disabled:opacity-60"
         >
-          Reject
+          <CloseIcon width={15} height={15} /> Reject
         </button>
       </div>
 
@@ -130,9 +131,9 @@ function PendingSetCard({
             type="button"
             onClick={() => void handleReject()}
             disabled={busy}
-            className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground"
+            className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground"
           >
-            Confirm reject
+            <CloseIcon width={15} height={15} /> Confirm reject
           </button>
         </div>
       ) : null}

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { getSetQuestions } from "../../api/admin";
 import { useToast } from "../../hooks/use-toast";
+import { CloseIcon, EyeIcon } from "../layout/icons";
 
 // Shared by the Pending Approvals and History panels — lets an admin expand
 // a set's actual question list before deciding (or to re-check an
@@ -40,8 +41,9 @@ export function QuestionReviewPanel({ setId }: { setId: string }) {
       <button
         type="button"
         onClick={() => void toggle()}
-        className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-muted"
+        className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-muted"
       >
+        {open ? <CloseIcon width={15} height={15} /> : <EyeIcon width={15} height={15} />}
         {open ? "Hide questions" : "Review questions"}
       </button>
       {open ? (

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getUsers, type AdminUserRow } from "../../api/admin";
 import { useToast } from "../../hooks/use-toast";
+import { ChevronLeftIcon, ChevronRightIcon } from "../layout/icons";
 import { StatusBadge } from "./StatusBadge";
 
 const PAGE_SIZE = 20;
@@ -81,9 +82,9 @@ export function UsersPanel() {
             type="button"
             disabled={page <= 1}
             onClick={() => setPage((p) => Math.max(1, p - 1))}
-            className="rounded-md border border-border px-2.5 py-1 disabled:opacity-40"
+            className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 disabled:opacity-40"
           >
-            Prev
+            <ChevronLeftIcon width={14} height={14} /> Prev
           </button>
           <span>
             Page {page} / {totalPages}
@@ -92,9 +93,9 @@ export function UsersPanel() {
             type="button"
             disabled={page >= totalPages}
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            className="rounded-md border border-border px-2.5 py-1 disabled:opacity-40"
+            className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 disabled:opacity-40"
           >
-            Next
+            Next <ChevronRightIcon width={14} height={14} />
           </button>
         </div>
       </div>

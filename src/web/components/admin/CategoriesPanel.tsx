@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { createCategory } from "../../api/admin";
 import type { Category } from "../../api/types";
 import { useToast } from "../../hooks/use-toast";
+import { PlusIcon } from "../layout/icons";
 
 export function CategoriesPanel({ categories, onCreated }: { categories: Category[]; onCreated: () => void }) {
   const [name, setName] = useState("");
@@ -72,9 +73,9 @@ export function CategoriesPanel({ categories, onCreated }: { categories: Categor
         <button
           type="submit"
           disabled={submitting}
-          className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+          className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
         >
-          {submitting ? "Creating…" : "Create category"}
+          <PlusIcon /> {submitting ? "Creating…" : "Create category"}
         </button>
       </form>
     </div>
