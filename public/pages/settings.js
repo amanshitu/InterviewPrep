@@ -792,6 +792,7 @@ async function loadMySets(container) {
       const row = el(`
         <div class="weak-row" style="margin-bottom:8px;">
           <span class="weak-row-label">${escapeHtml(s.title)}${s.track ? ` <span class="section-sub">(${escapeHtml(s.track)})</span>` : ""}</span>
+          <span class="pill pill-not_started">${s.question_count || 0} question${s.question_count === 1 ? "" : "s"}</span>
           ${renderSetStatusPill(s)}
           ${s.visibility === "private" || s.visibility === "rejected"
             ? `<button class="btn btn-ghost btn-small btn-icon-label" data-submit-review="${s.id}">${SEND_ICON} Submit for review</button>`

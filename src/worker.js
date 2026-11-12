@@ -1130,7 +1130,9 @@ async function handleCreateQuestionSet(request, env, user) {
 
 async function handleListMySets(request, env, user) {
   const rows = await env.DB.prepare(
-    "SELECT id, title, track, visibility, created_at, rejected_reason FROM question_sets WHERE owner_user_id = ? ORDER BY created_at DESC",
+    `SELECT qs.id as id, qs.title as title, qs.track as track, qs.visibility as visibility, qs.created_at as created_at, qs.rejected_reason as rejected_reason,
+            (SELECT COUNT(*) FROM questions q WHERE q.set_id = qs.id) as question_count
+     FROM question_sets qs WHERE qs.owner_user_id = ? ORDER BY qs.created_at DESC`,
   )
     .bind(user.id)
     .all();

@@ -912,3 +912,16 @@ This surfaced a real gap in Mock Interview (Phase 6.3): it previously auto-advan
 | Mock Interview summary: per-question list as compact bubble pairs | Done |
 | Verified via Playwright (network-stubbed analyze responses, same approach as Phase 6.3): Self Test shows exactly 3 bubbles in AI/user/AI order; Mock Interview correctly stays on "Question N of 3" after analyzing (does not auto-advance), updates the continue button's label on the final question ("See session summary"), and the summary renders 6 bubbles (3 question/score pairs) with the correct average | Done |
 | Deploy | Not yet — pending |
+
+## Phase 6.5 — question-count badge on "My question sets"
+
+**Status: implemented and verified with curl + a real Playwright/Chromium browser; not yet deployed.**
+
+"My question sets" already showed a color-coded visibility status pill (`renderSetStatusPill`); the only thing missing per the enhancement batch was a question-count chip. `handleListMySets` now returns a `question_count` per set via a correlated subquery against `questions`; the settings page renders it as a small neutral pill (reusing the existing `.pill-not_started` gray style, visually distinct from the colored status pill) right next to the status badge, with correct singular/plural ("1 question" vs "2 questions").
+
+| Item | Status |
+|---|---|
+| `handleListMySets` returns `question_count` per set | Done |
+| Question-count chip rendered next to the existing status pill, correct singular/plural | Done |
+| Verified via direct D1 seeding of 4 sets (private/pending/shared/rejected, with 2/0/1/0 questions respectively) — confirmed the API returns the right counts and the Settings page renders all 4 badge combinations correctly | Done |
+| Deploy | Not yet — pending |
