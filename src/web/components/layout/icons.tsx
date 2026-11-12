@@ -310,3 +310,39 @@ export function FlagIcon(props: SVGProps<SVGSVGElement>) {
     </Icon>
   );
 }
+
+export function SpeakerIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M5 9v6h4l5 4V5L9 9H5Z" strokeLinejoin="round" />
+      <path d="M16.5 9.5a4 4 0 0 1 0 5" />
+    </Icon>
+  );
+}
+
+export function StopIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <rect x="6" y="6" width="12" height="12" rx="1.5" />
+    </Icon>
+  );
+}
+
+export function ClockIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3.5 2" strokeLinecap="round" strokeLinejoin="round" />
+    </Icon>
+  );
+}
+
+export function UsersIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <circle cx="9" cy="8" r="3.2" />
+      <path d="M3 20c0-3.4 2.7-5.8 6-5.8s6 2.4 6 5.8" strokeLinecap="round" />
+      <path d="M16 8.2a3 3 0 0 1 0 5.9M19.5 20c0-2.8-1.8-4.9-4.2-5.6" strokeLinecap="round" />
+    </Icon>
+  );
+}

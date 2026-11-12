@@ -12,7 +12,7 @@ import {
 } from "../../api/queue";
 import { ApiError } from "../../api/client";
 import type { Question, User } from "../../api/types";
-import { CheckIcon, EyeIcon, PlusIcon, RefreshIcon, ShuffleIcon, SparkleIcon } from "../../components/layout/icons";
+import { CheckIcon, EyeIcon, PlusIcon, RefreshIcon, ShuffleIcon, SparkleIcon, SpeakerIcon, StopIcon } from "../../components/layout/icons";
 
 const DEFAULT_REVIEW_COUNT = 15;
 
@@ -90,9 +90,9 @@ function QuestionCard({
               <button
                 type="button"
                 onClick={() => readAloud.toggle(q.id, q.a)}
-                className="rounded-md border border-border px-3 py-1.5 text-sm font-semibold text-foreground"
+                className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-semibold text-foreground"
               >
-                {speaking ? "Stop reading" : "Read aloud"}
+                {speaking ? <StopIcon width={16} height={16} /> : <SpeakerIcon width={16} height={16} />} {speaking ? "Stop reading" : "Read aloud"}
               </button>
             ) : null}
           </div>

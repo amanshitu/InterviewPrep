@@ -56,22 +56,22 @@ export function Login() {
               role="tab"
               aria-selected={form === "login"}
               onClick={() => setForm("login")}
-              className={`flex-1 rounded-sm px-3 py-2 text-sm font-medium transition-colors ${
+              className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-sm px-3 py-2 text-sm font-medium transition-colors ${
                 form === "login" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
               }`}
             >
-              Sign in
+              <SendIcon width={14} height={14} /> Sign in
             </button>
             <button
               type="button"
               role="tab"
               aria-selected={form === "signup"}
               onClick={() => setForm("signup")}
-              className={`flex-1 rounded-sm px-3 py-2 text-sm font-medium transition-colors ${
+              className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-sm px-3 py-2 text-sm font-medium transition-colors ${
                 form === "signup" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
               }`}
             >
-              Create account
+              <PlusIcon width={14} height={14} /> Create account
             </button>
           </div>
         ) : null}

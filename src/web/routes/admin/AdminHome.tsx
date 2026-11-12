@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ComponentType, type SVGProps } from "react";
 import { getApprovalHistory, getOverview, getPendingSets, type AdminOverview, type ApprovalHistoryEntry, type PendingQuestionSet } from "../../api/admin";
 import { listCategories } from "../../api/categories";
 import type { Category } from "../../api/types";
 import { AppShell } from "../../components/layout/AppShell";
+import { ClockIcon, FolderIcon, RefreshIcon, UsersIcon } from "../../components/layout/icons";
 import { KpiCard } from "../../components/admin/KpiCard";
 import { Section } from "../../components/admin/Section";
 import { CategoriesPanel } from "../../components/admin/CategoriesPanel";
@@ -14,11 +15,11 @@ import type { User } from "../../api/types";
 
 type Tab = "categories" | "pending" | "history" | "users";
 
-const TABS: { key: Tab; label: string }[] = [
-  { key: "pending", label: "Pending Approvals" },
-  { key: "categories", label: "Categories" },
-  { key: "history", label: "History" },
-  { key: "users", label: "Users" },
+const TABS: { key: Tab; label: string; icon: ComponentType<SVGProps<SVGSVGElement>> }[] = [
+  { key: "pending", label: "Pending Approvals", icon: ClockIcon },
+  { key: "categories", label: "Categories", icon: FolderIcon },
+  { key: "history", label: "History", icon: RefreshIcon },
+  { key: "users", label: "Users", icon: UsersIcon },
 ];
 
 export function AdminHome() {
@@ -84,11 +85,11 @@ function AdminDashboard() {
             key={t.key}
             type="button"
             onClick={() => setTab(t.key)}
-            className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium ${
+            className={`inline-flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium ${
               tab === t.key ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
-            {t.label}
+            <t.icon width={15} height={15} /> {t.label}
             {t.key === "pending" && sets.length > 0 ? ` (${sets.length})` : ""}
           </button>
         ))}
