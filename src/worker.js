@@ -1699,7 +1699,24 @@ async function handleSelfTestAnalyze(request, env, user) {
     quota = await getSelfTestQuota(env, user);
   }
 
+  if (feedback.score !== null) {
+    await env.DB.prepare(
+      `INSERT INTO self_test_results (user_id, question_id, date, score) VALUES (?, ?, ?, ?)`,
+    )
+      .bind(user.id, questionId, todayDateStr(user.timezone), feedback.score)
+      .run();
+  }
+
   return json({ feedback, modelAnswer: question.a, generatedBy, quota });
+}
+
+async function handleGetSelfTestHistory(request, env, user) {
+  const { results } = await env.DB.prepare(
+    `SELECT date, score FROM self_test_results WHERE user_id = ? ORDER BY created_at ASC LIMIT 500`,
+  )
+    .bind(user.id)
+    .all();
+  return json({ history: results || [] });
 }
 
 // ---------- Stats: per-topic progress + accuracy (for "target areas") ----------
@@ -2123,6 +2140,9 @@ export default {
         }
         if (url.pathname === "/api/self-test/analyze" && request.method === "POST") {
           return applySecurityHeaders(await handleSelfTestAnalyze(request, env, user));
+        }
+        if (url.pathname === "/api/self-test/history" && request.method === "GET") {
+          return applySecurityHeaders(await handleGetSelfTestHistory(request, env, user));
         }
 
         const setAction = url.pathname.match(/^\/api\/question-sets\/([^/]+)\/(submit|subscribe)$/);

@@ -46,16 +46,46 @@ export async function render() {
 
   let events = [];
   let progress = null;
-  const [activityResult, progressResult] = await Promise.allSettled([
+  let selfTestHistory = [];
+  const [activityResult, progressResult, selfTestHistoryResult] = await Promise.allSettled([
     api("/api/activity?limit=2000"),
     api("/api/stats/progress"),
+    api("/api/self-test/history"),
   ]);
   if (activityResult.status === "fulfilled") events = activityResult.value.events || [];
   else toastError(activityResult.reason.message);
   if (progressResult.status === "fulfilled") progress = progressResult.value;
+  if (selfTestHistoryResult.status === "fulfilled") selfTestHistory = selfTestHistoryResult.value.history || [];
 
-  paint(events, progress);
+  paint(events, progress, selfTestHistory);
   loadInsight();
+}
+
+// Variant of buildBarChartSvg for 1-10 scores rather than 0-100 percentages:
+// bar height still scales 0-100 (score * 10) so it shares the same visual
+// scale as the accuracy chart, but the printed label is the real score.
+function buildScoreTrendSvg(data) {
+  const width = Math.max(320, data.length * 34);
+  const height = 140;
+  const step = width / data.length;
+  const barWidth = Math.min(28, step - 8);
+  const bars = data
+    .map((d, i) => {
+      const x = i * step + (step - barWidth) / 2;
+      const barHeight = Math.max(2, (d.value / 100) * (height - 30));
+      const y = height - 20 - barHeight;
+      return `
+        <rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barHeight.toFixed(1)}" rx="3" fill="var(--primary)"></rect>
+        <text x="${(x + barWidth / 2).toFixed(1)}" y="${(y - 5).toFixed(1)}" font-size="10" text-anchor="middle" fill="var(--text)">${d.score}</text>
+        <text x="${(x + barWidth / 2).toFixed(1)}" y="${height - 6}" font-size="10" text-anchor="middle" fill="var(--text-muted)">${escapeHtml(d.label)}</text>
+      `;
+    })
+    .join("");
+  const wrap = document.createElement("div");
+  wrap.style.overflowX = "auto";
+  wrap.style.marginTop = "12px";
+  wrap.innerHTML = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="Self Test score trend chart">${bars}</svg>`;
+  return wrap;
 }
 
 // A compact, tappable "this week" bar chart — real data (questions
@@ -207,7 +237,7 @@ async function loadInsight() {
   }
 }
 
-function paint(events, progress) {
+function paint(events, progress, selfTestHistory) {
   const currentUser = state.currentUser;
   const main = $("#main");
   main.innerHTML = "";
@@ -261,6 +291,30 @@ function paint(events, progress) {
     chartCard.appendChild(buildBarChartSvg(trendData));
   }
   view.appendChild(chartCard);
+
+  const byDayScore = {};
+  (selfTestHistory || []).forEach((r) => {
+    if (!byDayScore[r.date]) byDayScore[r.date] = [];
+    byDayScore[r.date].push(r.score);
+  });
+  const scoreDays = Object.keys(byDayScore).sort().slice(-14);
+  const scoreTrendData = scoreDays.map((d) => {
+    const scores = byDayScore[d];
+    const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+    return { label: d.slice(5), score: avg.toFixed(1), value: avg * 10 };
+  });
+  const scoreTrendCard = el(`
+    <div class="card">
+      <div class="section-title" style="font-size:16px;display:flex;align-items:center;gap:8px;">${SPARKLE_HEADER_ICON} Self Test score trend</div>
+      <p class="section-sub" style="margin-top:4px;">Average AI-graded score (1-10) per day, last ${scoreTrendData.length || 0} days.</p>
+    </div>
+  `);
+  if (scoreTrendData.length === 0) {
+    scoreTrendCard.appendChild(el(`<p class="section-sub" style="margin-top:14px;">No Self Test attempts yet — try it from Today's Self Test card.</p>`));
+  } else {
+    scoreTrendCard.appendChild(buildScoreTrendSvg(scoreTrendData));
+  }
+  view.appendChild(scoreTrendCard);
 
   view.appendChild(buildProgressByTopicCard(progress ? progress.topics : null));
 

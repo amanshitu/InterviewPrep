@@ -844,3 +844,20 @@ Touched `public/styles.css` only — every color is already referenced through t
 | Confirmed no hardcoded hex colors exist outside the token blocks (grepped the whole file) | Done |
 | Verified login screen, Today, and Settings pages in both light and dark via Playwright/Chromium — text legible, buttons pill-shaped, cards still rectangular | Done |
 | Deploy | Not yet — pending |
+
+## Phase 6.1 — Self Test score history + Stats trend chart
+
+**Status: implemented and verified with curl + a real Playwright/Chromium browser; not yet deployed.**
+
+Self Test (Phase 5.6) graded each attempt but never kept a record of past scores. New `self_test_results(user_id, question_id, date, score)` table (`migrations/0010_self_test_history.sql`) — a per-attempt score log, deliberately separate from `ai_token_usage` (which only tracks quota spend, not scores). `handleSelfTestAnalyze` now writes a row after every successfully-parsed analysis; a new `GET /api/self-test/history` returns a user's full history (bounded to the last 500 rows, same bounding convention as `/api/activity?limit=2000`).
+
+Stats page adds a third parallel fetch alongside its existing two, buckets scores by day, averages same-day attempts, and shows the last 14 days with data — the exact bucketing pattern the existing "Accuracy trend" card already uses. Chart rendering reuses that card's hand-built inline-SVG bar chart approach via a small variant (`buildScoreTrendSvg`): bar height still scales 0-100 (score × 10) so it shares the accuracy chart's visual scale, but the printed label is the real 1-10 score, not a percentage.
+
+| Item | Status |
+|---|---|
+| New `self_test_results` table + migration | Done |
+| `handleSelfTestAnalyze` persists a history row per successful analysis | Done |
+| New `GET /api/self-test/history` endpoint | Done |
+| New "Self Test score trend" card on Stats, same bucketing/card pattern as Accuracy trend | Done |
+| Verified end-to-end: seeded 5 days of synthetic scores (6/7/5/8/9) via direct D1, confirmed the history endpoint returns them, confirmed the Stats chart renders with matching bar heights and the correct score labels | Done |
+| Deploy | Not yet — pending |
