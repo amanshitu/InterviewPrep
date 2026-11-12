@@ -78,7 +78,7 @@ function BackIcon() {
 
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`rounded-[var(--radius)] border border-border bg-card p-6 text-card-foreground shadow-sm ${className}`}>
+    <div className={`rounded-(--radius) border border-border bg-card p-6 text-card-foreground shadow-sm ${className}`}>
       {children}
     </div>
   );
@@ -98,7 +98,7 @@ function FlowSection() {
       <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start">
         {FLOW_STEPS.map((step, idx) => (
           <React.Fragment key={step.title}>
-            <div className="flex min-w-[140px] flex-1 flex-col gap-1.5 rounded-[var(--radius-md)] bg-secondary p-4">
+            <div className="flex min-w-35 flex-1 flex-col gap-1.5 rounded-(--radius-md) bg-secondary p-4">
               <div className="flex size-9 items-center justify-center rounded-full bg-background text-primary">{step.icon}</div>
               <div className="text-sm font-semibold">{step.title}</div>
               <div className="text-xs text-muted-foreground">{step.desc}</div>
@@ -152,7 +152,7 @@ export function About() {
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto flex max-w-2xl flex-col gap-5 px-4 py-10">
-        <Card className="bg-gradient-to-br from-primary/10 to-transparent">
+        <Card className="bg-linear-to-br from-primary/10 to-transparent">
           <SectionTitle size="lg">What is Interview Prep Tracker?</SectionTitle>
           <p className="mt-2 text-sm text-muted-foreground">
             A daily interview-prep companion. Every day you get a personalized batch of questions sized to your own
@@ -200,7 +200,7 @@ export function About() {
         </Card>
 
         <a
-          className="inline-flex items-center justify-center gap-1.5 self-center rounded-[var(--radius-md)] px-3 py-2 text-sm font-medium text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+          className="inline-flex items-center justify-center gap-1.5 self-center rounded-(--radius-md) px-3 py-2 text-sm font-medium text-muted-foreground transition hover:bg-secondary hover:text-foreground"
           href="/login"
         >
           <BackIcon /> Back to sign in

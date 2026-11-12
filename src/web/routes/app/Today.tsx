@@ -202,7 +202,7 @@ function TodayContent({ user }: { user: User }) {
     <div className="flex flex-col gap-5">
       <div className="rounded-lg border border-border bg-card p-5">
         <div className="flex flex-wrap items-center gap-5">
-          <div className="min-w-[200px] flex-1">
+          <div className="min-w-50 flex-1">
             <div className="text-lg font-bold text-foreground">Welcome back, {user.name.split(" ")[0]}</div>
             <p className="mt-1.5 text-sm text-muted-foreground">
               {queue.completed} of {queue.target} questions done today{user.track ? ` · preparing for ${user.track}` : ""}

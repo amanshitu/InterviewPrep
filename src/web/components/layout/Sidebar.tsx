@@ -25,7 +25,7 @@ export function Sidebar({ user, onLogout }: { user: User; onLogout: () => void }
             <path d="M12 2 3 6.5v6C3 17.2 6.9 21.3 12 22.5 17.1 21.3 21 17.2 21 12.5v-6L12 2Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
             <path d="M8.5 12.2l2.3 2.3 4.7-4.9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          <span className="rail:max-w-0 rail:opacity-0 max-w-[140px] overflow-hidden whitespace-nowrap text-sm font-bold opacity-100 transition-[max-width,opacity] duration-(--rail-dur) ease-(--rail-ease)">
+          <span className="rail:max-w-0 rail:opacity-0 max-w-35 overflow-hidden whitespace-nowrap text-sm font-bold opacity-100 transition-[max-width,opacity] duration-(--rail-dur) ease-(--rail-ease)">
             Interview Prep
           </span>
         </a>
@@ -84,7 +84,7 @@ function SidebarLink({ href, label, Icon }: { href: string; label: string; Icon:
     >
       {active ? <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-primary" /> : null}
       <Icon className="shrink-0" />
-      <span className="rail:max-w-0 rail:opacity-0 max-w-[160px] overflow-hidden whitespace-nowrap opacity-100 transition-[max-width,opacity] duration-(--rail-dur) ease-(--rail-ease)">
+      <span className="rail:max-w-0 rail:opacity-0 max-w-40 overflow-hidden whitespace-nowrap opacity-100 transition-[max-width,opacity] duration-(--rail-dur) ease-(--rail-ease)">
         {label}
       </span>
     </a>

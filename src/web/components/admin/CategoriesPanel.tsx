@@ -49,7 +49,7 @@ export function CategoriesPanel({ categories, onCreated }: { categories: Categor
         )}
       </div>
       <form onSubmit={handleSubmit} className="mt-4 flex flex-wrap items-end gap-3">
-        <label className="flex min-w-[180px] flex-1 flex-col gap-1 text-sm font-medium text-muted-foreground">
+        <label className="flex min-w-45 flex-1 flex-col gap-1 text-sm font-medium text-muted-foreground">
           New category name
           <input
             type="text"
@@ -60,7 +60,7 @@ export function CategoriesPanel({ categories, onCreated }: { categories: Categor
             className="rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
           />
         </label>
-        <label className="flex min-w-[240px] flex-[2] flex-col gap-1 text-sm font-medium text-muted-foreground">
+        <label className="flex min-w-60 flex-2 flex-col gap-1 text-sm font-medium text-muted-foreground">
           Description (optional)
           <input
             type="text"

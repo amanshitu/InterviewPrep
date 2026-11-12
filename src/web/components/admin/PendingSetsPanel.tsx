@@ -125,7 +125,7 @@ function PendingSetCard({
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder="Reason for rejecting (optional)"
-            className="min-w-[220px] flex-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm text-foreground"
+            className="min-w-55 flex-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm text-foreground"
           />
           <button
             type="button"
