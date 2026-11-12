@@ -1054,3 +1054,25 @@ Key design decisions locked in with the user before this was built: progress on 
 | Backfill: one `interview-prep` category, all 5 official sets tagged into it, every existing user enrolled with current quota/streak copied across, set active | Done |
 | Verified zero behavior change: compared `users` vs. the new `user_categories` row for several existing accounts — `daily_quota`/`streak_count`/`streak_longest`/`streak_last_active` match exactly, `active_category_id` correctly set to `interview-prep` | Done |
 | Deploy | Not yet — pending |
+
+## Phase 7.1 — category-aware queue, quota, streak, and category endpoints
+
+**Status: implemented and verified end-to-end via curl against local D1; not yet deployed.**
+
+Makes the daily queue, quota ledger, and streak actually scope to a user's active category, on top of Phase 7.0's schema foundation. `daily_quota_ledger`'s primary key had to be rebuilt from `(user_id, date)` to `(user_id, category_id, date)` (migration `0013_category_scoped_ledger.sql`) — SQLite can't alter a primary key in place, and the old PK would otherwise reject a second category's ledger row for the same calendar day. Existing rows backfilled to `interview-prep`, same as Phase 7.0.
+
+Every query that decides "what's in today's queue for this category" now joins through the new `question_set_categories` table, filtered to `user.activeCategoryId` — `ensureTodayQueueFilled`'s fresh-candidate query, its backlog-carryover priority query, the already-queued count, `getTodayQueueQuestions`, and `getTodayCompletedQuestions`. Crucially, `user_question_progress` itself needed **zero** schema change: a shared question's set is simply tagged into 2+ categories, so the existing `WHERE p.question_id IS NULL` exclusion (globally keyed) is what makes "progress shared globally" fall out for free — once a shared question is done via one category, it's automatically excluded from every other category's queue too, with no extra code.
+
+Streak and quota moved off `users` onto `user_categories`, read via a `LEFT JOIN user_categories uc ON uc.user_id = u.id AND uc.category_id = u.active_category_id` added to `getUserFromRequest` and `handleLogin`'s queries (with `COALESCE(uc.*, u.*)` as a defensive fallback) — this is the key simplification from the plan: every other handler that reads `user.dailyQuota`/`user.streakCount`/etc. needed **zero changes**, since they just keep reading the same in-memory `user` object, which now transparently reflects the active category.
+
+New endpoints: `GET /api/categories` (list + enrollment status), `POST /api/categories/enroll`, `POST /api/categories/switch` (validates the user is actually enrolled first). `GET /api/me` now returns `activeCategoryId` and `enrolledCategories`.
+
+| Item | Status |
+|---|---|
+| `daily_quota_ledger` rebuilt with `category_id` in its primary key | Done |
+| Queue-fill, carryover, and completed/active question queries all scoped via `question_set_categories` | Done |
+| Streak/quota read from `user_categories` (active category), with every existing handler reading `user.dailyQuota`/`streakCount` unchanged | Done |
+| `handleCompleteQuestion`/`handleFlagQuestionForReview`/`handleRequestMore`/`handleUpdateProfile` updated to write to the active category's ledger/enrollment row instead of `users` | Done |
+| New `GET /api/categories`, `POST /api/categories/enroll`, `POST /api/categories/switch`; `GET /api/me` gains `activeCategoryId` + `enrolledCategories` | Done |
+| **Verified end-to-end against local D1**: seeded a second category ("Railway Exam") with a Railway-only question set and a question set shared between Railway and Interview Prep (simulating "GK shared with Police/Railway"). Confirmed: (1) switching active category to Railway shows *only* Railway + shared-GK questions — zero leakage of Interview Prep's hr/pm/em/tech/ai content; (2) completing the shared GK question under Railway bumps Railway's completed count; (3) switching back to Interview Prep shows its streak/quota completely untouched (still 0/0, independent of Railway's activity); (4) the shared GK question does not reappear in Interview Prep's *active* queue (globally done) but correctly still shows in Interview Prep's "completed today" list too, since it really was completed today regardless of which category surfaced it | Done |
+| Deploy | Not yet — pending |

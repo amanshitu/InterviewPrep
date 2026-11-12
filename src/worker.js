@@ -228,12 +228,18 @@ async function getUserFromRequest(request, env) {
   if (!token) return null;
   const row = await env.DB.prepare(
     `SELECT s.user_id as user_id, s.expires_at as expires_at, u.id as id, u.email as email, u.name as name,
-            u.created_at as created_at, u.track as track, u.role as role, u.daily_quota as daily_quota,
-            u.streak_count as streak_count, u.streak_longest as streak_longest, u.streak_last_active as streak_last_active,
+            u.created_at as created_at, u.track as track, u.role as role,
+            u.active_category_id as active_category_id,
+            COALESCE(uc.daily_quota, u.daily_quota) as daily_quota,
+            COALESCE(uc.streak_count, u.streak_count) as streak_count,
+            COALESCE(uc.streak_longest, u.streak_longest) as streak_longest,
+            COALESCE(uc.streak_last_active, u.streak_last_active) as streak_last_active,
             u.ai_provider as ai_provider, u.ai_key_ciphertext as ai_key_ciphertext, u.ai_key_iv as ai_key_iv,
             u.headline as headline, u.years_experience as years_experience, u.bio as bio, u.timezone as timezone,
             u.workers_ai_model as workers_ai_model, u.avatar_data as avatar_data
-     FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ?`,
+     FROM sessions s JOIN users u ON u.id = s.user_id
+     LEFT JOIN user_categories uc ON uc.user_id = u.id AND uc.category_id = u.active_category_id
+     WHERE s.token = ?`,
   )
     .bind(token)
     .first();
@@ -258,6 +264,7 @@ function mapUserRow(row) {
     createdAt: row.created_at,
     track: row.track,
     role: row.role,
+    activeCategoryId: row.active_category_id,
     dailyQuota: row.daily_quota,
     streakCount: row.streak_count,
     streakLongest: row.streak_longest,
@@ -282,6 +289,7 @@ function userPayload(user) {
     createdAt: user.createdAt,
     track: user.track,
     role: user.role,
+    activeCategoryId: user.activeCategoryId,
     dailyQuota: user.dailyQuota,
     streak: { count: user.streakCount || 0, longest: user.streakLongest || 0, lastActiveDate: user.streakLastActive || null },
     aiProvider: user.aiProvider || "workers-ai",
@@ -299,6 +307,60 @@ function clampQuota(n) {
   const v = parseInt(n, 10);
   if (!Number.isFinite(v)) return 10;
   return Math.min(50, Math.max(5, v));
+}
+
+// ---------- categories (multi-category platform) ----------
+async function handleListCategories(request, env, user) {
+  const { results } = await env.DB.prepare(
+    `SELECT c.id as id, c.name as name, c.description as description,
+            uc.user_id IS NOT NULL as enrolled
+     FROM categories c
+     LEFT JOIN user_categories uc ON uc.category_id = c.id AND uc.user_id = ?
+     WHERE c.is_active = 1
+     ORDER BY c.name ASC`,
+  )
+    .bind(user.id)
+    .all();
+  return json({ categories: (results || []).map((r) => ({ ...r, enrolled: !!r.enrolled })) });
+}
+
+async function handleEnrollCategory(request, env, user) {
+  const parsed = await readJsonBody(request, 500);
+  if (!parsed.ok) return json({ error: parsed.error }, { status: parsed.status });
+  const categoryId = (parsed.body.categoryId || "").toString();
+  const category = await env.DB.prepare("SELECT id FROM categories WHERE id = ? AND is_active = 1").bind(categoryId).first();
+  if (!category) return json({ error: "Unknown category." }, { status: 404 });
+
+  await env.DB.prepare(
+    "INSERT INTO user_categories (user_id, category_id, daily_quota) VALUES (?, ?, 10) ON CONFLICT(user_id, category_id) DO NOTHING",
+  )
+    .bind(user.id, categoryId)
+    .run();
+  return json({ ok: true });
+}
+
+async function handleSwitchCategory(request, env, user) {
+  const parsed = await readJsonBody(request, 500);
+  if (!parsed.ok) return json({ error: parsed.error }, { status: parsed.status });
+  const categoryId = (parsed.body.categoryId || "").toString();
+  const enrollment = await env.DB.prepare("SELECT user_id FROM user_categories WHERE user_id = ? AND category_id = ?")
+    .bind(user.id, categoryId)
+    .first();
+  if (!enrollment) return json({ error: "You're not enrolled in that category yet." }, { status: 400 });
+
+  await env.DB.prepare("UPDATE users SET active_category_id = ? WHERE id = ?").bind(categoryId, user.id).run();
+  return json({ ok: true, activeCategoryId: categoryId });
+}
+
+async function handleGetMe(request, env, user) {
+  const { results } = await env.DB.prepare(
+    `SELECT c.id as id, c.name as name FROM categories c
+     JOIN user_categories uc ON uc.category_id = c.id
+     WHERE uc.user_id = ? ORDER BY c.name ASC`,
+  )
+    .bind(user.id)
+    .all();
+  return json({ user: { ...userPayload(user), enrolledCategories: results || [] } });
 }
 
 // Everything keyed by "today" (the daily quota ledger, the daily test set,
@@ -386,11 +448,23 @@ async function handleSignup(request, env) {
   );
   if (subs.length) await env.DB.batch(subs);
 
+  // Every account also starts enrolled in the default category (same one
+  // existing accounts were backfilled into) with the quota they signed up
+  // with — a real category picker at signup comes in a later phase; for now
+  // this keeps new accounts working exactly like existing ones.
+  await env.DB.prepare(
+    "INSERT INTO user_categories (user_id, category_id, daily_quota) VALUES (?, 'interview-prep', ?)",
+  )
+    .bind(id, dailyQuota)
+    .run();
+  await env.DB.prepare("UPDATE users SET active_category_id = 'interview-prep' WHERE id = ?").bind(id).run();
+
   return startSession(
     env,
     id,
     userPayload({
       id, email, name, createdAt: now, track, role: "user", dailyQuota,
+      activeCategoryId: "interview-prep",
       streakCount: 0, streakLongest: 0, streakLastActive: null,
       aiProvider: null, aiKeyCiphertext: null, aiKeyIv: null,
       headline, yearsExperience: null, bio: null, timezone,
@@ -406,11 +480,19 @@ async function handleLogin(request, env) {
   const password = (body.password || "").toString();
 
   const user = await env.DB.prepare(
-    `SELECT id, email, name, password_hash, salt, created_at, track, role, daily_quota,
-            streak_count, streak_longest, streak_last_active,
-            ai_provider, ai_key_ciphertext, ai_key_iv, headline, years_experience, bio, timezone, workers_ai_model,
-            avatar_data
-     FROM users WHERE email = ?`,
+    `SELECT u.id as id, u.email as email, u.name as name, u.password_hash as password_hash, u.salt as salt,
+            u.created_at as created_at, u.track as track, u.role as role,
+            u.active_category_id as active_category_id,
+            COALESCE(uc.daily_quota, u.daily_quota) as daily_quota,
+            COALESCE(uc.streak_count, u.streak_count) as streak_count,
+            COALESCE(uc.streak_longest, u.streak_longest) as streak_longest,
+            COALESCE(uc.streak_last_active, u.streak_last_active) as streak_last_active,
+            u.ai_provider as ai_provider, u.ai_key_ciphertext as ai_key_ciphertext, u.ai_key_iv as ai_key_iv,
+            u.headline as headline, u.years_experience as years_experience, u.bio as bio, u.timezone as timezone,
+            u.workers_ai_model as workers_ai_model, u.avatar_data as avatar_data
+     FROM users u
+     LEFT JOIN user_categories uc ON uc.user_id = u.id AND uc.category_id = u.active_category_id
+     WHERE u.email = ?`,
   )
     .bind(email)
     .first();
@@ -632,11 +714,18 @@ async function handleUpdateProfile(request, env, user) {
   }
 
   await env.DB.prepare(
-    `UPDATE users SET track = ?, daily_quota = ?, ai_provider = ?, ai_key_ciphertext = ?, ai_key_iv = ?,
+    `UPDATE users SET track = ?, ai_provider = ?, ai_key_ciphertext = ?, ai_key_iv = ?,
             headline = ?, bio = ?, years_experience = ?, timezone = ?, workers_ai_model = ? WHERE id = ?`,
   )
-    .bind(track, dailyQuota, aiProvider, aiKeyCiphertext, aiKeyIv, headline, bio, yearsExperience, timezone, workersAiModel, user.id)
+    .bind(track, aiProvider, aiKeyCiphertext, aiKeyIv, headline, bio, yearsExperience, timezone, workersAiModel, user.id)
     .run();
+  // Quota is per-category (user_categories), not a column on users — update
+  // the active category's row, same one getUserFromRequest/handleLogin read.
+  if (user.activeCategoryId) {
+    await env.DB.prepare("UPDATE user_categories SET daily_quota = ? WHERE user_id = ? AND category_id = ?")
+      .bind(dailyQuota, user.id, user.activeCategoryId)
+      .run();
+  }
 
   return json({
     user: userPayload({
@@ -736,26 +825,35 @@ async function handleExportProgress(request, env, user) {
 // questions from a prior day get priority in today's queue, capped at 1x
 // the daily quota worth of backlog per day.
 
-async function getOrCreateTodayLedger(env, userId, dailyQuota, today) {
+async function getOrCreateTodayLedger(env, userId, categoryId, dailyQuota, today) {
   await env.DB.prepare(
-    `INSERT INTO daily_quota_ledger (user_id, date, base_quota, extra_requested, completed)
-     VALUES (?, ?, ?, 0, 0) ON CONFLICT(user_id, date) DO NOTHING`,
+    `INSERT INTO daily_quota_ledger (user_id, category_id, date, base_quota, extra_requested, completed)
+     VALUES (?, ?, ?, ?, 0, 0) ON CONFLICT(user_id, category_id, date) DO NOTHING`,
   )
-    .bind(userId, today, dailyQuota)
+    .bind(userId, categoryId, today, dailyQuota)
     .run();
-  return env.DB.prepare("SELECT * FROM daily_quota_ledger WHERE user_id = ? AND date = ?")
-    .bind(userId, today)
+  return env.DB.prepare("SELECT * FROM daily_quota_ledger WHERE user_id = ? AND category_id = ? AND date = ?")
+    .bind(userId, categoryId, today)
     .first();
 }
 
+// A question only counts toward "today's queue" for a given category if its
+// set is tagged into that category (question_set_categories). This is also
+// how a shared question (tagged into 2+ categories) naturally shows up in
+// each enrolled category's queue while its progress stays one shared row —
+// no category column needed on user_question_progress itself.
 async function ensureTodayQueueFilled(env, user, today) {
-  const ledger = await getOrCreateTodayLedger(env, user.id, user.dailyQuota, today);
+  const categoryId = user.activeCategoryId;
+  const ledger = await getOrCreateTodayLedger(env, user.id, categoryId, user.dailyQuota, today);
   const target = ledger.base_quota + ledger.extra_requested;
 
   const alreadyQueuedRow = await env.DB.prepare(
-    "SELECT COUNT(*) as n FROM user_question_progress WHERE user_id = ? AND queued_for_date = ? AND status != 'done'",
+    `SELECT COUNT(*) as n FROM user_question_progress p
+     JOIN questions q ON q.id = p.question_id
+     JOIN question_set_categories qsc ON qsc.set_id = q.set_id AND qsc.category_id = ?
+     WHERE p.user_id = ? AND p.queued_for_date = ? AND p.status != 'done'`,
   )
-    .bind(user.id, today)
+    .bind(categoryId, user.id, today)
     .first();
   const alreadyQueued = (alreadyQueuedRow && alreadyQueuedRow.n) || 0;
 
@@ -765,11 +863,13 @@ async function ensureTodayQueueFilled(env, user, today) {
   const carryCap = user.dailyQuota;
   const priorityLimit = Math.min(needed, carryCap);
   const priorityRows = await env.DB.prepare(
-    `SELECT question_id FROM user_question_progress
-     WHERE user_id = ? AND status != 'done' AND queued_for_date IS NOT NULL AND queued_for_date < ?
-     ORDER BY queued_for_date ASC LIMIT ?`,
+    `SELECT p.question_id as question_id FROM user_question_progress p
+     JOIN questions q ON q.id = p.question_id
+     JOIN question_set_categories qsc ON qsc.set_id = q.set_id AND qsc.category_id = ?
+     WHERE p.user_id = ? AND p.status != 'done' AND p.queued_for_date IS NOT NULL AND p.queued_for_date < ?
+     ORDER BY p.queued_for_date ASC LIMIT ?`,
   )
-    .bind(user.id, today, priorityLimit)
+    .bind(categoryId, user.id, today, priorityLimit)
     .all();
   const priorityIds = (priorityRows.results || []).map((r) => r.question_id);
 
@@ -782,11 +882,12 @@ async function ensureTodayQueueFilled(env, user, today) {
     const freshRows = await env.DB.prepare(
       `SELECT q.id as id, q.topic_order as topic_order FROM questions q
        JOIN user_question_sets uqs ON uqs.set_id = q.set_id AND uqs.user_id = ?
+       JOIN question_set_categories qsc ON qsc.set_id = q.set_id AND qsc.category_id = ?
        LEFT JOIN user_question_progress p ON p.user_id = ? AND p.question_id = q.id
        WHERE p.question_id IS NULL
        ORDER BY q.topic_order ASC, q.sort_order ASC LIMIT 5000`,
     )
-      .bind(user.id, user.id)
+      .bind(user.id, categoryId, user.id)
       .all();
     const byTopic = new Map();
     for (const r of freshRows.results || []) {
@@ -823,10 +924,11 @@ async function getTodayQueueQuestions(env, user, today) {
             p.status as status, p.last_result as last_result
      FROM user_question_progress p
      JOIN questions q ON q.id = p.question_id
+     JOIN question_set_categories qsc ON qsc.set_id = q.set_id AND qsc.category_id = ?
      WHERE p.user_id = ? AND p.queued_for_date = ? AND p.status != 'done'
      ORDER BY q.topic_order ASC, q.sort_order ASC`,
   )
-    .bind(user.id, today)
+    .bind(user.activeCategoryId, user.id, today)
     .all();
   return rows.results || [];
 }
@@ -840,10 +942,11 @@ async function getTodayCompletedQuestions(env, user, today) {
     `SELECT q.id as id, q.q as q, q.a as a, q.topic_label as topic_label, p.last_shown_at as last_shown_at
      FROM user_question_progress p
      JOIN questions q ON q.id = p.question_id
+     JOIN question_set_categories qsc ON qsc.set_id = q.set_id AND qsc.category_id = ?
      WHERE p.user_id = ? AND p.queued_for_date = ? AND p.status = 'done'
      ORDER BY p.last_shown_at DESC`,
   )
-    .bind(user.id, today)
+    .bind(user.activeCategoryId, user.id, today)
     .all();
   return rows.results || [];
 }
@@ -851,7 +954,7 @@ async function getTodayCompletedQuestions(env, user, today) {
 async function handleGetTodayQueue(request, env, user) {
   const today = todayDateStr(user.timezone);
   await ensureTodayQueueFilled(env, user, today);
-  const ledger = await getOrCreateTodayLedger(env, user.id, user.dailyQuota, today);
+  const ledger = await getOrCreateTodayLedger(env, user.id, user.activeCategoryId, user.dailyQuota, today);
   const questions = await getTodayQueueQuestions(env, user, today);
   const completedQuestions = await getTodayCompletedQuestions(env, user, today);
   const target = ledger.base_quota + ledger.extra_requested;
@@ -873,7 +976,7 @@ async function handleCompleteQuestion(request, env, user) {
 
   const today = todayDateStr(user.timezone);
   const now = new Date().toISOString();
-  await getOrCreateTodayLedger(env, user.id, user.dailyQuota, today);
+  await getOrCreateTodayLedger(env, user.id, user.activeCategoryId, user.dailyQuota, today);
 
   const existing = await env.DB.prepare("SELECT status FROM user_question_progress WHERE user_id = ? AND question_id = ?")
     .bind(user.id, questionId)
@@ -893,18 +996,21 @@ async function handleCompleteQuestion(request, env, user) {
     .run();
 
   if (!wasAlreadyDone) {
-    await env.DB.prepare("UPDATE daily_quota_ledger SET completed = completed + 1 WHERE user_id = ? AND date = ?")
-      .bind(user.id, today)
+    await env.DB.prepare("UPDATE daily_quota_ledger SET completed = completed + 1 WHERE user_id = ? AND category_id = ? AND date = ?")
+      .bind(user.id, user.activeCategoryId, today)
       .run();
 
     // Streak bump — same "consecutive calendar day" rule as before, now
-    // stored directly on the user row instead of inside a JSON blob.
+    // per-category (user_categories) instead of one global streak on users,
+    // so consistent practice in one category doesn't carry another's streak.
     const y = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
     if (user.streakLastActive !== today) {
       const newCount = user.streakLastActive === y ? (user.streakCount || 0) + 1 : 1;
       const newLongest = Math.max(user.streakLongest || 0, newCount);
-      await env.DB.prepare("UPDATE users SET streak_count = ?, streak_longest = ?, streak_last_active = ? WHERE id = ?")
-        .bind(newCount, newLongest, today, user.id)
+      await env.DB.prepare(
+        "UPDATE user_categories SET streak_count = ?, streak_longest = ?, streak_last_active = ? WHERE user_id = ? AND category_id = ?",
+      )
+        .bind(newCount, newLongest, today, user.id, user.activeCategoryId)
         .run();
     }
   }
@@ -941,7 +1047,7 @@ async function handleFlagQuestionForReview(request, env, user) {
 
   const today = todayDateStr(user.timezone);
   const now = new Date().toISOString();
-  await getOrCreateTodayLedger(env, user.id, user.dailyQuota, today);
+  await getOrCreateTodayLedger(env, user.id, user.activeCategoryId, user.dailyQuota, today);
 
   const existing = await env.DB.prepare("SELECT status FROM user_question_progress WHERE user_id = ? AND question_id = ?")
     .bind(user.id, questionId)
@@ -950,9 +1056,9 @@ async function handleFlagQuestionForReview(request, env, user) {
 
   if (wasDone) {
     await env.DB.prepare(
-      "UPDATE daily_quota_ledger SET completed = MAX(0, completed - 1) WHERE user_id = ? AND date = ?",
+      "UPDATE daily_quota_ledger SET completed = MAX(0, completed - 1) WHERE user_id = ? AND category_id = ? AND date = ?",
     )
-      .bind(user.id, today)
+      .bind(user.id, user.activeCategoryId, today)
       .run();
   }
 
@@ -982,14 +1088,14 @@ async function handleFlagQuestionForReview(request, env, user) {
 
 async function handleRequestMore(request, env, user) {
   const today = todayDateStr(user.timezone);
-  const ledger = await getOrCreateTodayLedger(env, user.id, user.dailyQuota, today);
+  const ledger = await getOrCreateTodayLedger(env, user.id, user.activeCategoryId, user.dailyQuota, today);
   const target = ledger.base_quota + ledger.extra_requested;
   if (ledger.completed < target) {
     return json({ error: "You still have questions left in today's queue." }, { status: 400 });
   }
 
-  await env.DB.prepare("UPDATE daily_quota_ledger SET extra_requested = extra_requested + ? WHERE user_id = ? AND date = ?")
-    .bind(EXTRA_BATCH, user.id, today)
+  await env.DB.prepare("UPDATE daily_quota_ledger SET extra_requested = extra_requested + ? WHERE user_id = ? AND category_id = ? AND date = ?")
+    .bind(EXTRA_BATCH, user.id, user.activeCategoryId, today)
     .run();
 
   await ensureTodayQueueFilled(env, user, today);
@@ -2162,7 +2268,16 @@ export default {
         if (!user) return applySecurityHeaders(json({ error: "Not authenticated." }, { status: 401 }));
 
         if (url.pathname === "/api/me" && request.method === "GET") {
-          return applySecurityHeaders(json({ user: userPayload(user) }));
+          return applySecurityHeaders(await handleGetMe(request, env, user));
+        }
+        if (url.pathname === "/api/categories" && request.method === "GET") {
+          return applySecurityHeaders(await handleListCategories(request, env, user));
+        }
+        if (url.pathname === "/api/categories/enroll" && request.method === "POST") {
+          return applySecurityHeaders(await handleEnrollCategory(request, env, user));
+        }
+        if (url.pathname === "/api/categories/switch" && request.method === "POST") {
+          return applySecurityHeaders(await handleSwitchCategory(request, env, user));
         }
         if (url.pathname === "/api/state" && request.method === "GET") {
           return applySecurityHeaders(await handleGetState(request, env, user));
