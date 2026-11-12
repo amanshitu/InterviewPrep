@@ -7,9 +7,9 @@ import { resolve } from "node:path";
 // (src/web/entries/*.tsx), served as real, separate documents — deliberately
 // not a client-side-routed SPA. The actual page content lives in
 // src/web/routes/{app,admin,auth,public}/*.tsx, mirroring MealSathi's
-// frontend folder convention. Entries are added one at a time as each page
-// is migrated (see DEVELOPMENT.md Phase 8.x); only about.html exists so far
-// (Phase 8.0, pipeline proof).
+// frontend folder convention. index.html (not today.html) is the Today
+// page specifically, so it resolves at "/" to match nav.ts's href and the
+// old app's root route.
 export default defineConfig({
   root: "src/web",
   plugins: [react(), tailwindcss()],
@@ -40,7 +40,16 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       input: {
+        index: resolve(__dirname, "src/web/index.html"),
         about: resolve(__dirname, "src/web/about.html"),
+        login: resolve(__dirname, "src/web/login.html"),
+        review: resolve(__dirname, "src/web/review.html"),
+        test: resolve(__dirname, "src/web/test.html"),
+        selfTest: resolve(__dirname, "src/web/self-test.html"),
+        mockInterview: resolve(__dirname, "src/web/mock-interview.html"),
+        stats: resolve(__dirname, "src/web/stats.html"),
+        settings: resolve(__dirname, "src/web/settings.html"),
+        admin: resolve(__dirname, "src/web/admin.html"),
       },
     },
   },

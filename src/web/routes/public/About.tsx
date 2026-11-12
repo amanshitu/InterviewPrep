@@ -201,7 +201,7 @@ export function About() {
 
         <a
           className="inline-flex items-center justify-center gap-1.5 self-center rounded-[var(--radius-md)] px-3 py-2 text-sm font-medium text-muted-foreground transition hover:bg-secondary hover:text-foreground"
-          href="/"
+          href="/login"
         >
           <BackIcon /> Back to sign in
         </a>
