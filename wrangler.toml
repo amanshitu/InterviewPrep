@@ -3,9 +3,13 @@ main = "src/worker/index.js"
 compatibility_date = "2025-01-01"
 
 [assets]
-directory = "./public"
+# Built by `npm run build:web` (Vite, multi-page mode — see vite.config.ts)
+# from src/web/. Every route is now a real document (true MPA, not a
+# client-side-routed SPA), so unlike the old app, an unmatched path should
+# genuinely 404 rather than falling back to index.html.
+directory = "./dist"
 binding = "ASSETS"
-not_found_handling = "single-page-application"
+not_found_handling = "404-page"
 # Without this, Cloudflare serves static files directly and never invokes
 # fetch() below for them, so security headers (CSP, nosniff, etc.) would
 # never get attached to index.html or other static responses.
