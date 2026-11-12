@@ -133,7 +133,7 @@ function TrendGraphic() {
 // (Phase 8.0), proving the Vite/React/TS build+serve+CSP pipeline before
 // anything else depends on it. The authenticated, shell-wrapped variant of
 // this same content is added once AppShell exists (Phase 8.1+).
-export function AboutPage() {
+export function About() {
   return (
     <div className="about-screen">
       <div className="about-standalone-wrap">
