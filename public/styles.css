@@ -75,6 +75,136 @@
   --shadow-2: 0 12px 30px rgba(0,0,0,0.5);
 }
 
+/* ---------- Accent colors (Settings -> Appearance) ----------
+   Overrides only the brand/interactive tokens (--primary and friends) —
+   --bg/--surface/--text etc. stay the warm neutral base regardless of
+   accent, same as --accent/--warn/--danger. "Terracotta" is the default
+   and needs no override block (it's just the :root/dark values above);
+   [data-accent] is unset for it, same convention as data-theme="system".
+   Each of the other 5 follows the exact 3-block pattern the base
+   light/dark theme above already uses: a light default, a system-dark
+   (prefers-color-scheme, no explicit data-theme="light"), and an explicit
+   dark (data-theme="dark") block — so an accent looks right in every
+   theme combination. */
+[data-accent="ocean"] {
+  --primary: #1f6f9c;
+  --primary-strong: #164f72;
+  --primary-soft: #dbeefb;
+  --on-primary: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"])[data-accent="ocean"] {
+    --primary: #5fb3e0;
+    --primary-strong: #7fc4ea;
+    --primary-soft: #123246;
+    --on-primary: #0d1f2b;
+  }
+}
+:root[data-theme="dark"][data-accent="ocean"] {
+  --primary: #5fb3e0;
+  --primary-strong: #7fc4ea;
+  --primary-soft: #123246;
+  --on-primary: #0d1f2b;
+}
+
+[data-accent="forest"] {
+  --primary: #1f7a4d;
+  --primary-strong: #155c38;
+  --primary-soft: #dff3e6;
+  --on-primary: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"])[data-accent="forest"] {
+    --primary: #5fcf8f;
+    --primary-strong: #7fdba3;
+    --primary-soft: #123a24;
+    --on-primary: #0d2518;
+  }
+}
+:root[data-theme="dark"][data-accent="forest"] {
+  --primary: #5fcf8f;
+  --primary-strong: #7fdba3;
+  --primary-soft: #123a24;
+  --on-primary: #0d2518;
+}
+
+[data-accent="plum"] {
+  --primary: #7a3a9c;
+  --primary-strong: #5c2b75;
+  --primary-soft: #f0e3f7;
+  --on-primary: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"])[data-accent="plum"] {
+    --primary: #c48ce0;
+    --primary-strong: #d4a6e8;
+    --primary-soft: #3a2645;
+    --on-primary: #231428;
+  }
+}
+:root[data-theme="dark"][data-accent="plum"] {
+  --primary: #c48ce0;
+  --primary-strong: #d4a6e8;
+  --primary-soft: #3a2645;
+  --on-primary: #231428;
+}
+
+[data-accent="rose"] {
+  --primary: #b8305a;
+  --primary-strong: #8f2244;
+  --primary-soft: #fbe3ea;
+  --on-primary: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"])[data-accent="rose"] {
+    --primary: #ec7fa0;
+    --primary-strong: #f299b3;
+    --primary-soft: #3a1a24;
+    --on-primary: #27121a;
+  }
+}
+:root[data-theme="dark"][data-accent="rose"] {
+  --primary: #ec7fa0;
+  --primary-strong: #f299b3;
+  --primary-soft: #3a1a24;
+  --on-primary: #27121a;
+}
+
+[data-accent="slate"] {
+  --primary: #3f5468;
+  --primary-strong: #2c3c4c;
+  --primary-soft: #e2e8ee;
+  --on-primary: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"])[data-accent="slate"] {
+    --primary: #93a9bd;
+    --primary-strong: #abc0d2;
+    --primary-soft: #26323d;
+    --on-primary: #141c22;
+  }
+}
+:root[data-theme="dark"][data-accent="slate"] {
+  --primary: #93a9bd;
+  --primary-strong: #abc0d2;
+  --primary-soft: #26323d;
+  --on-primary: #141c22;
+}
+
+/* Swatch buttons in the Settings accent picker — each shows its own
+   actual --primary as a filled circle so the choice is self-explanatory. */
+.accent-options { display: flex; gap: 10px; flex-wrap: wrap; }
+.accent-option {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  background: transparent; border: none; cursor: pointer; padding: 4px;
+  border-radius: var(--radius-md); font-size: 12px; color: var(--text-muted);
+}
+.accent-option-swatch {
+  width: 28px; height: 28px; border-radius: 999px; border: 2px solid var(--border);
+}
+.accent-option.is-active { color: var(--text); font-weight: 700; }
+.accent-option.is-active .accent-option-swatch { border-color: var(--text); }
+
 * { box-sizing: border-box; }
 html, body { height: 100%; }
 body {

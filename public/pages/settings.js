@@ -1,6 +1,6 @@
 // Account, prep profile, AI provider (BYOK), password/sessions, question
 // sets (upload + suggestions), and data export.
-import { $, $all, el, escapeHtml, toastSuccess, toastError, toastWarning, formatDate, downloadBlob, api, state, renderShell, renderNav, renderAvatar, refreshBankStats, isSpeechSupported, isWakeLockSupported, getReadAloudPrefs, setReadAloudPrefs, getVoiceOptions, toggleReadAloud, getAnswerFontSize, setAnswerFontSize, CAMERA_ICON, TRASH_ICON, SAVE_ICON, KEY_ICON, LOGOUT_ICON, DOWNLOAD_ICON, UPLOAD_ICON, SEND_ICON, PLUS_ICON, CLOSE_ICON, SPARKLE_ICON, COPY_ICON, SPEAKER_ICON, STOP_ICON } from "../app.js";
+import { $, $all, el, escapeHtml, toastSuccess, toastError, toastWarning, formatDate, downloadBlob, api, state, renderShell, renderNav, renderAvatar, refreshBankStats, isSpeechSupported, isWakeLockSupported, getReadAloudPrefs, setReadAloudPrefs, getVoiceOptions, toggleReadAloud, getAnswerFontSize, setAnswerFontSize, getAccent, setAccent, ACCENT_OPTIONS, CAMERA_ICON, TRASH_ICON, SAVE_ICON, KEY_ICON, LOGOUT_ICON, DOWNLOAD_ICON, UPLOAD_ICON, SEND_ICON, PLUS_ICON, CLOSE_ICON, SPARKLE_ICON, COPY_ICON, SPEAKER_ICON, STOP_ICON } from "../app.js";
 
 // Client-side resize keeps the uploaded picture small (well under the
 // server's MAX_AVATAR_DATA_URL_LENGTH backstop) without needing any file
@@ -155,6 +155,8 @@ export function render() {
   `));
 
   view.appendChild(buildAiProviderCard());
+
+  view.appendChild(buildAccentCard());
 
   view.appendChild(buildAnswerFontSizeCard());
 
@@ -345,6 +347,7 @@ export function render() {
   wireResumePromptCard(view);
   wireSuggestionsCard(view);
   wireAiProviderCard(view);
+  wireAccentCard(view);
   wireAnswerFontSizeCard(view);
   loadSelfTestQuota(view);
   if (isSpeechSupported()) wireReadAloudCard(view);
@@ -481,6 +484,37 @@ function buildAnswerFontSizeCard() {
 function wireAnswerFontSizeCard(view) {
   $all("#font-size-options .font-size-option", view).forEach((btn) => {
     btn.addEventListener("click", () => setAnswerFontSize(btn.dataset.size));
+  });
+}
+
+// ---------- Accent color ----------
+function buildAccentCard() {
+  const current = getAccent();
+  const swatches = ACCENT_OPTIONS.map(
+    (a) => `
+      <button type="button" class="accent-option${a.id === current ? " is-active" : ""}" data-accent-id="${a.id}" title="${escapeHtml(a.label)}">
+        <span class="accent-option-swatch" style="background:${a.swatch};"></span>
+        ${escapeHtml(a.label)}
+      </button>
+    `,
+  ).join("");
+  return el(`
+    <div class="card">
+      <div class="section-title">Accent color</div>
+      <p class="section-sub" style="margin-top:6px;">Changes the app's main interactive color (buttons, progress bars, highlights). Saved to this browser.</p>
+      <div class="accent-options" id="accent-options" style="margin-top:14px;">${swatches}</div>
+    </div>
+  `);
+}
+
+function wireAccentCard(view) {
+  $all("#accent-options .accent-option", view).forEach((btn) => {
+    btn.addEventListener("click", () => {
+      setAccent(btn.dataset.accentId);
+      $all("#accent-options .accent-option", view).forEach((b) => {
+        b.classList.toggle("is-active", b === btn);
+      });
+    });
   });
 }
 

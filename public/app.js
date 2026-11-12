@@ -735,6 +735,42 @@ function initAnswerFontSize() {
   setAnswerFontSize(getAnswerFontSize());
 }
 
+// ---------- accent color ----------
+// Same localStorage pattern as theme/answer-font-size. Only the picker UI
+// (Settings -> Appearance) wires clicks; the inline <head> script in
+// index.html replays the saved value before first paint to avoid a flash.
+const ACCENT_KEY = "accent";
+export const ACCENT_OPTIONS = [
+  { id: "terracotta", label: "Terracotta", swatch: "#c2501f" },
+  { id: "ocean", label: "Ocean", swatch: "#1f6f9c" },
+  { id: "forest", label: "Forest", swatch: "#1f7a4d" },
+  { id: "plum", label: "Plum", swatch: "#7a3a9c" },
+  { id: "rose", label: "Rose", swatch: "#b8305a" },
+  { id: "slate", label: "Slate", swatch: "#3f5468" },
+];
+
+export function getAccent() {
+  try {
+    const saved = localStorage.getItem(ACCENT_KEY);
+    return ACCENT_OPTIONS.some((a) => a.id === saved) ? saved : "terracotta";
+  } catch {
+    return "terracotta";
+  }
+}
+
+export function setAccent(accentId) {
+  if (accentId === "terracotta") {
+    document.documentElement.removeAttribute("data-accent");
+  } else {
+    document.documentElement.setAttribute("data-accent", accentId);
+  }
+  try {
+    localStorage.setItem(ACCENT_KEY, accentId);
+  } catch {
+    /* best-effort — localStorage unavailable */
+  }
+}
+
 // ---------- profile dropdown ----------
 function wireProfileMenu() {
   const menu = $("#profile-menu");

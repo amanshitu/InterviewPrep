@@ -949,3 +949,19 @@ A VAPID ECDSA P-256 key pair was generated locally (disposable script, not commi
 | Verified the full real-browser flow via Playwright/Chromium: enabling reminders actually created a working `PushSubscription` (a real `fcm.googleapis.com` endpoint) and saved it server-side; disabling removed it both client-side (`getSubscription()` returns null afterward) and the server-side D1 row | Done |
 | **VAPID_PRIVATE_KEY_JWK has not been registered as a live Worker secret** — `wrangler secret put` against the real Cloudflare account is a deliberate pause point (writes to shared/production infrastructure), held for explicit confirmation before running | Blocked — pending confirmation |
 | Deploy | Not yet — pending (and blocked on the secret above regardless) |
+
+## Phase 6.7 — selectable accent colors
+
+**Status: implemented and verified with a real Playwright/Chromium browser; not yet deployed.**
+
+After the Phase 6.0 rebrand, asked for additional modern theme options on top of the new warm default rather than only the one fixed palette. New "Accent color" card in Settings with 6 swatches (Terracotta — the default, Ocean, Forest, Plum, Rose, Slate); picking one re-themes the app live by overriding only the brand/interactive tokens (`--primary`/`--primary-strong`/`--primary-soft`/`--on-primary`) via a `[data-accent="x"]` attribute on `<html>` — `--bg`/`--surface`/`--text`/`--accent` (the separate decorative streak-icon token)/`--warn`/`--danger` etc. all stay the warm neutral base regardless of accent choice, same as the base theme's own light/dark split.
+
+Each non-default accent gets the same 3-block CSS pattern the base light/dark theme already uses (a light default, a `prefers-color-scheme: dark` block, and an explicit `data-theme="dark"` block) so every accent looks right in every theme combination, not just light mode. Persisted to `localStorage` (same pattern as theme/answer-font-size/read-aloud prefs) and replayed before first paint by the same inline `<head>` script that already prevents a theme flash — which meant recomputing that script's CSP hash (`script-src`), since its text changed; verified via Playwright that no CSP violation occurred after the change (confirmed only the expected pre-login 401 console entry, nothing else).
+
+| Item | Status |
+|---|---|
+| 6 selectable accents, each with light + dark variants, scoped to only the brand/interactive tokens | Done |
+| New Settings "Accent color" card, swatch buttons previewing each accent's actual color | Done |
+| Inline flash-prevention `<head>` script extended to also replay the saved accent; CSP `script-src` hash recomputed to match | Done |
+| Verified: default (Terracotta) matches the Phase 6.0 rebrand exactly; switching to another accent (Ocean) live-updates `--primary` and every element that reads it (brand wordmark, buttons, avatar, active nav) while leaving the base cream/brown surfaces untouched; confirmed via Chromium console that the recomputed CSP hash didn't break the inline script (no CSP-violation console errors, only the expected pre-login 401) | Done |
+| Deploy | Not yet — pending |

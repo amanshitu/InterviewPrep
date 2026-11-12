@@ -12,12 +12,14 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png?v=2" />
 <meta name="theme-color" content="#3730a3" />
 <script>
-  // Applied before first paint to avoid a flash of the wrong theme. The
-  // actual toggle UI lives in the topbar (app.js); this just replays
-  // whatever was saved last time, synchronously, before CSS renders.
+  // Applied before first paint to avoid a flash of the wrong theme/accent.
+  // The actual toggle UI lives in the topbar/Settings (app.js); this just
+  // replays whatever was saved last time, synchronously, before CSS renders.
   try {
     var t = localStorage.getItem("theme");
     if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+    var a = localStorage.getItem("accent");
+    if (a) document.documentElement.setAttribute("data-accent", a);
   } catch (e) { /* localStorage unavailable — falls back to system preference */ }
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">

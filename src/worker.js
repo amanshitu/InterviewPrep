@@ -17,7 +17,7 @@ const CONTENT_SECURITY_POLICY = [
   // before app.js (a deferred module) even loads, so it can't be external —
   // it's allowlisted by hash instead of 'unsafe-inline'. Recompute this if
   // that script's exact text ever changes (see index.html <head>).
-  "script-src 'self' 'sha256-rw5YrZYZj6hm+/yuCjO0eNdALBx5MSdW1bNmGMUfs1c='",
+  "script-src 'self' 'sha256-LBYsBVLhXWkf/9YHxDzIi/0rU6rD6eVxv1UKeUYswZY='",
   // Inline style="" attributes are used throughout app.js's templated markup;
   // rewriting all of them to avoid 'unsafe-inline' isn't worth it for this app.
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
