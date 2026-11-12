@@ -2266,17 +2266,38 @@ async function handleScheduled(env) {
     const today = todayDateStr(sub.timezone);
     if (sub.last_push_sent_date === today) continue;
 
-    const pending = await env.DB.prepare(
-      "SELECT COUNT(*) as n FROM user_question_progress WHERE user_id = ? AND queued_for_date = ? AND status != 'done'",
+    // Pending is now per-category (each enrolled category has its own
+    // queue/quota) — compute each separately via the same
+    // question_set_categories join every other category-scoped query uses,
+    // then combine any non-zero ones into a single reminder rather than
+    // sending one push per category.
+    const { results: enrolled } = await env.DB.prepare(
+      "SELECT c.id as id, c.name as name FROM categories c JOIN user_categories uc ON uc.category_id = c.id WHERE uc.user_id = ?",
     )
-      .bind(sub.user_id, today)
-      .first();
-    if (!pending || !pending.n) continue;
+      .bind(sub.user_id)
+      .all();
+    const perCategoryPending = [];
+    for (const cat of enrolled || []) {
+      const row = await env.DB.prepare(
+        `SELECT COUNT(*) as n FROM user_question_progress p
+         JOIN questions q ON q.id = p.question_id
+         JOIN question_set_categories qsc ON qsc.set_id = q.set_id AND qsc.category_id = ?
+         WHERE p.user_id = ? AND p.queued_for_date = ? AND p.status != 'done'`,
+      )
+        .bind(cat.id, sub.user_id, today)
+        .first();
+      if (row && row.n) perCategoryPending.push({ name: cat.name, n: row.n });
+    }
+    if (!perCategoryPending.length) continue;
+
+    const body = perCategoryPending.length === 1
+      ? `You still have ${perCategoryPending[0].n} question${perCategoryPending[0].n === 1 ? "" : "s"} left today.`
+      : perCategoryPending.map((c) => `${c.name}: ${c.n} left`).join(", ") + " today.";
 
     try {
       const resp = await sendWebPush(
         { endpoint: sub.endpoint, p256dh: sub.p256dh, auth: sub.auth },
-        { title: "Interview Prep", body: `You still have ${pending.n} question${pending.n === 1 ? "" : "s"} left today.`, url: "/" },
+        { title: "Interview Prep", body, url: "/" },
         env.VAPID_PUBLIC_KEY,
         vapidPrivateJwk,
         "mailto:support@example.com",

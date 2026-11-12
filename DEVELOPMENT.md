@@ -1150,3 +1150,20 @@ Admin's piece of the platform: a new "Categories" card at the top of the Admin p
 | Per-category checkboxes on each pending set; `handleApproveSet` tags `question_set_categories` from the selected ones, replacing any existing tags | Done |
 | **Verified end-to-end**: created a category via curl and via the actual admin UI form; submitted a question set for review and approved it with `categoryIds: ["interview-prep", "railway-exam"]` via curl — confirmed both `question_set_categories` rows were created, directly proving the "GK shared between Railway and Police" scenario from the original request; separately approved a second set through the real browser UI with only one checkbox ticked and confirmed via D1 that only that one category was tagged | Done |
 | Deploy | Not yet — pending |
+
+## Phase 7.6 — per-category push reminders
+
+**Status: implemented and verified against local D1 (same local-cron-trigger technique as Phase 6.6); not yet deployed. Closes out the multi-category platform batch (Phases 7.0–7.6).**
+
+The daily streak-reminder push (Phase 6.6) computed one combined "N questions left today" count across a user's entire queue — now that the queue is per-category, that count needs to be too, or it would just be wrong (either double-counting or missing categories depending on how the old query happened to interact with the new schema). `handleScheduled` now fetches each subscriber's enrolled categories and computes pending count per category via the same `question_set_categories` join every other category-scoped query uses, then combines any non-zero ones into a single reminder (`"Railway Exam: 4 left, Interview Prep: 2 left today."`) rather than sending one push per category — still exactly one notification per user per local day, just with accurate, category-aware content.
+
+| Item | Status |
+|---|---|
+| `handleScheduled` computes pending count per enrolled category (not one blended count) | Done |
+| Multiple non-zero categories combine into one message; a single pending category keeps the original, simpler wording | Done |
+| Verified via the local cron trigger (`/cdn-cgi/local/scheduled` + the Workers Logs observability API, same technique as Phase 6.6): a test user enrolled in both Interview Prep (10 pending) and Railway Exam (2 pending) produced the message "Interview Prep: 10 left, Railway Exam: 2 left today."; confirmed the send attempt against a fake endpoint failed gracefully as expected (no network simulator for push services locally either) and `last_push_sent_date` correctly stayed unset for retry | Done |
+| Deploy | Not yet — pending |
+
+---
+
+**Multi-category platform (Phases 7.0–7.6) — batch complete.** The app now supports a user enrolling in and switching between multiple distinct practice categories (today's Interview Prep content, plus any new categories like "Railway Exam"/"Police Exam" an admin creates), with queue/quota/streak/Self-Test/Daily-Test/Stats/push-reminders all correctly scoped per category, content shareable across categories via admin tagging, and zero behavior change for existing users/data. See the approved plan (multi-category platform) for the full design rationale and the three decisions locked in before building: shared-globally progress on shared content, multi-enrollment with a switcher, and architecture-only scope (no invented exam content).
