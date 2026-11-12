@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 import { resolve } from "node:path";
 
 // Multi-page build: each route gets its own thin HTML entry + mount point
@@ -11,7 +12,7 @@ import { resolve } from "node:path";
 // (Phase 8.0, pipeline proof).
 export default defineConfig({
   root: "src/web",
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   build: {
     outDir: "../../dist",
     emptyOutDir: true,
