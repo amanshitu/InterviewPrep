@@ -1205,3 +1205,23 @@ Seeded with the same convention as 0016 (`owner_user_id = NULL`, pre-approved/`v
 | `migrations/0017_police_exam_and_sharing.sql`: new `police-exam` category, `shared-gk-bank` (shared into Railway + Police), `police-exam-bank` (Police-only), retroactive tag of `railway-exam-bank` into `police-exam`, retroactive `user_question_sets` backfill | Done |
 | **Verified end-to-end against local D1, both directions**: a test user enrolled+switched to Police Exam saw `totalQuestions: 70` (40 retroactively-shared Railway + 15 shared GK + 15 Police-exclusive), with all 12 expected topics present; the same user switched back to Railway Exam saw `totalQuestions: 55` (its original 40 + the 15 shared GK), with **zero** Police-exclusive topics (Police Organization & Structure / Law & Legal Awareness / Current Affairs & Law Updates) leaking through — confirming sharing is correctly scoped per the `question_set_categories` tags on each set, not accidentally global | Done |
 | Deploy | **Not yet — needs `npx wrangler d1 migrations apply interview-prep-db --remote` run manually**, same as Phase 7.7 (which also hasn't been applied to production yet — check `wrangler d1 migrations list --remote` before assuming either is live) |
+
+## Phase 7.9 — SSC, Banking, and Teaching exam categories
+
+**Status: migration written and fully verified against local D1 (curl, all 5 categories); not yet applied to production.**
+
+Rounds out the exam-category lineup to five total (Interview Prep, Railway, Police, SSC, Banking, Teaching) and pushes the content-sharing model further: instead of authoring everything from scratch, `migrations/0018_ssc_banking_teaching.sql` reuses existing sets wherever the content is genuinely relevant, and adds exam-specific exclusive content only where it isn't.
+
+- **SSC Exam** and **Banking Exam** both tag in the existing `shared-gk-bank` (now serving 4 categories) *and* the existing `railway-exam-bank` reasoning/math/science set (now serving 4 categories too) — both exams test the same kind of quant/reasoning/general-awareness content Railway already has. Each then gets one exclusive set: `ssc-english-bank` (15 Q — English Language & Grammar) and `banking-awareness-bank` (15 Q — Banking & Financial Awareness).
+- **Teaching Exam** (CTET/TET) only tags in `shared-gk-bank` — pedagogy isn't served by Railway's reasoning/math content, so it deliberately isn't shared there — plus one exclusive set, `teaching-pedagogy-bank` (15 Q — Child Development & Pedagogy, covering Piaget/Vygotsky, assessment types, NEP 2020, etc.).
+
+Same seeding convention and CSV-validate-before-SQL-generate workflow as Phases 7.7/7.8 (all 45 new rows parsed with 0 skipped rows against the exact client-side `parseCsv`/`csvRowsToSections` logic before conversion). One schema mismatch was caught and fixed before applying: the generator script initially emitted `questions` rows with `question`/`answer` columns (matching 0016's naming) instead of the actual schema's `q`/`a`/`sort_order`/`created_at` columns used by 0017 — `wrangler d1 migrations apply --local` failed cleanly with `table questions has no column named question`, rolled back with nothing partially written, and the regenerated migration applied successfully on retry.
+
+| Item | Status |
+|---|---|
+| 45 new questions (15 SSC English + 15 Banking Awareness + 15 Teaching Pedagogy) | Done |
+| Validated against the exact CSV parser logic (0 skipped rows) before conversion to SQL | Done |
+| `migrations/0018_ssc_banking_teaching.sql`: 3 new categories, 2 retroactive shares of existing sets (GK + Railway bank into SSC/Banking, GK only into Teaching), 3 new exclusive sets, retroactive `user_question_sets` backfill | Done |
+| **Verified end-to-end against local D1**: SSC Exam and Banking Exam both correctly show `totalQuestions: 70` (40 Railway + 15 shared GK + 15 own-exclusive); Teaching Exam correctly shows `totalQuestions: 30` (15 shared GK + 15 own-exclusive, with no Railway content); re-checked Railway Exam (`55`, unchanged) and Police Exam (`70`, unchanged) to confirm adding three more categories didn't disturb any existing category's totals | Done |
+| Deploy | **Not yet — needs `npx wrangler d1 migrations apply interview-prep-db --remote`**, along with 0016 and 0017, which are also still pending on production |
+
