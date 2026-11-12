@@ -439,6 +439,10 @@ img { max-width: 100%; }
 }
 .profile-dropdown-item:hover { background: var(--surface-2); }
 .profile-dropdown-danger:hover { background: var(--danger-soft); color: var(--danger); }
+.profile-dropdown-item.is-active { background: var(--primary-soft); color: var(--primary); }
+.profile-dropdown-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--text-muted); padding: 4px 10px 2px; }
+.profile-dropdown-divider { height: 1px; background: var(--border); margin: 6px 4px; }
+.profile-dropdown-item-sub { font-size: 11.5px; font-weight: 500; color: var(--text-muted); }
 
 .main { flex: 1; min-width: 0; overflow-y: auto; padding: 28px 32px 60px; }
 .view { max-width: 880px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
@@ -752,6 +756,10 @@ input[type="range"] { accent-color: var(--primary); width: 160px; }
   .app-sheet-row svg { flex-shrink: 0; color: var(--text-muted); }
   .app-sheet-danger { color: var(--danger); }
   .app-sheet-danger svg { color: var(--danger); }
+  .app-sheet-row.is-active { background: var(--primary-soft); color: var(--primary); }
+  .app-sheet-row.is-active svg { color: var(--primary); }
+  .app-sheet-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--text-muted); padding: 10px 6px 4px; }
+  .app-sheet-row-sub { font-size: 11.5px; font-weight: 500; color: var(--text-muted); }
   .app-sheet-theme-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 6px; }
   .app-sheet-theme-label { font-size: 14px; font-weight: 600; }
   .app-sheet-textarea {

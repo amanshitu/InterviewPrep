@@ -1116,3 +1116,21 @@ Also brought **Daily Review** (`handleGetReview`) into the category-scoping patt
 | Daily Review (`handleGetReview`) brought into the same category-scoping pattern, for consistency with Self Test/Daily Test | Done |
 | **Verified end-to-end against local D1**: completing a Railway-only question shows it (and only it) in Stats' topic breakdown, the raw activity feed, and Daily Review's pool while active=Railway; switching back to Interview Prep shows all three as completely empty for that same activity — zero cross-category leakage anywhere in Stats | Done |
 | Deploy | Not yet — pending |
+
+## Phase 7.4 — category switcher (profile dropdown + mobile sheet)
+
+**Status: implemented and verified with a real Playwright/Chromium browser; not yet deployed.**
+
+The frontend piece that makes Phases 7.0–7.3's backend work actually usable: a category switcher in the desktop profile dropdown and the mobile profile sheet (the two places identity-scoped chrome already lives — both already fully re-rendered by the existing `renderShell()`). Lists every category the user is enrolled in (the active one highlighted and disabled), plus an "Enroll in another category" row that expands an inline list of not-yet-enrolled categories fetched from `GET /api/categories`. Picking an enrolled category calls `POST /api/categories/switch`; picking a new one calls `POST /api/categories/enroll` then `switch`. Either way, a shared `refreshUserAndCurrentPage()` helper re-fetches `/api/me`, updates `state.currentUser`, re-renders the shell, and re-dispatches the current route — so Today/Stats/everything else immediately reflects the new active category with no manual page reload.
+
+**Found and fixed a real bug while testing**: the switcher initially rendered with *zero* enrolled categories listed, even for a user who should have had "Interview Prep." Root cause — `handleSignup`/`handleLogin`/`handleChangePassword`/`handleUpdateAccount`/`handleUpdateProfile` all built their response's `user` object via the plain `userPayload()` helper, which only `handleGetMe` had been extended (in Phase 7.1) to wrap with `enrolledCategories`. Since the frontend sets `state.currentUser` directly from whichever response it's currently handling (never re-fetching `/api/me` separately after signup/login), every path *except* a later explicit `/api/me` call was silently missing the category list. Fixed by extracting a shared `userPayloadWithCategories(env, user)` helper and using it everywhere a user object is handed back to the frontend, not just in `handleGetMe`.
+
+**Deliberately not built this pass** (two items from the plan's Phase 7.4 scope, both superseded once the switcher proved itself fully functional): a signup-time category picker (would need a new unauthenticated `/api/categories`-style endpoint just for the signup form, for a capability the post-signup switcher already covers completely with zero friction — new accounts still auto-enroll into `interview-prep` exactly as before, and can add more the moment they want to); and a duplicate "Categories" card in Settings (the profile-menu switcher is reachable from literally every page already, so a second copy of the same enroll/switch UI would be pure redundancy, not new capability).
+
+| Item | Status |
+|---|---|
+| Category switcher rendered into both the desktop dropdown and mobile sheet from the same shared logic | Done |
+| Switch / enroll-then-switch, both re-rendering the shell and the current route live | Done |
+| **Bug found and fixed**: `userPayloadWithCategories()` extracted and applied to every endpoint that hands the frontend a user object (signup, login, password change, account/profile updates) — not just `/api/me` | Done |
+| Verified via Playwright on both desktop (profile dropdown) and mobile (profile sheet) viewports: enrolled categories list correctly (including immediately after signup), enrolling in a new category and switching to it both update the dropdown/sheet and the Today page's actual content (pending/target/questions) live, with no page reload | Done |
+| Deploy | Not yet — pending |

@@ -352,15 +352,28 @@ async function handleSwitchCategory(request, env, user) {
   return json({ ok: true, activeCategoryId: categoryId });
 }
 
-async function handleGetMe(request, env, user) {
+// Every response that hands the frontend a user object (signup, login,
+// password change, /api/me) needs enrolledCategories for the category
+// switcher — it's not part of userPayload() itself since it's a list, not
+// a scalar column joinable in the same query as getUserFromRequest's hot
+// path (that one only needs the scalar activeCategoryId).
+async function getEnrolledCategories(env, userId) {
   const { results } = await env.DB.prepare(
     `SELECT c.id as id, c.name as name FROM categories c
      JOIN user_categories uc ON uc.category_id = c.id
      WHERE uc.user_id = ? ORDER BY c.name ASC`,
   )
-    .bind(user.id)
+    .bind(userId)
     .all();
-  return json({ user: { ...userPayload(user), enrolledCategories: results || [] } });
+  return results || [];
+}
+
+async function userPayloadWithCategories(env, user) {
+  return { ...userPayload(user), enrolledCategories: await getEnrolledCategories(env, user.id) };
+}
+
+async function handleGetMe(request, env, user) {
+  return json({ user: await userPayloadWithCategories(env, user) });
 }
 
 // Everything keyed by "today" (the daily quota ledger, the daily test set,
@@ -462,7 +475,7 @@ async function handleSignup(request, env) {
   return startSession(
     env,
     id,
-    userPayload({
+    await userPayloadWithCategories(env, {
       id, email, name, createdAt: now, track, role: "user", dailyQuota,
       activeCategoryId: "interview-prep",
       streakCount: 0, streakLongest: 0, streakLastActive: null,
@@ -504,7 +517,7 @@ async function handleLogin(request, env) {
     return json({ error: "Incorrect email or password." }, { status: 401 });
   }
 
-  return startSession(env, user.id, userPayload(mapUserRow(user)));
+  return startSession(env, user.id, await userPayloadWithCategories(env, mapUserRow(user)));
 }
 
 async function startSession(env, userId, sessionUser) {
@@ -632,7 +645,7 @@ async function handleChangePassword(request, env, user) {
 
   // Rotate the session: issue a fresh token, drop the old one.
   await env.DB.prepare("DELETE FROM sessions WHERE token = ?").bind(user.token).run();
-  return startSession(env, user.id, userPayload(user));
+  return startSession(env, user.id, await userPayloadWithCategories(env, user));
 }
 
 async function handleRevokeAllSessions(request, env, user) {
@@ -666,7 +679,7 @@ async function handleUpdateAccount(request, env, user) {
   }
 
   await env.DB.prepare("UPDATE users SET name = ?, avatar_data = ? WHERE id = ?").bind(name, avatarData, user.id).run();
-  return json({ user: userPayload({ ...user, name, avatarData }) });
+  return json({ user: await userPayloadWithCategories(env, { ...user, name, avatarData }) });
 }
 
 const AI_PROVIDERS = ["workers-ai", "openai", "anthropic"];
@@ -728,7 +741,7 @@ async function handleUpdateProfile(request, env, user) {
   }
 
   return json({
-    user: userPayload({
+    user: await userPayloadWithCategories(env, {
       ...user, track, dailyQuota, aiProvider, aiKeyCiphertext, aiKeyIv, headline, bio, yearsExperience, timezone, workersAiModel,
     }),
   });
