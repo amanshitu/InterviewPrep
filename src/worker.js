@@ -11,12 +11,20 @@ const PASSWORD_RESET_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
-  "script-src 'self'",
+  // The theme-flash-prevention inline script in index.html's <head> runs
+  // before app.js (a deferred module) even loads, so it can't be external —
+  // it's allowlisted by hash instead of 'unsafe-inline'. Recompute this if
+  // that script's exact text ever changes (see index.html <head>).
+  "script-src 'self' 'sha256-rw5YrZYZj6hm+/yuCjO0eNdALBx5MSdW1bNmGMUfs1c='",
   // Inline style="" attributes are used throughout app.js's templated markup;
   // rewriting all of them to avoid 'unsafe-inline' isn't worth it for this app.
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com",
   "img-src 'self' data:",
+  // The Read aloud background-keep-alive track is a silent WAV built at
+  // runtime as a Blob and played from its blob: object URL — needed so
+  // background audio can keep speechSynthesis alive past a screen lock.
+  "media-src 'self' blob:",
   "connect-src 'self'",
   "base-uri 'self'",
   "form-action 'self'",
@@ -87,6 +95,34 @@ async function hashPassword(password, saltHex) {
     256,
   );
   return bytesToHex(new Uint8Array(bits));
+}
+
+// ---------- BYOK encryption ----------
+// Per-user AI provider keys are encrypted at rest with AES-GCM, using a
+// master key that only exists as a Worker secret (never in D1). Plaintext
+// keys only ever exist in memory for the duration of the request that
+// needs them.
+async function getMasterKey(env) {
+  const raw = hexToBytes(env.AI_KEY_ENCRYPTION_SECRET);
+  return crypto.subtle.importKey("raw", raw, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+}
+
+async function encryptSecret(env, plaintext) {
+  const key = await getMasterKey(env);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const enc = new TextEncoder().encode(plaintext);
+  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, enc);
+  return { ciphertext: bytesToHex(new Uint8Array(ciphertext)), iv: bytesToHex(iv) };
+}
+
+async function decryptSecret(env, ciphertextHex, ivHex) {
+  const key = await getMasterKey(env);
+  const plainBuf = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: hexToBytes(ivHex) },
+    key,
+    hexToBytes(ciphertextHex),
+  );
+  return new TextDecoder().decode(plainBuf);
 }
 
 // Reads and parses a JSON request body, defensively capping its size so a
@@ -189,7 +225,13 @@ async function getUserFromRequest(request, env) {
   const token = cookies[SESSION_COOKIE];
   if (!token) return null;
   const row = await env.DB.prepare(
-    "SELECT s.user_id as user_id, s.expires_at as expires_at, u.id as id, u.email as email, u.name as name, u.created_at as created_at FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ?",
+    `SELECT s.user_id as user_id, s.expires_at as expires_at, u.id as id, u.email as email, u.name as name,
+            u.created_at as created_at, u.track as track, u.role as role, u.daily_quota as daily_quota,
+            u.streak_count as streak_count, u.streak_longest as streak_longest, u.streak_last_active as streak_last_active,
+            u.ai_provider as ai_provider, u.ai_key_ciphertext as ai_key_ciphertext, u.ai_key_iv as ai_key_iv,
+            u.headline as headline, u.years_experience as years_experience, u.bio as bio, u.timezone as timezone,
+            u.workers_ai_model as workers_ai_model, u.avatar_data as avatar_data
+     FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ?`,
   )
     .bind(token)
     .first();
@@ -198,8 +240,88 @@ async function getUserFromRequest(request, env) {
     await env.DB.prepare("DELETE FROM sessions WHERE token = ?").bind(token).run();
     return null;
   }
-  return { id: row.id, email: row.email, name: row.name, createdAt: row.created_at, token };
+  return { ...mapUserRow(row), token };
 }
+
+// Normalizes a raw D1 users-table row (snake_case columns) into the same
+// camelCase shape getUserFromRequest() returns, so handleLogin/handleSignup
+// can build a session payload the same way instead of hand-rolling a
+// second, easy-to-drift-from-reality object literal (a real earlier bug:
+// the login response was missing aiProvider/hasAiKey entirely).
+function mapUserRow(row) {
+  return {
+    id: row.id,
+    email: row.email,
+    name: row.name,
+    createdAt: row.created_at,
+    track: row.track,
+    role: row.role,
+    dailyQuota: row.daily_quota,
+    streakCount: row.streak_count,
+    streakLongest: row.streak_longest,
+    streakLastActive: row.streak_last_active,
+    aiProvider: row.ai_provider,
+    aiKeyCiphertext: row.ai_key_ciphertext,
+    aiKeyIv: row.ai_key_iv,
+    headline: row.headline,
+    yearsExperience: row.years_experience,
+    bio: row.bio,
+    timezone: row.timezone,
+    workersAiModel: row.workers_ai_model,
+    avatarData: row.avatar_data,
+  };
+}
+
+function userPayload(user) {
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    createdAt: user.createdAt,
+    track: user.track,
+    role: user.role,
+    dailyQuota: user.dailyQuota,
+    streak: { count: user.streakCount || 0, longest: user.streakLongest || 0, lastActiveDate: user.streakLastActive || null },
+    aiProvider: user.aiProvider || "workers-ai",
+    hasAiKey: !!user.aiKeyCiphertext,
+    headline: user.headline || "",
+    yearsExperience: typeof user.yearsExperience === "number" ? user.yearsExperience : null,
+    bio: user.bio || "",
+    timezone: user.timezone || "UTC",
+    workersAiModel: WORKERS_AI_MODEL_IDS.includes(user.workersAiModel) ? user.workersAiModel : DEFAULT_WORKERS_AI_MODEL,
+    avatarData: user.avatarData || null,
+  };
+}
+
+function clampQuota(n) {
+  const v = parseInt(n, 10);
+  if (!Number.isFinite(v)) return 10;
+  return Math.min(50, Math.max(5, v));
+}
+
+// Everything keyed by "today" (the daily quota ledger, the daily test set,
+// AI usage caps) should reset at the user's own midnight, not an arbitrary
+// UTC one — defaults to UTC only if the stored timezone is missing/invalid.
+function todayDateStr(timezone) {
+  try {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: timezone || "UTC" }).format(new Date());
+  } catch {
+    return new Date().toISOString().slice(0, 10);
+  }
+}
+
+const VALID_TIMEZONE_FALLBACK = "UTC";
+function normalizeTimezone(tz) {
+  if (!tz || typeof tz !== "string") return VALID_TIMEZONE_FALLBACK;
+  try {
+    Intl.DateTimeFormat("en-CA", { timeZone: tz });
+    return tz.slice(0, 60);
+  } catch {
+    return VALID_TIMEZONE_FALLBACK;
+  }
+}
+
+const EXTRA_BATCH = 5;
 
 function defaultState() {
   return {
@@ -217,6 +339,10 @@ async function handleSignup(request, env) {
   const name = (body.name || "").toString().trim();
   const email = (body.email || "").toString().trim().toLowerCase();
   const password = (body.password || "").toString();
+  const track = body.track ? String(body.track).trim().slice(0, 120) : null;
+  const dailyQuota = clampQuota(body.dailyQuota);
+  const headline = body.headline ? String(body.headline).trim().slice(0, 140) : null;
+  const timezone = normalizeTimezone(body.timezone);
 
   if (!name) return json({ error: "Please enter your name." }, { status: 400 });
   if (!isValidEmail(email)) return json({ error: "Please enter a valid email." }, { status: 400 });
@@ -237,9 +363,9 @@ async function handleSignup(request, env) {
   const now = new Date().toISOString();
 
   await env.DB.prepare(
-    "INSERT INTO users (id, email, name, password_hash, salt, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+    "INSERT INTO users (id, email, name, password_hash, salt, created_at, track, daily_quota, headline, timezone) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
   )
-    .bind(id, email, name, passwordHash, salt, now)
+    .bind(id, email, name, passwordHash, salt, now, track, dailyQuota, headline, timezone)
     .run();
 
   await env.DB.prepare(
@@ -248,7 +374,26 @@ async function handleSignup(request, env) {
     .bind(id, JSON.stringify(defaultState()), now)
     .run();
 
-  return startSession(env, id, { id, email, name, createdAt: now });
+  // Every account starts subscribed to all official (non-user-owned) sets —
+  // that's the shared HR/behavioral etc. curriculum everyone gets by default.
+  const officialSets = await env.DB.prepare("SELECT id FROM question_sets WHERE owner_user_id IS NULL").all();
+  const subs = (officialSets.results || []).map((s) =>
+    env.DB.prepare(
+      "INSERT INTO user_question_sets (user_id, set_id, subscribed_at) VALUES (?, ?, ?) ON CONFLICT(user_id, set_id) DO NOTHING",
+    ).bind(id, s.id, now),
+  );
+  if (subs.length) await env.DB.batch(subs);
+
+  return startSession(
+    env,
+    id,
+    userPayload({
+      id, email, name, createdAt: now, track, role: "user", dailyQuota,
+      streakCount: 0, streakLongest: 0, streakLastActive: null,
+      aiProvider: null, aiKeyCiphertext: null, aiKeyIv: null,
+      headline, yearsExperience: null, bio: null, timezone,
+    }),
+  );
 }
 
 async function handleLogin(request, env) {
@@ -259,7 +404,11 @@ async function handleLogin(request, env) {
   const password = (body.password || "").toString();
 
   const user = await env.DB.prepare(
-    "SELECT id, email, name, password_hash, salt, created_at FROM users WHERE email = ?",
+    `SELECT id, email, name, password_hash, salt, created_at, track, role, daily_quota,
+            streak_count, streak_longest, streak_last_active,
+            ai_provider, ai_key_ciphertext, ai_key_iv, headline, years_experience, bio, timezone, workers_ai_model,
+            avatar_data
+     FROM users WHERE email = ?`,
   )
     .bind(email)
     .first();
@@ -271,15 +420,10 @@ async function handleLogin(request, env) {
     return json({ error: "Incorrect email or password." }, { status: 401 });
   }
 
-  return startSession(env, user.id, {
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    createdAt: user.created_at,
-  });
+  return startSession(env, user.id, userPayload(mapUserRow(user)));
 }
 
-async function startSession(env, userId, userPayload) {
+async function startSession(env, userId, sessionUser) {
   const token = randomHex(32);
   const now = Date.now();
   const expiresAt = new Date(now + SESSION_TTL_MS).toISOString();
@@ -290,7 +434,7 @@ async function startSession(env, userId, userPayload) {
     .run();
 
   return json(
-    { user: userPayload },
+    { user: sessionUser },
     {
       status: 200,
       headers: { "Set-Cookie": sessionCookieHeader(token, SESSION_TTL_MS / 1000) },
@@ -404,12 +548,7 @@ async function handleChangePassword(request, env, user) {
 
   // Rotate the session: issue a fresh token, drop the old one.
   await env.DB.prepare("DELETE FROM sessions WHERE token = ?").bind(user.token).run();
-  return startSession(env, user.id, {
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    createdAt: user.createdAt,
-  });
+  return startSession(env, user.id, userPayload(user));
 }
 
 async function handleRevokeAllSessions(request, env, user) {
@@ -417,14 +556,91 @@ async function handleRevokeAllSessions(request, env, user) {
   return json({ ok: true }, { headers: { "Set-Cookie": clearCookieHeader() } });
 }
 
+// Client-side canvas resizing (settings.js) keeps real uploads far below
+// this — it's a hard backstop against an oversized data URL landing in D1.
+const MAX_AVATAR_DATA_URL_LENGTH = 400000;
+
 async function handleUpdateAccount(request, env, user) {
-  const parsed = await readJsonBody(request);
+  const parsed = await readJsonBody(request, MAX_AVATAR_DATA_URL_LENGTH + 2000);
   if (!parsed.ok) return json({ error: parsed.error }, { status: parsed.status });
   const name = (parsed.body.name || "").toString().trim();
   if (!name) return json({ error: "Please enter your name." }, { status: 400 });
 
-  await env.DB.prepare("UPDATE users SET name = ? WHERE id = ?").bind(name, user.id).run();
-  return json({ user: { id: user.id, email: user.email, name, createdAt: user.createdAt } });
+  let avatarData = user.avatarData || null;
+  if (Object.prototype.hasOwnProperty.call(parsed.body, "avatarData")) {
+    const raw = parsed.body.avatarData;
+    if (raw === null) {
+      avatarData = null;
+    } else if (typeof raw === "string" && /^data:image\/(png|jpeg|webp);base64,/.test(raw)) {
+      if (raw.length > MAX_AVATAR_DATA_URL_LENGTH) {
+        return json({ error: "Image is too large. Please choose a smaller picture." }, { status: 400 });
+      }
+      avatarData = raw;
+    } else {
+      return json({ error: "Invalid image data." }, { status: 400 });
+    }
+  }
+
+  await env.DB.prepare("UPDATE users SET name = ?, avatar_data = ? WHERE id = ?").bind(name, avatarData, user.id).run();
+  return json({ user: userPayload({ ...user, name, avatarData }) });
+}
+
+const AI_PROVIDERS = ["workers-ai", "openai", "anthropic"];
+
+async function handleUpdateProfile(request, env, user) {
+  const parsed = await readJsonBody(request, 4000);
+  if (!parsed.ok) return json({ error: parsed.error }, { status: parsed.status });
+  const body = parsed.body;
+  const track = body.track !== undefined ? (body.track ? String(body.track).trim().slice(0, 120) : null) : user.track;
+  const dailyQuota = body.dailyQuota !== undefined ? clampQuota(body.dailyQuota) : user.dailyQuota;
+  const headline = body.headline !== undefined ? (body.headline ? String(body.headline).trim().slice(0, 140) : null) : user.headline;
+  const bio = body.bio !== undefined ? (body.bio ? String(body.bio).trim().slice(0, 600) : null) : user.bio;
+  const yearsExperience =
+    body.yearsExperience !== undefined
+      ? (body.yearsExperience === null || body.yearsExperience === "" ? null : Math.max(0, Math.min(60, parseInt(body.yearsExperience, 10) || 0)))
+      : user.yearsExperience;
+  const timezone = body.timezone !== undefined ? normalizeTimezone(body.timezone) : user.timezone;
+  const workersAiModel =
+    body.workersAiModel !== undefined
+      ? (WORKERS_AI_MODEL_IDS.includes(body.workersAiModel) ? body.workersAiModel : DEFAULT_WORKERS_AI_MODEL)
+      : user.workersAiModel;
+
+  let aiProvider = user.aiProvider;
+  let aiKeyCiphertext = user.aiKeyCiphertext;
+  let aiKeyIv = user.aiKeyIv;
+
+  if (body.aiApiKey === "") {
+    // Explicit clear: drop back to the shared Workers AI default.
+    aiProvider = null;
+    aiKeyCiphertext = null;
+    aiKeyIv = null;
+  } else if (typeof body.aiApiKey === "string" && body.aiApiKey.trim()) {
+    const provider = AI_PROVIDERS.includes(body.aiProvider) ? body.aiProvider : "openai";
+    if (provider === "workers-ai") {
+      return json({ error: "Workers AI doesn't need an API key — clear the key field instead." }, { status: 400 });
+    }
+    const enc = await encryptSecret(env, body.aiApiKey.trim());
+    aiProvider = provider;
+    aiKeyCiphertext = enc.ciphertext;
+    aiKeyIv = enc.iv;
+  } else if (body.aiProvider === "workers-ai") {
+    aiProvider = null;
+    aiKeyCiphertext = null;
+    aiKeyIv = null;
+  }
+
+  await env.DB.prepare(
+    `UPDATE users SET track = ?, daily_quota = ?, ai_provider = ?, ai_key_ciphertext = ?, ai_key_iv = ?,
+            headline = ?, bio = ?, years_experience = ?, timezone = ?, workers_ai_model = ? WHERE id = ?`,
+  )
+    .bind(track, dailyQuota, aiProvider, aiKeyCiphertext, aiKeyIv, headline, bio, yearsExperience, timezone, workersAiModel, user.id)
+    .run();
+
+  return json({
+    user: userPayload({
+      ...user, track, dailyQuota, aiProvider, aiKeyCiphertext, aiKeyIv, headline, bio, yearsExperience, timezone, workersAiModel,
+    }),
+  });
 }
 
 // ---------- progress state ----------
@@ -484,12 +700,1313 @@ async function handlePutState(request, env, user) {
 async function handleGetActivity(request, env, user) {
   const url = new URL(request.url);
   const limit = Math.min(2000, Math.max(1, parseInt(url.searchParams.get("limit") || "1000", 10) || 1000));
+  // Left-joined so old, pre-relational activity rows (question_id referring
+  // to a question that may since have been removed) still come back.
   const rows = await env.DB.prepare(
-    "SELECT occurred_at, event_type, topic_id, question_id, result FROM activity_log WHERE user_id = ? ORDER BY occurred_at DESC LIMIT ?",
+    `SELECT a.occurred_at as occurred_at, a.event_type as event_type, a.topic_id as topic_id,
+            a.question_id as question_id, a.result as result, q.q as question_text
+     FROM activity_log a
+     LEFT JOIN questions q ON q.id = a.question_id
+     WHERE a.user_id = ? ORDER BY a.occurred_at DESC LIMIT ?`,
   )
     .bind(user.id, limit)
     .all();
   return json({ events: rows.results || [] });
+}
+
+async function handleExportProgress(request, env, user) {
+  const rows = await env.DB.prepare(
+    "SELECT question_id, status, first_shown_at, last_shown_at, last_result, times_shown, correct_streak FROM user_question_progress WHERE user_id = ?",
+  )
+    .bind(user.id)
+    .all();
+  return json({
+    exportedAt: new Date().toISOString(),
+    user: { name: user.name, email: user.email, track: user.track, dailyQuota: user.dailyQuota },
+    streak: { count: user.streakCount || 0, longest: user.streakLongest || 0, lastActiveDate: user.streakLastActive },
+    progress: rows.results || [],
+  });
+}
+
+// ---------- daily queue / quota-carryover engine ----------
+// See DEVELOPMENT.md "Locked decisions" for the carry-over rule this
+// implements: the daily target stays flat at the user's quota; unfinished
+// questions from a prior day get priority in today's queue, capped at 1x
+// the daily quota worth of backlog per day.
+
+async function getOrCreateTodayLedger(env, userId, dailyQuota, today) {
+  await env.DB.prepare(
+    `INSERT INTO daily_quota_ledger (user_id, date, base_quota, extra_requested, completed)
+     VALUES (?, ?, ?, 0, 0) ON CONFLICT(user_id, date) DO NOTHING`,
+  )
+    .bind(userId, today, dailyQuota)
+    .run();
+  return env.DB.prepare("SELECT * FROM daily_quota_ledger WHERE user_id = ? AND date = ?")
+    .bind(userId, today)
+    .first();
+}
+
+async function ensureTodayQueueFilled(env, user, today) {
+  const ledger = await getOrCreateTodayLedger(env, user.id, user.dailyQuota, today);
+  const target = ledger.base_quota + ledger.extra_requested;
+
+  const alreadyQueuedRow = await env.DB.prepare(
+    "SELECT COUNT(*) as n FROM user_question_progress WHERE user_id = ? AND queued_for_date = ? AND status != 'done'",
+  )
+    .bind(user.id, today)
+    .first();
+  const alreadyQueued = (alreadyQueuedRow && alreadyQueuedRow.n) || 0;
+
+  const needed = target - ledger.completed - alreadyQueued;
+  if (needed <= 0) return ledger;
+
+  const carryCap = user.dailyQuota;
+  const priorityLimit = Math.min(needed, carryCap);
+  const priorityRows = await env.DB.prepare(
+    `SELECT question_id FROM user_question_progress
+     WHERE user_id = ? AND status != 'done' AND queued_for_date IS NOT NULL AND queued_for_date < ?
+     ORDER BY queued_for_date ASC LIMIT ?`,
+  )
+    .bind(user.id, today, priorityLimit)
+    .all();
+  const priorityIds = (priorityRows.results || []).map((r) => r.question_id);
+
+  const fillCount = needed - priorityIds.length;
+  let freshIds = [];
+  if (fillCount > 0) {
+    // Pull every not-yet-queued question (bounded generously) and round-robin
+    // across topics rather than draining topic_order 1 first — otherwise a
+    // user only ever sees the first category until it's fully exhausted.
+    const freshRows = await env.DB.prepare(
+      `SELECT q.id as id, q.topic_order as topic_order FROM questions q
+       JOIN user_question_sets uqs ON uqs.set_id = q.set_id AND uqs.user_id = ?
+       LEFT JOIN user_question_progress p ON p.user_id = ? AND p.question_id = q.id
+       WHERE p.question_id IS NULL
+       ORDER BY q.topic_order ASC, q.sort_order ASC LIMIT 5000`,
+    )
+      .bind(user.id, user.id)
+      .all();
+    const byTopic = new Map();
+    for (const r of freshRows.results || []) {
+      if (!byTopic.has(r.topic_order)) byTopic.set(r.topic_order, []);
+      byTopic.get(r.topic_order).push(r.id);
+    }
+    const topicQueues = Array.from(byTopic.values());
+    let i = 0;
+    while (freshIds.length < fillCount && topicQueues.some((q) => q.length > 0)) {
+      const queue = topicQueues[i % topicQueues.length];
+      if (queue.length > 0) freshIds.push(queue.shift());
+      i += 1;
+    }
+  }
+
+  const allIds = priorityIds.concat(freshIds);
+  if (allIds.length) {
+    const stmts = allIds.map((qid) =>
+      env.DB.prepare(
+        `INSERT INTO user_question_progress (user_id, question_id, status, queued_for_date, times_shown, correct_streak)
+         VALUES (?, ?, 'queued', ?, 0, 0)
+         ON CONFLICT(user_id, question_id) DO UPDATE SET queued_for_date = excluded.queued_for_date
+         WHERE user_question_progress.status != 'done'`,
+      ).bind(user.id, qid, today),
+    );
+    await env.DB.batch(stmts);
+  }
+  return ledger;
+}
+
+async function getTodayQueueQuestions(env, user, today) {
+  const rows = await env.DB.prepare(
+    `SELECT q.id as id, q.q as q, q.a as a, q.topic_label as topic_label, q.set_id as set_id,
+            p.status as status, p.last_result as last_result
+     FROM user_question_progress p
+     JOIN questions q ON q.id = p.question_id
+     WHERE p.user_id = ? AND p.queued_for_date = ? AND p.status != 'done'
+     ORDER BY q.topic_order ASC, q.sort_order ASC`,
+  )
+    .bind(user.id, today)
+    .all();
+  return rows.results || [];
+}
+
+// Today's already-completed questions, kept alongside the active list so
+// the UI can show a browsable "Completed today" section that survives a
+// page reload — otherwise a done question just vanishes from the queue
+// entirely, with no way to glance back at it without opening Daily Review.
+async function getTodayCompletedQuestions(env, user, today) {
+  const rows = await env.DB.prepare(
+    `SELECT q.id as id, q.q as q, q.a as a, q.topic_label as topic_label, p.last_shown_at as last_shown_at
+     FROM user_question_progress p
+     JOIN questions q ON q.id = p.question_id
+     WHERE p.user_id = ? AND p.queued_for_date = ? AND p.status = 'done'
+     ORDER BY p.last_shown_at DESC`,
+  )
+    .bind(user.id, today)
+    .all();
+  return rows.results || [];
+}
+
+async function handleGetTodayQueue(request, env, user) {
+  const today = todayDateStr(user.timezone);
+  await ensureTodayQueueFilled(env, user, today);
+  const ledger = await getOrCreateTodayLedger(env, user.id, user.dailyQuota, today);
+  const questions = await getTodayQueueQuestions(env, user, today);
+  const completedQuestions = await getTodayCompletedQuestions(env, user, today);
+  const target = ledger.base_quota + ledger.extra_requested;
+  return json({
+    date: today,
+    target,
+    completed: ledger.completed,
+    remaining: Math.max(0, target - ledger.completed),
+    questions,
+    completedQuestions,
+  });
+}
+
+async function handleCompleteQuestion(request, env, user) {
+  const parsed = await readJsonBody(request, 2000);
+  if (!parsed.ok) return json({ error: parsed.error }, { status: parsed.status });
+  const questionId = (parsed.body.question_id || "").toString();
+  if (!questionId) return json({ error: "Missing question_id." }, { status: 400 });
+
+  const today = todayDateStr(user.timezone);
+  const now = new Date().toISOString();
+  await getOrCreateTodayLedger(env, user.id, user.dailyQuota, today);
+
+  const existing = await env.DB.prepare("SELECT status FROM user_question_progress WHERE user_id = ? AND question_id = ?")
+    .bind(user.id, questionId)
+    .first();
+  const wasAlreadyDone = !!(existing && existing.status === "done");
+
+  await env.DB.prepare(
+    `INSERT INTO user_question_progress (user_id, question_id, status, queued_for_date, first_shown_at, last_shown_at, times_shown, correct_streak)
+     VALUES (?, ?, 'done', ?, ?, ?, 1, 0)
+     ON CONFLICT(user_id, question_id) DO UPDATE SET
+       status = 'done',
+       first_shown_at = COALESCE(user_question_progress.first_shown_at, excluded.first_shown_at),
+       last_shown_at = excluded.last_shown_at,
+       times_shown = user_question_progress.times_shown + 1`,
+  )
+    .bind(user.id, questionId, today, now, now)
+    .run();
+
+  if (!wasAlreadyDone) {
+    await env.DB.prepare("UPDATE daily_quota_ledger SET completed = completed + 1 WHERE user_id = ? AND date = ?")
+      .bind(user.id, today)
+      .run();
+
+    // Streak bump — same "consecutive calendar day" rule as before, now
+    // stored directly on the user row instead of inside a JSON blob.
+    const y = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    if (user.streakLastActive !== today) {
+      const newCount = user.streakLastActive === y ? (user.streakCount || 0) + 1 : 1;
+      const newLongest = Math.max(user.streakLongest || 0, newCount);
+      await env.DB.prepare("UPDATE users SET streak_count = ?, streak_longest = ?, streak_last_active = ? WHERE id = ?")
+        .bind(newCount, newLongest, today, user.id)
+        .run();
+    }
+  }
+
+  const topicRow = await env.DB.prepare("SELECT topic_label FROM questions WHERE id = ?").bind(questionId).first();
+  await env.DB.prepare(
+    "INSERT INTO activity_log (user_id, occurred_at, event_type, topic_id, question_id, result) VALUES (?, ?, 'reveal', ?, ?, NULL)",
+  )
+    .bind(user.id, now, topicRow ? topicRow.topic_label : null, questionId)
+    .run();
+
+  return json({ ok: true });
+}
+
+// The "Review again soon" / "Need Review" counterpart to completing a
+// question — used on the Today page both for a question the user has just
+// looked at but doesn't want to mark done yet, AND for pulling an
+// already-completed question back out of "Completed today" for another
+// look. Either way it does NOT touch the streak. If the question was
+// already status='done', its ledger completed-count is decremented so
+// today's target/remaining stay consistent with what's actually still in
+// the active queue; if it wasn't done yet, the ledger is left untouched —
+// the question simply stays in today's active queue (and naturally
+// carries over to tomorrow via the existing backlog-priority rule in
+// ensureTodayQueueFilled) rather than counting as finished. Reuses the
+// same last_result='again' signal the Daily Review page's "Review again
+// soon" already writes, so it also feeds weakest-topic/accuracy stats
+// identically.
+async function handleFlagQuestionForReview(request, env, user) {
+  const parsed = await readJsonBody(request, 2000);
+  if (!parsed.ok) return json({ error: parsed.error }, { status: parsed.status });
+  const questionId = (parsed.body.question_id || "").toString();
+  if (!questionId) return json({ error: "Missing question_id." }, { status: 400 });
+
+  const today = todayDateStr(user.timezone);
+  const now = new Date().toISOString();
+  await getOrCreateTodayLedger(env, user.id, user.dailyQuota, today);
+
+  const existing = await env.DB.prepare("SELECT status FROM user_question_progress WHERE user_id = ? AND question_id = ?")
+    .bind(user.id, questionId)
+    .first();
+  const wasDone = !!(existing && existing.status === "done");
+
+  if (wasDone) {
+    await env.DB.prepare(
+      "UPDATE daily_quota_ledger SET completed = MAX(0, completed - 1) WHERE user_id = ? AND date = ?",
+    )
+      .bind(user.id, today)
+      .run();
+  }
+
+  await env.DB.prepare(
+    `INSERT INTO user_question_progress (user_id, question_id, status, queued_for_date, first_shown_at, last_shown_at, times_shown, correct_streak, last_result)
+     VALUES (?, ?, 'shown', ?, ?, ?, 1, 0, 'again')
+     ON CONFLICT(user_id, question_id) DO UPDATE SET
+       status = 'shown',
+       first_shown_at = COALESCE(user_question_progress.first_shown_at, excluded.first_shown_at),
+       last_shown_at = excluded.last_shown_at,
+       times_shown = user_question_progress.times_shown + 1,
+       correct_streak = 0,
+       last_result = 'again'`,
+  )
+    .bind(user.id, questionId, today, now, now)
+    .run();
+
+  const topicRow = await env.DB.prepare("SELECT topic_label FROM questions WHERE id = ?").bind(questionId).first();
+  await env.DB.prepare(
+    "INSERT INTO activity_log (user_id, occurred_at, event_type, topic_id, question_id, result) VALUES (?, ?, 'review', ?, ?, 'again')",
+  )
+    .bind(user.id, now, topicRow ? topicRow.topic_label : null, questionId)
+    .run();
+
+  return json({ ok: true });
+}
+
+async function handleRequestMore(request, env, user) {
+  const today = todayDateStr(user.timezone);
+  const ledger = await getOrCreateTodayLedger(env, user.id, user.dailyQuota, today);
+  const target = ledger.base_quota + ledger.extra_requested;
+  if (ledger.completed < target) {
+    return json({ error: "You still have questions left in today's queue." }, { status: 400 });
+  }
+
+  await env.DB.prepare("UPDATE daily_quota_ledger SET extra_requested = extra_requested + ? WHERE user_id = ? AND date = ?")
+    .bind(EXTRA_BATCH, user.id, today)
+    .run();
+
+  await ensureTodayQueueFilled(env, user, today);
+  const questions = await getTodayQueueQuestions(env, user, today);
+  return json({ questions });
+}
+
+async function handleReviewResult(request, env, user) {
+  const parsed = await readJsonBody(request, 2000);
+  if (!parsed.ok) return json({ error: parsed.error }, { status: parsed.status });
+  const questionId = (parsed.body.question_id || "").toString();
+  const result = (parsed.body.result || "").toString();
+  if (!questionId || (result !== "got_it" && result !== "again")) {
+    return json({ error: "Invalid review result." }, { status: 400 });
+  }
+
+  const now = new Date().toISOString();
+  const existing = await env.DB.prepare("SELECT correct_streak FROM user_question_progress WHERE user_id = ? AND question_id = ?")
+    .bind(user.id, questionId)
+    .first();
+  const newStreak = result === "got_it" ? ((existing && existing.correct_streak) || 0) + 1 : 0;
+
+  await env.DB.prepare(
+    `UPDATE user_question_progress SET last_result = ?, correct_streak = ?, times_shown = times_shown + 1, last_shown_at = ?
+     WHERE user_id = ? AND question_id = ?`,
+  )
+    .bind(result, newStreak, now, user.id, questionId)
+    .run();
+
+  const topicRow = await env.DB.prepare("SELECT topic_label FROM questions WHERE id = ?").bind(questionId).first();
+  await env.DB.prepare(
+    "INSERT INTO activity_log (user_id, occurred_at, event_type, topic_id, question_id, result) VALUES (?, ?, 'review', ?, ?, ?)",
+  )
+    .bind(user.id, now, topicRow ? topicRow.topic_label : null, questionId, result)
+    .run();
+
+  return json({ ok: true });
+}
+
+async function handleGetReview(request, env, user) {
+  const url = new URL(request.url);
+  const count = Math.min(20, Math.max(1, parseInt(url.searchParams.get("count") || "15", 10) || 15));
+
+  const rows = await env.DB.prepare(
+    `SELECT p.question_id as id, q.q as q, q.a as a, q.topic_label as topic_label,
+            p.last_result as last_result, p.correct_streak as correct_streak, p.times_shown as times_shown
+     FROM user_question_progress p
+     JOIN questions q ON q.id = p.question_id
+     WHERE p.user_id = ? AND p.status = 'done'`,
+  )
+    .bind(user.id)
+    .all();
+
+  const pool = rows.results || [];
+  if (pool.length === 0) return json({ questions: [] });
+
+  const weighted = pool.map((item) => {
+    let w = 1;
+    if (!item.times_shown) w = 1.6;
+    else if (item.last_result === "again") w = 3;
+    else w = Math.max(0.35, 1 - (item.correct_streak || 0) * 0.15);
+    return { item, w };
+  });
+
+  const chosen = [];
+  const n = Math.min(count, weighted.length);
+  for (let i = 0; i < n; i++) {
+    const totalW = weighted.reduce((s, x) => s + x.w, 0);
+    let r = Math.random() * totalW;
+    let idx = 0;
+    for (; idx < weighted.length; idx++) {
+      r -= weighted[idx].w;
+      if (r <= 0) break;
+    }
+    idx = Math.min(idx, weighted.length - 1);
+    chosen.push(weighted[idx].item);
+    weighted.splice(idx, 1);
+  }
+  return json({ questions: chosen });
+}
+
+// ---------- user-submitted question sets ----------
+
+async function handleCreateQuestionSet(request, env, user) {
+  // Raised from 80000, then 300000 — a CSV-imported set (client-parsed into
+  // this same JSON shape) with several hundred detailed rows can run well
+  // past 300KB once re-serialized as JSON (per-field quoting/escaping adds
+  // real overhead over the raw CSV size), which is what "Request body too
+  // large" on import traced back to.
+  const parsed = await readJsonBody(request, 2000000);
+  if (!parsed.ok) return json({ error: parsed.error }, { status: parsed.status });
+  const body = parsed.body;
+  const title = (body.title || "").toString().trim();
+  const track = body.track ? String(body.track).trim().slice(0, 120) : null;
+  const sections = Array.isArray(body.sections) ? body.sections : [];
+
+  if (!title) return json({ error: "Please enter a title for your question set." }, { status: 400 });
+  if (sections.length === 0) return json({ error: "Add at least one section." }, { status: 400 });
+
+  for (const section of sections) {
+    const label = ((section && section.label) || "").toString().trim();
+    const questions = Array.isArray(section && section.questions) ? section.questions : [];
+    if (!label) return json({ error: "Every section needs a label." }, { status: 400 });
+    if (questions.length === 0) return json({ error: `Section "${label}" needs at least one question.` }, { status: 400 });
+    for (const q of questions) {
+      if (!q || !String(q.q || "").trim() || !String(q.a || "").trim()) {
+        return json({ error: `Every question in "${label}" needs both a question and an answer.` }, { status: 400 });
+      }
+    }
+  }
+
+  const setId = crypto.randomUUID();
+  const now = new Date().toISOString();
+  await env.DB.prepare(
+    "INSERT INTO question_sets (id, owner_user_id, title, track, visibility, created_at) VALUES (?, ?, ?, ?, 'private', ?)",
+  )
+    .bind(setId, user.id, title, track, now)
+    .run();
+
+  const stmts = [];
+  sections.forEach((section, topicOrder) => {
+    const label = String(section.label).trim();
+    section.questions.forEach((q, sortOrder) => {
+      stmts.push(
+        env.DB.prepare(
+          "INSERT INTO questions (id, set_id, topic_label, topic_order, sort_order, q, a, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        ).bind(crypto.randomUUID(), setId, label, topicOrder, sortOrder, String(q.q).trim(), String(q.a).trim(), now),
+      );
+    });
+  });
+  stmts.push(
+    env.DB.prepare(
+      "INSERT INTO user_question_sets (user_id, set_id, subscribed_at) VALUES (?, ?, ?) ON CONFLICT(user_id, set_id) DO NOTHING",
+    ).bind(user.id, setId, now),
+  );
+  await env.DB.batch(stmts);
+
+  return json({ set: { id: setId, title, track, visibility: "private" } });
+}
+
+async function handleListMySets(request, env, user) {
+  const rows = await env.DB.prepare(
+    "SELECT id, title, track, visibility, created_at, rejected_reason FROM question_sets WHERE owner_user_id = ? ORDER BY created_at DESC",
+  )
+    .bind(user.id)
+    .all();
+  return json({ sets: rows.results || [] });
+}
+
+// Powers the header's book-icon stat pill — "yours" is everything this user
+// can see (official + subscribed shared sets + their own), "total" is every
+// question anyone on the platform has ever added, regardless of visibility.
+async function handleGetBankCount(request, env, user) {
+  const yoursRow = await env.DB.prepare(
+    `SELECT COUNT(*) as c FROM questions q JOIN user_question_sets uqs ON uqs.set_id = q.set_id AND uqs.user_id = ?`,
+  )
+    .bind(user.id)
+    .first();
+  const totalRow = await env.DB.prepare("SELECT COUNT(*) as c FROM questions").first();
+  return json({ yours: yoursRow.c, total: totalRow.c });
+}
+
+async function handleSubmitSet(request, env, user, setId) {
+  const row = await env.DB.prepare("SELECT owner_user_id, visibility FROM question_sets WHERE id = ?")
+    .bind(setId)
+    .first();
+  if (!row || row.owner_user_id !== user.id) return json({ error: "Question set not found." }, { status: 404 });
+  if (row.visibility !== "private" && row.visibility !== "rejected") {
+    return json({ error: "Only a private or rejected set can be submitted for review." }, { status: 400 });
+  }
+  await env.DB.prepare("UPDATE question_sets SET visibility = 'pending', rejected_reason = NULL WHERE id = ?")
+    .bind(setId)
+    .run();
+  return json({ ok: true });
+}
+
+async function handleSubscribeSet(request, env, user, setId) {
+  const row = await env.DB.prepare("SELECT visibility FROM question_sets WHERE id = ?").bind(setId).first();
+  if (!row || row.visibility !== "shared") {
+    return json({ error: "This question set isn't available to subscribe to." }, { status: 400 });
+  }
+  await env.DB.prepare(
+    "INSERT INTO user_question_sets (user_id, set_id, subscribed_at) VALUES (?, ?, ?) ON CONFLICT(user_id, set_id) DO NOTHING",
+  )
+    .bind(user.id, setId, new Date().toISOString())
+    .run();
+  return json({ ok: true });
+}
+
+async function handleListSuggestions(request, env, user) {
+  // Shared, user-submitted sets (not the official ones, which everyone is
+  // already auto-subscribed to) that this user hasn't picked up yet — sets
+  // matching the user's own track are surfaced first.
+  const rows = await env.DB.prepare(
+    `SELECT qs.id as id, qs.title as title, qs.track as track, u.name as owner_name
+     FROM question_sets qs
+     LEFT JOIN users u ON u.id = qs.owner_user_id
+     WHERE qs.visibility = 'shared' AND qs.owner_user_id IS NOT NULL
+       AND NOT EXISTS (SELECT 1 FROM user_question_sets WHERE user_id = ? AND set_id = qs.id)
+     ORDER BY (qs.track IS NOT NULL AND qs.track = ?) DESC, qs.created_at DESC`,
+  )
+    .bind(user.id, user.track || "")
+    .all();
+  return json({ sets: rows.results || [] });
+}
+
+// ---------- admin: question-set approval queue ----------
+
+async function handleAdminPendingSets(request, env, user) {
+  const rows = await env.DB.prepare(
+    `SELECT qs.id as id, qs.title as title, qs.track as track, qs.created_at as created_at,
+            u.name as owner_name, u.email as owner_email,
+            (SELECT COUNT(*) FROM questions WHERE set_id = qs.id) as question_count
+     FROM question_sets qs LEFT JOIN users u ON u.id = qs.owner_user_id
+     WHERE qs.visibility = 'pending' ORDER BY qs.created_at ASC`,
+  ).all();
+  return json({ sets: rows.results || [] });
+}
+
+async function handleApproveSet(request, env, user, setId) {
+  const row = await env.DB.prepare("SELECT visibility FROM question_sets WHERE id = ?").bind(setId).first();
+  if (!row || row.visibility !== "pending") return json({ error: "This set isn't pending review." }, { status: 400 });
+  await env.DB.prepare(
+    `UPDATE question_sets SET visibility = 'shared', approved_at = ?, approved_by = ?,
+            rejected_reason = NULL, rejected_at = NULL, rejected_by = NULL WHERE id = ?`,
+  )
+    .bind(new Date().toISOString(), user.id, setId)
+    .run();
+  return json({ ok: true });
+}
+
+async function handleRejectSet(request, env, user, setId) {
+  const parsed = await readJsonBody(request, 2000);
+  if (!parsed.ok) return json({ error: parsed.error }, { status: parsed.status });
+  const reason = (parsed.body.reason || "").toString().trim().slice(0, 300) || "No reason given.";
+  const row = await env.DB.prepare("SELECT visibility FROM question_sets WHERE id = ?").bind(setId).first();
+  if (!row || row.visibility !== "pending") return json({ error: "This set isn't pending review." }, { status: 400 });
+  await env.DB.prepare(
+    "UPDATE question_sets SET visibility = 'rejected', rejected_reason = ?, rejected_at = ?, rejected_by = ? WHERE id = ?",
+  )
+    .bind(reason, new Date().toISOString(), user.id, setId)
+    .run();
+  return json({ ok: true });
+}
+
+// Lets an admin inspect a set's actual questions before deciding — used
+// both from the pending queue (review before approving) and from the
+// history view (re-check what an already-decided set contained).
+async function handleAdminGetSetQuestions(request, env, user, setId) {
+  const rows = await env.DB.prepare(
+    "SELECT q, a, topic_label FROM questions WHERE set_id = ? ORDER BY topic_order ASC, sort_order ASC",
+  )
+    .bind(setId)
+    .all();
+  return json({ questions: rows.results || [] });
+}
+
+// Audit trail: every set that's been decided one way or the other, who
+// decided it, and how many questions were in it at that time.
+async function handleAdminApprovalHistory(request, env, user) {
+  const rows = await env.DB.prepare(
+    `SELECT qs.id as id, qs.title as title, qs.track as track, qs.visibility as visibility,
+            qs.created_at as created_at, qs.approved_at as approved_at, qs.rejected_at as rejected_at,
+            qs.rejected_reason as rejected_reason,
+            owner.name as owner_name, owner.email as owner_email,
+            actor.name as actor_name, actor.email as actor_email,
+            (SELECT COUNT(*) FROM questions WHERE set_id = qs.id) as question_count
+     FROM question_sets qs
+     LEFT JOIN users owner ON owner.id = qs.owner_user_id
+     LEFT JOIN users actor ON actor.id = COALESCE(qs.approved_by, qs.rejected_by)
+     WHERE qs.visibility IN ('shared', 'rejected') AND qs.owner_user_id IS NOT NULL
+     ORDER BY COALESCE(qs.approved_at, qs.rejected_at, qs.created_at) DESC
+     LIMIT 200`,
+  ).all();
+  return json({ history: rows.results || [] });
+}
+
+// ---------- AI: MCQ generation (once per question, cached forever) ----------
+
+const TEST_SIZE = 10;
+
+// A curated, verified-live (via `wrangler ai models` against this account's
+// actual catalog) set of general-purpose text models spanning a few
+// different vendors/architectures — not just size variants of one family —
+// so a deprecation like @cf/meta/llama-3.1-8b-instruct's (without -fp8, on
+// 2026-05-30, which silently broke MCQ generation until caught in
+// production) doesn't take out every option at once. Users can switch in
+// Settings if their current pick starts erroring; this list is the
+// server-side allowlist, so keep public/pages/settings.js's copy in sync.
+const WORKERS_AI_MODELS = [
+  { id: "@cf/meta/llama-3.1-8b-instruct-fp8", label: "Llama 3.1 8B (default)" },
+  { id: "@cf/meta/llama-3.2-3b-instruct", label: "Llama 3.2 3B (smaller, faster)" },
+  { id: "@cf/mistral/mistral-7b-instruct-v0.2-lora", label: "Mistral 7B" },
+  { id: "@cf/google/gemma-2b-it-lora", label: "Gemma 2B (fastest)" },
+  { id: "@cf/zai-org/glm-4.7-flash", label: "GLM 4.7 Flash" },
+  { id: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", label: "Llama 3.3 70B (higher quality, costs more of your daily cap)" },
+];
+const WORKERS_AI_MODEL_IDS = WORKERS_AI_MODELS.map((m) => m.id);
+const DEFAULT_WORKERS_AI_MODEL = WORKERS_AI_MODELS[0].id;
+
+function resolveWorkersAiModel(user) {
+  return WORKERS_AI_MODEL_IDS.includes(user.workersAiModel) ? user.workersAiModel : DEFAULT_WORKERS_AI_MODEL;
+}
+
+function buildMcqPrompt(question, answer) {
+  return `You are creating a multiple-choice quiz question from an interview question and its model answer.
+
+Question: ${question}
+
+Model answer: ${answer}
+
+Produce a JSON object with exactly this shape, and nothing else — no markdown fences, no commentary:
+{"options": ["...", "...", "...", "..."], "correct_index": 0}
+
+Rules:
+- Exactly 4 short options (one sentence each, plain text).
+- Exactly one option must be a faithful short paraphrase of the model answer's core point.
+- The other three must be plausible but incorrect for this specific question.
+- "correct_index" is the 0-based index of the correct option in "options".`;
+}
+
+function parseMcqJson(raw) {
+  if (!raw) return null;
+  let text = String(raw).trim();
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced) text = fenced[1].trim();
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) return null;
+  try {
+    const obj = JSON.parse(text.slice(start, end + 1));
+    if (!Array.isArray(obj.options) || obj.options.length !== 4) return null;
+    if (!Number.isInteger(obj.correct_index) || obj.correct_index < 0 || obj.correct_index > 3) return null;
+    return { options: obj.options.map((o) => String(o).slice(0, 300)), correctIndex: obj.correct_index };
+  } catch {
+    return null;
+  }
+}
+
+// Used only if the model call fails or returns something unparsable, so the
+// daily test never hard-breaks on an AI hiccup — just degrades in quality.
+function fallbackMcq(answer) {
+  const correct = String(answer).slice(0, 160);
+  return {
+    options: [
+      correct,
+      "An unrelated approach that doesn't address the question.",
+      "The opposite of the recommended approach.",
+      "None of the above.",
+    ],
+    correctIndex: 0,
+  };
+}
+
+async function callWorkersAi(env, prompt, model, maxTokens = 600) {
+  const result = await env.AI.run(model || DEFAULT_WORKERS_AI_MODEL, {
+    messages: [{ role: "user", content: prompt }],
+    temperature: 0.4,
+    max_tokens: maxTokens,
+  });
+  return result && result.response;
+}
+
+async function callOpenAi(apiKey, prompt, maxTokens = 600) {
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.4,
+      max_tokens: maxTokens,
+    }),
+  });
+  if (!res.ok) throw new Error(`OpenAI request failed (${res.status})`);
+  const data = await res.json();
+  return data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+}
+
+async function callAnthropic(apiKey, prompt, maxTokens = 600) {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: "claude-3-5-haiku-20241022",
+      max_tokens: maxTokens,
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
+  if (!res.ok) throw new Error(`Anthropic request failed (${res.status})`);
+  const data = await res.json();
+  return data.content && data.content[0] && data.content[0].text;
+}
+
+// ---------- AI usage capping ----------
+// The shared Workers AI free tier is one pool for the whole account, so
+// one user completing hundreds of brand-new questions in a day could
+// eat everyone else's quota. BYOK users pay for (and are limited by)
+// their own key, so the cap only applies when using the shared default.
+const FREE_AI_DAILY_CAP = 20;
+
+function usesByok(user) {
+  return !!(user.aiProvider && user.aiProvider !== "workers-ai" && user.aiKeyCiphertext);
+}
+
+// Atomically increments today's usage counter iff it's under the cap —
+// the conditional UPDATE either changes a row or it doesn't, so this is
+// race-safe under concurrent requests (unlike a read-then-write check).
+async function checkAndIncrementAiUsage(env, userId, today) {
+  await env.DB.prepare("INSERT INTO ai_usage (user_id, date, count) VALUES (?, ?, 0) ON CONFLICT(user_id, date) DO NOTHING")
+    .bind(userId, today)
+    .run();
+  const result = await env.DB.prepare("UPDATE ai_usage SET count = count + 1 WHERE user_id = ? AND date = ? AND count < ?")
+    .bind(userId, today, FREE_AI_DAILY_CAP)
+    .run();
+  const allowed = !!(result.meta && result.meta.changes > 0);
+  const row = await env.DB.prepare("SELECT count FROM ai_usage WHERE user_id = ? AND date = ?").bind(userId, today).first();
+  return { allowed, used: (row && row.count) || 0, cap: FREE_AI_DAILY_CAP };
+}
+
+async function handleGetAiUsage(request, env, user) {
+  if (usesByok(user)) return json({ unlimited: true, used: 0, cap: null });
+  const today = todayDateStr(user.timezone);
+  const row = await env.DB.prepare("SELECT count FROM ai_usage WHERE user_id = ? AND date = ?").bind(user.id, today).first();
+  return json({ unlimited: false, used: (row && row.count) || 0, cap: FREE_AI_DAILY_CAP });
+}
+
+// Calls whichever provider the user is configured for. When using the
+// shared Workers AI default, this first spends one unit of the daily
+// cap — if the cap is already used up, returns null without calling
+// anything (the caller falls back to a generic response and, for
+// cacheable results, must NOT persist that fallback permanently).
+async function callConfiguredAi(env, user, prompt, label, maxTokens = 600) {
+  if (usesByok(user)) {
+    try {
+      const apiKey = await decryptSecret(env, user.aiKeyCiphertext, user.aiKeyIv);
+      const raw =
+        user.aiProvider === "anthropic"
+          ? await callAnthropic(apiKey, prompt, maxTokens)
+          : await callOpenAi(apiKey, prompt, maxTokens);
+      return { raw, generatedBy: user.aiProvider, capped: false };
+    } catch (err) {
+      console.error(`[${label}] provider=${user.aiProvider} error=${err && err.message ? err.message : err}`);
+      return { raw: null, generatedBy: user.aiProvider, capped: false };
+    }
+  }
+
+  const usage = await checkAndIncrementAiUsage(env, user.id, todayDateStr(user.timezone));
+  if (!usage.allowed) {
+    return { raw: null, generatedBy: "workers-ai", capped: true };
+  }
+  const model = resolveWorkersAiModel(user);
+  try {
+    const raw = await callWorkersAi(env, prompt, model, maxTokens);
+    return { raw, generatedBy: "workers-ai", model, capped: false };
+  } catch (err) {
+    console.error(`[${label}] provider=workers-ai model=${model} error=${err && err.message ? err.message : err}`);
+    return { raw: null, generatedBy: "workers-ai", model, capped: false };
+  }
+}
+
+async function generateMcq(env, user, question, answer) {
+  const prompt = buildMcqPrompt(question, answer);
+  const { raw, generatedBy, model, capped } = await callConfiguredAi(env, user, prompt, "mcq generation");
+  // Record the specific model alongside the provider (e.g.
+  // "workers-ai:@cf/meta/llama-3.1-8b-instruct-fp8") so a future admin
+  // tool could identify and regenerate MCQs from a model that's since
+  // been deprecated, without needing to redo everything.
+  const generatedByDetailed = model ? `${generatedBy}:${model}` : generatedBy;
+  return { ...(parseMcqJson(raw) || fallbackMcq(answer)), generatedBy: generatedByDetailed, ephemeral: capped };
+}
+
+async function getOrCreateMcqVariant(env, user, question) {
+  const existing = await env.DB.prepare("SELECT options_json, correct_index FROM mcq_variants WHERE question_id = ?")
+    .bind(question.id)
+    .first();
+  if (existing) return { options: JSON.parse(existing.options_json), correctIndex: existing.correct_index };
+
+  const generated = await generateMcq(env, user, question.q, question.a);
+  if (generated.ephemeral) {
+    // Rate-limited, not a real (if low-quality) AI answer — don't cache
+    // this permanently, so a later, uncapped request can generate it
+    // properly instead of every future user being stuck with a filler.
+    return { options: generated.options, correctIndex: generated.correctIndex };
+  }
+
+  await env.DB.prepare(
+    "INSERT INTO mcq_variants (question_id, options_json, correct_index, generated_by, generated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(question_id) DO NOTHING",
+  )
+    .bind(question.id, JSON.stringify(generated.options), generated.correctIndex, generated.generatedBy, new Date().toISOString())
+    .run();
+
+  // Re-read so a concurrent generation race converges on one canonical variant.
+  const row = await env.DB.prepare("SELECT options_json, correct_index FROM mcq_variants WHERE question_id = ?")
+    .bind(question.id)
+    .first();
+  return { options: JSON.parse(row.options_json), correctIndex: row.correct_index };
+}
+
+// ---------- AI: personalized Stats insight (cached once per user/day) ----------
+
+async function handleGetStatsInsight(request, env, user) {
+  const today = todayDateStr(user.timezone);
+  const cached = await env.DB.prepare("SELECT insight, generated_by FROM ai_stats_insights WHERE user_id = ? AND date = ?")
+    .bind(user.id, today)
+    .first();
+  if (cached) return json({ insight: cached.insight, generatedBy: cached.generated_by, cached: true });
+
+  const rows = await env.DB.prepare(
+    `SELECT topic_id, result FROM activity_log
+     WHERE user_id = ? AND event_type = 'review' AND result IS NOT NULL
+     ORDER BY occurred_at DESC LIMIT 300`,
+  )
+    .bind(user.id)
+    .all();
+  const events = rows.results || [];
+
+  if (events.length < 3) {
+    return json({
+      insight: "Not enough review history yet for a personalized insight — keep completing daily reviews and check back.",
+      generatedBy: null,
+      cached: false,
+    });
+  }
+
+  const topicAgg = {};
+  events.forEach((e) => {
+    if (!e.topic_id) return;
+    topicAgg[e.topic_id] = topicAgg[e.topic_id] || { total: 0, again: 0 };
+    topicAgg[e.topic_id].total++;
+    if (e.result === "again") topicAgg[e.topic_id].again++;
+  });
+  const weakTopics = Object.entries(topicAgg)
+    .map(([label, v]) => ({ label, rate: v.again / v.total, total: v.total }))
+    .filter((x) => x.total >= 2)
+    .sort((a, b) => b.rate - a.rate)
+    .slice(0, 3);
+
+  const profileBits = [
+    user.track ? `preparing for: ${user.track}` : null,
+    user.headline ? `current role: ${user.headline}` : null,
+    typeof user.yearsExperience === "number" ? `${user.yearsExperience} years of experience` : null,
+    user.bio ? `background: ${user.bio}` : null,
+  ].filter(Boolean);
+
+  const summary = `${profileBits.length ? profileBits.join("; ") + ". " : ""}Current streak: ${user.streakCount || 0} days (longest ${user.streakLongest || 0}). Graded reviews so far: ${events.length}. Weakest topics: ${
+    weakTopics.length
+      ? weakTopics.map((t) => `${t.label} (marked "review again" on ${Math.round(t.rate * 100)}% of ${t.total} attempts)`).join("; ")
+      : "none stand out yet"
+  }.`;
+  const prompt = `You are a supportive interview-prep coach. Based on this user's profile and stats, write a short, specific, encouraging insight (2-3 sentences, plain text, no markdown) and one concrete suggestion for what to focus on next — tailor it to their stated role/experience/goal when given.\n\nProfile & stats: ${summary}`;
+
+  const { raw, generatedBy, capped } = await callConfiguredAi(env, user, prompt, "stats insight");
+  if (capped) {
+    return json({
+      insight: null,
+      limited: true,
+      cap: FREE_AI_DAILY_CAP,
+      message: "You've used today's free AI insight/test-generation allowance — try again tomorrow, or set your own AI key in Settings for unlimited use.",
+    });
+  }
+
+  const insight = (raw && raw.trim().slice(0, 600)) || "Keep at it — steady daily review is what moves the needle most, and there isn't a clear weak spot yet to call out.";
+  await env.DB.prepare(
+    `INSERT INTO ai_stats_insights (user_id, date, insight, generated_by, generated_at) VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(user_id, date) DO UPDATE SET insight = excluded.insight, generated_by = excluded.generated_by, generated_at = excluded.generated_at`,
+  )
+    .bind(user.id, today, insight, generatedBy, new Date().toISOString())
+    .run();
+
+  return json({ insight, generatedBy, cached: false });
+}
+
+// ---------- Self Test: practice answering a random question, AI-graded ----------
+// A separate, token-granular daily budget — deliberately not the existing
+// ai_usage/FREE_AI_DAILY_CAP counter, which tracks *number of generations*
+// for the other AI features (MCQ, Stats insight, resume prompts). This one
+// was asked for specifically as a visible, hard-capped *token* quota, so it
+// gets its own table and its own cap, keyed by date the same way for a
+// consistent "resets at your own midnight" mental model. Same BYOK carve-out
+// as everywhere else: a user's own key is their own cost, not capped here.
+const SELF_TEST_TOKEN_DAILY_QUOTA = 6000;
+
+// No provider in this app's stack reliably reports exact token counts back
+// through the shared callConfiguredAi() helper (and changing that helper's
+// return shape risks the other three features that already depend on it) —
+// so spend is the standard ~4-characters-per-token estimate over the
+// prompt + reply text. Good enough for a budget a user watches go down,
+// called out as an estimate in the UI rather than presented as exact.
+function estimateTokens(text) {
+  return Math.max(1, Math.ceil((text || "").length / 4));
+}
+
+async function getSelfTestQuota(env, user) {
+  if (usesByok(user)) return { unlimited: true, used: 0, quota: null, remaining: null };
+  const today = todayDateStr(user.timezone);
+  const row = await env.DB.prepare("SELECT tokens_used FROM ai_token_usage WHERE user_id = ? AND date = ?")
+    .bind(user.id, today)
+    .first();
+  const used = (row && row.tokens_used) || 0;
+  return { unlimited: false, used, quota: SELF_TEST_TOKEN_DAILY_QUOTA, remaining: Math.max(0, SELF_TEST_TOKEN_DAILY_QUOTA - used) };
+}
+
+async function handleGetSelfTestQuota(request, env, user) {
+  return json(await getSelfTestQuota(env, user));
+}
+
+async function handleGetSelfTestQuestion(request, env, user) {
+  const row = await env.DB.prepare(
+    `SELECT q.id as id, q.q as q, q.a as a, q.topic_label as topic_label FROM questions q
+     JOIN user_question_sets uqs ON uqs.set_id = q.set_id AND uqs.user_id = ?
+     ORDER BY RANDOM() LIMIT 1`,
+  )
+    .bind(user.id)
+    .first();
+  if (!row) return json({ error: "No questions available yet — subscribe to or upload a question set first." }, { status: 400 });
+  return json({ question: row });
+}
+
+function buildSelfTestAnalysisPrompt(question, modelAnswer, userAnswer) {
+  return `You are an expert interview coach reviewing a candidate's spoken/written practice answer. Compare it to the model answer and give specific, actionable feedback — not generic encouragement.
+
+Question: ${question}
+
+Model answer (for reference, don't just repeat it): ${modelAnswer}
+
+Candidate's answer: ${userAnswer}
+
+Reply in exactly this plain-text format, no markdown:
+Score: <a number 1-10>
+Strengths: <1-2 sentences on what the candidate did well>
+Gaps: <1-2 sentences on what's missing or weak compared to the model answer>
+Suggestion: <one concrete, specific thing to improve next time>`;
+}
+
+function parseSelfTestFeedback(raw) {
+  if (!raw) return null;
+  const get = (label) => {
+    const m = raw.match(new RegExp(`${label}:\\s*(.+?)(?:\\n(?:Score|Strengths|Gaps|Suggestion):|$)`, "is"));
+    return m ? m[1].trim() : "";
+  };
+  const scoreText = get("Score");
+  const score = parseInt(scoreText, 10);
+  return {
+    score: Number.isFinite(score) ? Math.max(1, Math.min(10, score)) : null,
+    strengths: get("Strengths") || "",
+    gaps: get("Gaps") || "",
+    suggestion: get("Suggestion") || "",
+  };
+}
+
+async function handleSelfTestAnalyze(request, env, user) {
+  const parsed = await readJsonBody(request, 20000);
+  if (!parsed.ok) return json({ error: parsed.error }, { status: parsed.status });
+  const questionId = (parsed.body.question_id || "").toString();
+  const userAnswer = (parsed.body.answer || "").toString().trim().slice(0, 6000);
+  if (!questionId) return json({ error: "Missing question_id." }, { status: 400 });
+  if (!userAnswer) return json({ error: "Write or speak an answer first." }, { status: 400 });
+
+  const question = await env.DB.prepare(
+    `SELECT q.id as id, q.q as q, q.a as a FROM questions q
+     JOIN user_question_sets uqs ON uqs.set_id = q.set_id AND uqs.user_id = ?
+     WHERE q.id = ?`,
+  )
+    .bind(user.id, questionId)
+    .first();
+  if (!question) return json({ error: "Question not found." }, { status: 404 });
+
+  const quotaBefore = await getSelfTestQuota(env, user);
+  const prompt = buildSelfTestAnalysisPrompt(question.q, question.a, userAnswer);
+  const estimatedCost = estimateTokens(prompt) + 350; // + a generous allowance for the reply, charged before the call so a quota check can't be bypassed by a slow/failed request
+  if (!quotaBefore.unlimited && quotaBefore.used + estimatedCost > quotaBefore.quota) {
+    return json({
+      error: "You've used today's Self Test AI quota — it resets at your own midnight, or set your own AI key in Settings for unlimited use.",
+      quota: quotaBefore,
+    }, { status: 429 });
+  }
+
+  const { raw, generatedBy, capped } = await callConfiguredAi(env, user, prompt, "self-test analysis", 500);
+  if (capped) {
+    return json({
+      error: "You've used today's free AI allowance for all features combined — try again tomorrow, or set your own AI key in Settings for unlimited use.",
+      quota: quotaBefore,
+    }, { status: 429 });
+  }
+  if (!raw) {
+    return json({ error: "Couldn't reach the AI right now — try again in a moment." }, { status: 502 });
+  }
+
+  const feedback = parseSelfTestFeedback(raw);
+  if (!feedback) {
+    return json({ error: "The AI's reply couldn't be parsed — try again." }, { status: 502 });
+  }
+
+  let quota = quotaBefore;
+  if (!quotaBefore.unlimited) {
+    const actualCost = estimateTokens(prompt) + estimateTokens(raw);
+    const today = todayDateStr(user.timezone);
+    await env.DB.prepare(
+      `INSERT INTO ai_token_usage (user_id, date, tokens_used) VALUES (?, ?, ?)
+       ON CONFLICT(user_id, date) DO UPDATE SET tokens_used = tokens_used + excluded.tokens_used`,
+    )
+      .bind(user.id, today, actualCost)
+      .run();
+    quota = await getSelfTestQuota(env, user);
+  }
+
+  return json({ feedback, modelAnswer: question.a, generatedBy, quota });
+}
+
+// ---------- Stats: per-topic progress + accuracy (for "target areas") ----------
+// Completion counts come from the relational content model (every set a
+// user can see has a row in user_question_sets, per the signup/subscribe
+// flow) joined against their per-question progress; accuracy reuses the
+// same activity_log aggregation handleGetStatsInsight does, just exposed
+// as raw per-topic numbers instead of folded into an AI prompt.
+
+async function handleGetStatsProgress(request, env, user) {
+  const totalsRows = await env.DB.prepare(
+    `SELECT q.topic_label as topic, COUNT(*) as total,
+            SUM(CASE WHEN p.status = 'done' THEN 1 ELSE 0 END) as completed,
+            MIN(q.topic_order) as minOrder
+     FROM questions q
+     JOIN user_question_sets uqs ON uqs.set_id = q.set_id AND uqs.user_id = ?
+     LEFT JOIN user_question_progress p ON p.user_id = ? AND p.question_id = q.id
+     GROUP BY q.topic_label
+     ORDER BY minOrder ASC`,
+  )
+    .bind(user.id, user.id)
+    .all();
+
+  const accuracyRows = await env.DB.prepare(
+    `SELECT topic_id as topic, COUNT(*) as attempts,
+            SUM(CASE WHEN result = 'again' THEN 1 ELSE 0 END) as againCount
+     FROM activity_log
+     WHERE user_id = ? AND event_type = 'review' AND result IS NOT NULL AND topic_id IS NOT NULL
+     GROUP BY topic_id`,
+  )
+    .bind(user.id)
+    .all();
+
+  const accuracyByTopic = {};
+  (accuracyRows.results || []).forEach((r) => {
+    accuracyByTopic[r.topic] = { attempts: r.attempts, againCount: r.againCount };
+  });
+
+  let totalQuestions = 0;
+  let totalCompleted = 0;
+  const topics = (totalsRows.results || []).map((r) => {
+    const total = r.total || 0;
+    const completed = r.completed || 0;
+    totalQuestions += total;
+    totalCompleted += completed;
+    const acc = accuracyByTopic[r.topic];
+    const accuracyPct = acc && acc.attempts >= 2 ? Math.round(((acc.attempts - acc.againCount) / acc.attempts) * 100) : null;
+    return {
+      topic: r.topic,
+      total,
+      completed,
+      completionPct: total ? Math.round((completed / total) * 100) : 0,
+      attempts: acc ? acc.attempts : 0,
+      accuracyPct,
+    };
+  });
+
+  // "Focus areas" — topics that are either mostly untouched or where the
+  // user struggles once they do attempt them, ranked worst-first. Needs
+  // at least a little signal (some completion or some attempts) so a
+  // brand-new topic with 0/0 doesn't dominate the list ahead of real gaps.
+  const focusAreas = topics
+    .filter((t) => t.total > 0 && (t.completed > 0 || t.completionPct < 100))
+    .map((t) => {
+      const completionGap = 1 - t.completed / t.total;
+      const accuracyGap = t.accuracyPct === null ? 0 : 1 - t.accuracyPct / 100;
+      return { ...t, focusScore: completionGap * 0.6 + accuracyGap * 0.4 };
+    })
+    .sort((a, b) => b.focusScore - a.focusScore)
+    .slice(0, 3);
+
+  return json({
+    topics,
+    overall: {
+      totalQuestions,
+      totalCompleted,
+      completionPct: totalQuestions ? Math.round((totalCompleted / totalQuestions) * 100) : 0,
+    },
+    focusAreas,
+  });
+}
+
+// ---------- AI: suggest a target role from resume text ----------
+// A small, cheap call (one short line of output) — unlike the deferred
+// "generate 40-60 Q&A from a resume" idea, this fits comfortably within
+// the existing FREE_AI_DAILY_CAP/BYOK infra with no new accounting.
+// Resume text itself is never persisted — it only passes through this
+// one request.
+
+function buildRoleSuggestionPrompt(resumeText) {
+  return `Based on the resume below, suggest the single best-suited next job target role/title for this person — their most logical next step, given their background and trajectory.
+
+Resume:
+"""
+${resumeText}
+"""
+
+Respond with ONLY the role title itself (e.g. "Senior Engineering Manager"), nothing else — no explanation, no quotes, no punctuation beyond the title, no markdown.`;
+}
+
+async function handleSuggestTargetRole(request, env, user) {
+  const parsed = await readJsonBody(request, 30000);
+  if (!parsed.ok) return json({ error: parsed.error }, { status: parsed.status });
+  const resumeText = (parsed.body.resumeText || "").toString().trim().slice(0, 24000);
+  if (!resumeText) return json({ error: "Paste your resume text first." }, { status: 400 });
+
+  const prompt = buildRoleSuggestionPrompt(resumeText);
+  const { raw, capped } = await callConfiguredAi(env, user, prompt, "role suggestion");
+  if (capped) {
+    return json(
+      { error: "You've used today's free AI allowance — try again tomorrow, set your own AI key in Settings, or just type a target role.", limited: true },
+      { status: 429 },
+    );
+  }
+  if (!raw) {
+    return json({ error: "Couldn't generate a suggestion right now — try again, or just type a target role." }, { status: 502 });
+  }
+
+  const role = raw
+    .toString()
+    .trim()
+    .replace(/^["'“”]+|["'“”.]+$/g, "")
+    .slice(0, 120);
+  if (!role) return json({ error: "Couldn't determine a role — try again or enter one manually." }, { status: 502 });
+
+  return json({ role });
+}
+
+// ---------- AI: resume-tailored question-generation prompt ----------
+// Also a small, cheap call — the AI writes the *instructions* (tailored
+// to this resume's actual companies/tech/seniority), not the 40-60 Q&A
+// pairs themselves, so this reuses the same cap/BYOK accounting as the
+// role suggestion above rather than needing its own budget.
+
+// The part of the prompt that makes the reply actually importable — kept
+// deterministic (never AI-generated) since the CSV importer depends on
+// this exact contract. Used both as instructions to the model (so it
+// knows what to end its own output with) and as a fallback appended
+// server-side if the model's reply somehow drops or mangles it.
+function resumePromptFormatRules(categories, perCategory) {
+  const categoryList = categories.join(", ");
+  return `Generate exactly ${perCategory} questions for EACH of these categories: ${categoryList}.
+
+Output ONLY a CSV — no commentary, no markdown code fences, nothing before or after it. Use exactly this header row:
+section,question,answer
+
+Rules:
+- "section" must be exactly one of: ${categoryList}.
+- Each answer must be a detailed, senior-level model answer (3-6 sentences) that references relevant, specific aspects of the resume and target role — not generic advice.
+- If a field contains a comma, wrap the whole field in double quotes. If a field contains a double quote, escape it by doubling it ("").
+- Do not add row numbers, extra columns, or blank lines.`;
+}
+
+function buildPromptGenerationMetaPrompt({ resumeText, targetRole, categories, perCategory }) {
+  const categoryList = categories.join(", ");
+  return `You are an expert interview coach writing a prompt that will be pasted into a separate AI assistant (ChatGPT or Claude) to generate senior-level interview questions and model answers.
+
+Your ONLY job is to write that prompt's text. Do NOT answer it yourself, do NOT generate any example questions or answers, and do NOT include any actual CSV rows — the other assistant does that part after receiving your prompt. Keep your own output short: 4-6 sentences of tailored framing, nothing more.
+
+Base that framing specifically on this person's actual background — mention their real companies, technologies, seniority signals, and career trajectory from the resume below, so the questions and answers the other assistant later produces end up genuinely specific to them and their target role instead of generic advice.
+
+Target role: ${targetRole}
+
+Resume:
+"""
+${resumeText}
+"""
+
+Immediately after your framing, append the following output-format instructions verbatim — copy them exactly as given here, do not paraphrase, shorten, omit, or add anything after them, since another program will parse the other assistant's eventual reply as a CSV file:
+
+${resumePromptFormatRules(categories, perCategory)}
+
+Respond with ONLY the finished prompt text itself (your framing immediately followed by the verbatim rules above) — no commentary about what you wrote, no markdown code fences, no example rows, nothing before or after it.`;
+}
+
+async function handleGenerateResumePrompt(request, env, user) {
+  const parsed = await readJsonBody(request, 30000);
+  if (!parsed.ok) return json({ error: parsed.error }, { status: parsed.status });
+  const resumeText = (parsed.body.resumeText || "").toString().trim().slice(0, 24000);
+  const targetRole = (parsed.body.targetRole || "").toString().trim().slice(0, 120);
+  const categories = Array.isArray(parsed.body.categories)
+    ? parsed.body.categories.map((c) => String(c).trim()).filter(Boolean).slice(0, 15)
+    : [];
+  const perCategory = Math.max(3, Math.min(20, parseInt(parsed.body.perCategory, 10) || 10));
+
+  if (!resumeText) return json({ error: "Paste your resume text first." }, { status: 400 });
+  if (!targetRole) return json({ error: "Enter a target role." }, { status: 400 });
+  if (categories.length === 0) return json({ error: "Pick at least one category." }, { status: 400 });
+
+  const metaPrompt = buildPromptGenerationMetaPrompt({ resumeText, targetRole, categories, perCategory });
+  // Generous budget: the framing itself is short, but the verbatim rules
+  // block it has to reproduce is a few hundred tokens on its own, and the
+  // default 600-token budget was clipping replies mid-instruction.
+  const { raw, capped } = await callConfiguredAi(env, user, metaPrompt, "resume prompt generation", 1200);
+  if (capped) {
+    return json(
+      { error: "You've used today's free AI allowance — try again tomorrow, or set your own AI key in Settings.", limited: true },
+      { status: 429 },
+    );
+  }
+  if (!raw) {
+    return json({ error: "Couldn't generate a prompt right now — try again." }, { status: 502 });
+  }
+
+  let prompt = raw
+    .toString()
+    .trim()
+    .replace(/^```[a-z]*\n?/i, "")
+    .replace(/```$/, "")
+    // Smaller models routinely ignore "no commentary" and prepend a line
+    // like "Here is the prompt:" before the actual content — strip it.
+    .replace(/^(here'?s|here is)\b[^\n:]*:\s*\n*/i, "")
+    .trim();
+  // Same models also sometimes wrap the whole reply in one matching pair
+  // of quotes, as if quoting it back — unwrap that too.
+  if ((prompt.startsWith('"') && prompt.endsWith('"')) || (prompt.startsWith("“") && prompt.endsWith("”"))) {
+    prompt = prompt.slice(1, -1).trim();
+  }
+  if (!prompt.includes("section,question,answer")) {
+    prompt += `\n\n${resumePromptFormatRules(categories, perCategory)}`;
+  }
+
+  return json({ prompt: prompt.slice(0, 12000) });
+}
+
+// ---------- daily multiple-choice test ----------
+
+async function handleGetTodayTest(request, env, user) {
+  const today = todayDateStr(user.timezone);
+  const testQuery = `SELECT t.question_id as id, t.selected_index as selected_index, t.correct as correct,
+            q.q as q, q.a as a, q.topic_label as topic_label
+     FROM daily_test_results t JOIN questions q ON q.id = t.question_id
+     WHERE t.user_id = ? AND t.date = ? ORDER BY t.id ASC`;
+
+  let testRows = ((await env.DB.prepare(testQuery).bind(user.id, today).all()).results) || [];
+
+  if (testRows.length === 0) {
+    const pool = await env.DB.prepare(
+      `SELECT q.id as id FROM user_question_progress p JOIN questions q ON q.id = p.question_id
+       WHERE p.user_id = ? AND p.status = 'done' ORDER BY RANDOM() LIMIT ?`,
+    )
+      .bind(user.id, TEST_SIZE)
+      .all();
+    const ids = (pool.results || []).map((r) => r.id);
+    if (ids.length) {
+      const now = new Date().toISOString();
+      const stmts = ids.map((qid) =>
+        env.DB.prepare(
+          "INSERT INTO daily_test_results (user_id, date, question_id, selected_index, correct, answered_at) VALUES (?, ?, ?, NULL, 0, ?) ON CONFLICT(user_id, date, question_id) DO NOTHING",
+        ).bind(user.id, today, qid, now),
+      );
+      await env.DB.batch(stmts);
+      testRows = ((await env.DB.prepare(testQuery).bind(user.id, today).all()).results) || [];
+    }
+  }
+
+  const questions = [];
+  for (const row of testRows) {
+    const variant = await getOrCreateMcqVariant(env, user, { id: row.id, q: row.q, a: row.a });
+    questions.push({
+      id: row.id,
+      q: row.q,
+      topic_label: row.topic_label,
+      options: variant.options,
+      answered: row.selected_index !== null,
+      selectedIndex: row.selected_index,
+      correct: row.selected_index !== null ? !!row.correct : null,
+      correctIndex: row.selected_index !== null ? variant.correctIndex : null,
+    });
+  }
+
+  return json({ date: today, questions });
+}
+
+async function handleAnswerTest(request, env, user) {
+  const parsed = await readJsonBody(request, 2000);
+  if (!parsed.ok) return json({ error: parsed.error }, { status: parsed.status });
+  const questionId = (parsed.body.question_id || "").toString();
+  const selectedIndex = parseInt(parsed.body.selected_index, 10);
+  if (!questionId || !Number.isInteger(selectedIndex) || selectedIndex < 0 || selectedIndex > 3) {
+    return json({ error: "Invalid answer." }, { status: 400 });
+  }
+
+  const variant = await env.DB.prepare("SELECT correct_index FROM mcq_variants WHERE question_id = ?")
+    .bind(questionId)
+    .first();
+  if (!variant) return json({ error: "No test question found for this id." }, { status: 404 });
+
+  const today = todayDateStr(user.timezone);
+  const now = new Date().toISOString();
+  const correct = selectedIndex === variant.correct_index ? 1 : 0;
+
+  await env.DB.prepare(
+    `INSERT INTO daily_test_results (user_id, date, question_id, selected_index, correct, answered_at)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT(user_id, date, question_id) DO UPDATE SET selected_index = excluded.selected_index, correct = excluded.correct, answered_at = excluded.answered_at`,
+  )
+    .bind(user.id, today, questionId, selectedIndex, correct, now)
+    .run();
+
+  await env.DB.prepare(
+    "INSERT INTO activity_log (user_id, occurred_at, event_type, topic_id, question_id, result) VALUES (?, ?, 'test_answer', NULL, ?, ?)",
+  )
+    .bind(user.id, now, questionId, correct ? "got_it" : "again")
+    .run();
+
+  return json({ ok: true, correct: !!correct, correctIndex: variant.correct_index });
 }
 
 export default {
@@ -527,9 +2044,7 @@ export default {
         if (!user) return applySecurityHeaders(json({ error: "Not authenticated." }, { status: 401 }));
 
         if (url.pathname === "/api/me" && request.method === "GET") {
-          return applySecurityHeaders(
-            json({ user: { id: user.id, email: user.email, name: user.name, createdAt: user.createdAt } }),
-          );
+          return applySecurityHeaders(json({ user: userPayload(user) }));
         }
         if (url.pathname === "/api/state" && request.method === "GET") {
           return applySecurityHeaders(await handleGetState(request, env, user));
@@ -540,14 +2055,109 @@ export default {
         if (url.pathname === "/api/activity" && request.method === "GET") {
           return applySecurityHeaders(await handleGetActivity(request, env, user));
         }
+        if (url.pathname === "/api/export/progress" && request.method === "GET") {
+          return applySecurityHeaders(await handleExportProgress(request, env, user));
+        }
         if (url.pathname === "/api/password/change" && request.method === "POST") {
           return applySecurityHeaders(await handleChangePassword(request, env, user));
         }
         if (url.pathname === "/api/account" && request.method === "PATCH") {
           return applySecurityHeaders(await handleUpdateAccount(request, env, user));
         }
+        if (url.pathname === "/api/profile" && request.method === "PATCH") {
+          return applySecurityHeaders(await handleUpdateProfile(request, env, user));
+        }
         if (url.pathname === "/api/sessions/revoke-all" && request.method === "POST") {
           return applySecurityHeaders(await handleRevokeAllSessions(request, env, user));
+        }
+        if (url.pathname === "/api/queue/today" && request.method === "GET") {
+          return applySecurityHeaders(await handleGetTodayQueue(request, env, user));
+        }
+        if (url.pathname === "/api/questions/complete" && request.method === "POST") {
+          return applySecurityHeaders(await handleCompleteQuestion(request, env, user));
+        }
+        if (url.pathname === "/api/questions/flag-review" && request.method === "POST") {
+          return applySecurityHeaders(await handleFlagQuestionForReview(request, env, user));
+        }
+        if (url.pathname === "/api/questions/request-more" && request.method === "POST") {
+          return applySecurityHeaders(await handleRequestMore(request, env, user));
+        }
+        if (url.pathname === "/api/questions/review-result" && request.method === "POST") {
+          return applySecurityHeaders(await handleReviewResult(request, env, user));
+        }
+        if (url.pathname === "/api/review" && request.method === "GET") {
+          return applySecurityHeaders(await handleGetReview(request, env, user));
+        }
+        if (url.pathname === "/api/question-sets" && request.method === "POST") {
+          return applySecurityHeaders(await handleCreateQuestionSet(request, env, user));
+        }
+        if (url.pathname === "/api/question-sets/mine" && request.method === "GET") {
+          return applySecurityHeaders(await handleListMySets(request, env, user));
+        }
+        if (url.pathname === "/api/questions/bank-count" && request.method === "GET") {
+          return applySecurityHeaders(await handleGetBankCount(request, env, user));
+        }
+        if (url.pathname === "/api/ai-usage" && request.method === "GET") {
+          return applySecurityHeaders(await handleGetAiUsage(request, env, user));
+        }
+        if (url.pathname === "/api/stats/progress" && request.method === "GET") {
+          return applySecurityHeaders(await handleGetStatsProgress(request, env, user));
+        }
+        if (url.pathname === "/api/stats/insight" && request.method === "GET") {
+          return applySecurityHeaders(await handleGetStatsInsight(request, env, user));
+        }
+        if (url.pathname === "/api/resume/suggest-role" && request.method === "POST") {
+          return applySecurityHeaders(await handleSuggestTargetRole(request, env, user));
+        }
+        if (url.pathname === "/api/resume/generate-prompt" && request.method === "POST") {
+          return applySecurityHeaders(await handleGenerateResumePrompt(request, env, user));
+        }
+        if (url.pathname === "/api/question-sets/suggestions" && request.method === "GET") {
+          return applySecurityHeaders(await handleListSuggestions(request, env, user));
+        }
+        if (url.pathname === "/api/self-test/quota" && request.method === "GET") {
+          return applySecurityHeaders(await handleGetSelfTestQuota(request, env, user));
+        }
+        if (url.pathname === "/api/self-test/question" && request.method === "GET") {
+          return applySecurityHeaders(await handleGetSelfTestQuestion(request, env, user));
+        }
+        if (url.pathname === "/api/self-test/analyze" && request.method === "POST") {
+          return applySecurityHeaders(await handleSelfTestAnalyze(request, env, user));
+        }
+
+        const setAction = url.pathname.match(/^\/api\/question-sets\/([^/]+)\/(submit|subscribe)$/);
+        if (setAction && request.method === "POST") {
+          const [, setId, action] = setAction;
+          if (action === "submit") return applySecurityHeaders(await handleSubmitSet(request, env, user, setId));
+          return applySecurityHeaders(await handleSubscribeSet(request, env, user, setId));
+        }
+
+        const adminSetAction = url.pathname.match(/^\/api\/admin\/question-sets\/([^/]+)\/(approve|reject)$/);
+        if (adminSetAction && request.method === "POST") {
+          if (user.role !== "admin") return applySecurityHeaders(json({ error: "Forbidden." }, { status: 403 }));
+          const [, setId, action] = adminSetAction;
+          if (action === "approve") return applySecurityHeaders(await handleApproveSet(request, env, user, setId));
+          return applySecurityHeaders(await handleRejectSet(request, env, user, setId));
+        }
+        if (url.pathname === "/api/admin/pending-sets" && request.method === "GET") {
+          if (user.role !== "admin") return applySecurityHeaders(json({ error: "Forbidden." }, { status: 403 }));
+          return applySecurityHeaders(await handleAdminPendingSets(request, env, user));
+        }
+        if (url.pathname === "/api/admin/approval-history" && request.method === "GET") {
+          if (user.role !== "admin") return applySecurityHeaders(json({ error: "Forbidden." }, { status: 403 }));
+          return applySecurityHeaders(await handleAdminApprovalHistory(request, env, user));
+        }
+        const adminSetQuestions = url.pathname.match(/^\/api\/admin\/question-sets\/([^/]+)\/questions$/);
+        if (adminSetQuestions && request.method === "GET") {
+          if (user.role !== "admin") return applySecurityHeaders(json({ error: "Forbidden." }, { status: 403 }));
+          return applySecurityHeaders(await handleAdminGetSetQuestions(request, env, user, adminSetQuestions[1]));
+        }
+
+        if (url.pathname === "/api/test/today" && request.method === "GET") {
+          return applySecurityHeaders(await handleGetTodayTest(request, env, user));
+        }
+        if (url.pathname === "/api/test/answer" && request.method === "POST") {
+          return applySecurityHeaders(await handleAnswerTest(request, env, user));
         }
 
         return applySecurityHeaders(json({ error: "Not found." }, { status: 404 }));

@@ -1,6 +1,6 @@
 {
   "name": "interview-prep",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "Daily interview-prep tracker (HR, delivery/program management, people management, technical architecture, AI automation) with login and per-user progress, deployed on Cloudflare Workers + D1.",
   "scripts": {
@@ -11,6 +11,16 @@
     "db:migrate:remote": "wrangler d1 execute interview-prep-db --remote --file=./migrations/0001_init.sql",
     "db:migrate:local:0002": "wrangler d1 execute interview-prep-db --local --file=./migrations/0002_accounts_security_activity.sql",
     "db:migrate:remote:0002": "wrangler d1 execute interview-prep-db --remote --file=./migrations/0002_accounts_security_activity.sql",
+    "db:migrate:local:0003": "wrangler d1 execute interview-prep-db --local --file=./migrations/0003_relational_content.sql",
+    "db:migrate:remote:0003": "wrangler d1 execute interview-prep-db --remote --file=./migrations/0003_relational_content.sql",
+    "db:seed:local": "wrangler d1 execute interview-prep-db --local --file=./migrations/seed_official_bank.sql",
+    "db:seed:remote": "wrangler d1 execute interview-prep-db --remote --file=./migrations/seed_official_bank.sql",
+    "db:migrate:local:0004": "wrangler d1 execute interview-prep-db --local --file=./migrations/0004_ai_usage_insights.sql",
+    "db:migrate:remote:0004": "wrangler d1 execute interview-prep-db --remote --file=./migrations/0004_ai_usage_insights.sql",
+    "db:migrate:local:0005": "wrangler d1 execute interview-prep-db --local --file=./migrations/0005_profile_fields.sql",
+    "db:migrate:remote:0005": "wrangler d1 execute interview-prep-db --remote --file=./migrations/0005_profile_fields.sql",
+    "db:migrate:local:0006": "wrangler d1 execute interview-prep-db --local --file=./migrations/0006_workers_ai_model_choice.sql",
+    "db:migrate:remote:0006": "wrangler d1 execute interview-prep-db --remote --file=./migrations/0006_workers_ai_model_choice.sql",
     "tail": "wrangler tail"
   },
   "devDependencies": {
