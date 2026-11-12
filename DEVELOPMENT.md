@@ -925,3 +925,27 @@ This surfaced a real gap in Mock Interview (Phase 6.3): it previously auto-advan
 | Question-count chip rendered next to the existing status pill, correct singular/plural | Done |
 | Verified via direct D1 seeding of 4 sets (private/pending/shared/rejected, with 2/0/1/0 questions respectively) — confirmed the API returns the right counts and the Settings page renders all 4 badge combinations correctly | Done |
 | Deploy | Not yet — pending |
+
+## Phase 6.6 — Push notifications (daily streak reminder)
+
+**Status: implemented and verified locally (crypto round-trip + a real Chromium browser subscribe/unsubscribe); the VAPID private key secret has NOT yet been registered against the live Cloudflare account — deploy blocked on that step.**
+
+The last and largest item of the enhancement batch: a daily browser notification nudging a user who still has incomplete questions for the day. Built entirely with native WebCrypto — no npm dependency — matching this app's established dependency-light convention (CSV import, PDF text extraction, and the resume-prompt builder all made the same call rather than reaching for a library).
+
+New `push_subscriptions(user_id, endpoint, p256dh, auth, last_push_sent_date)` table (`migrations/0011_push_subscriptions.sql`). New `src/webpush.js` implements RFC 8291 message encryption (ECDH + HKDF + AES-128-GCM) and RFC 8292 VAPID JWT signing (ES256), both via `crypto.subtle` directly. Three new endpoints: `GET /api/push/vapid-public-key`, `POST /api/push/subscribe`, `POST /api/push/unsubscribe`. A new `scheduled` export runs hourly (`wrangler.toml` `[triggers]`); for each subscription it computes the owner's current local hour from their saved timezone (same `Intl`-based approach as `todayDateStr`), and — once per local day, at 7pm local time, only if they still have incomplete questions queued for today — sends a reminder via `sendWebPush`, recording `last_push_sent_date` to prevent double-sends. A dead/expired subscription (404/410 response) is removed automatically. `public/sw.js` gained `push` and `notificationclick` listeners (cache version bumped to v3). Settings gained a "Notifications" card with an enable/disable toggle that requests permission, subscribes via `pushManager.subscribe`, and posts the subscription to the backend.
+
+A VAPID ECDSA P-256 key pair was generated locally (disposable script, not committed). The public key is a plain `wrangler.toml` var (`VAPID_PUBLIC_KEY`, safe to expose); the private key was written directly to the gitignored `.dev.vars` as `VAPID_PRIVATE_KEY_JWK` for local testing — it was never printed to a terminal or committed anywhere.
+
+| Item | Status |
+|---|---|
+| `push_subscriptions` table + migration | Done |
+| `src/webpush.js`: VAPID JWT signing + RFC 8291 message encryption, both via native WebCrypto | Done |
+| Subscribe/unsubscribe/vapid-public-key endpoints | Done |
+| Hourly `scheduled` handler: per-user local-hour gating, once-per-local-day dedup, pending-question check, dead-subscription cleanup | Done |
+| `sw.js` push + notificationclick listeners | Done |
+| Settings "Notifications" card (enable/disable toggle) | Done |
+| **Crypto correctness verified independently of any push service**: a disposable Node script generated a fake "browser" subscriber key pair, called the real `sendWebPush()` with a stubbed `fetch` to capture the encrypted wire body, then decrypted it back using the subscriber's private key exactly as a real browser would — confirmed the decrypted payload matched the original JSON byte-for-byte. The VAPID JWT's ES256 signature was separately verified against its own public key | Done |
+| Verified the `scheduled` handler's gating logic locally via `wrangler dev --local` + `/cdn-cgi/local/scheduled` (local cron trigger) and the Workers Logs observability query API: confirmed local-hour computation, confirmed a real send attempt is made when a pending question exists (correctly failed against a fake unreachable endpoint, left for retry — not marked as sent), and confirmed the send is correctly skipped once all of a user's questions are marked done (all via a temporary debug log, removed before commit) | Done |
+| Verified the full real-browser flow via Playwright/Chromium: enabling reminders actually created a working `PushSubscription` (a real `fcm.googleapis.com` endpoint) and saved it server-side; disabling removed it both client-side (`getSubscription()` returns null afterward) and the server-side D1 row | Done |
+| **VAPID_PRIVATE_KEY_JWK has not been registered as a live Worker secret** — `wrangler secret put` against the real Cloudflare account is a deliberate pause point (writes to shared/production infrastructure), held for explicit confirmation before running | Blocked — pending confirmation |
+| Deploy | Not yet — pending (and blocked on the secret above regardless) |

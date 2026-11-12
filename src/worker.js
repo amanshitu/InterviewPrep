@@ -5,6 +5,8 @@
 // itself is static content shipped with the app (public/questions.js) —
 // only per-user progress lives in the database.
 
+import { sendWebPush } from "./webpush.js";
+
 const SESSION_COOKIE = "session";
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const PASSWORD_RESET_TTL_MS = 30 * 60 * 1000; // 30 minutes
@@ -2034,6 +2036,97 @@ async function handleAnswerTest(request, env, user) {
   return json({ ok: true, correct: !!correct, correctIndex: variant.correct_index });
 }
 
+async function handlePushSubscribe(request, env, user) {
+  const parsed = await readJsonBody(request, 4000);
+  if (!parsed.ok) return json({ error: parsed.error }, { status: parsed.status });
+  const { endpoint, keys } = parsed.body || {};
+  if (!endpoint || !keys || !keys.p256dh || !keys.auth) {
+    return json({ error: "Invalid push subscription." }, { status: 400 });
+  }
+  await env.DB.prepare(
+    `INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth) VALUES (?, ?, ?, ?)
+     ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, p256dh = excluded.p256dh, auth = excluded.auth`,
+  )
+    .bind(user.id, endpoint, keys.p256dh, keys.auth)
+    .run();
+  return json({ ok: true });
+}
+
+async function handlePushUnsubscribe(request, env, user) {
+  const parsed = await readJsonBody(request, 4000);
+  if (!parsed.ok) return json({ error: parsed.error }, { status: parsed.status });
+  const { endpoint } = parsed.body || {};
+  if (!endpoint) return json({ error: "Missing endpoint." }, { status: 400 });
+  await env.DB.prepare("DELETE FROM push_subscriptions WHERE endpoint = ? AND user_id = ?")
+    .bind(endpoint, user.id)
+    .run();
+  return json({ ok: true });
+}
+
+// Rough local-hour estimate from an IANA timezone name, reusing the same
+// Intl-based approach as todayDateStr rather than a hardcoded offset table.
+function localHourFor(timezone) {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", { timeZone: timezone || "UTC", hour: "numeric", hour12: false }).formatToParts(new Date());
+    const hourPart = parts.find((p) => p.type === "hour");
+    return hourPart ? parseInt(hourPart.value, 10) % 24 : new Date().getUTCHours();
+  } catch {
+    return new Date().getUTCHours();
+  }
+}
+
+const PUSH_REMINDER_LOCAL_HOUR = 19; // 7pm in each subscriber's own timezone
+
+// Runs hourly (wrangler.toml [triggers]). For each subscription whose
+// owner's local time is currently the reminder hour and who hasn't been
+// sent a reminder yet today (their own local date), sends a nudge if they
+// still have incomplete questions in today's queue. One row's
+// last_push_sent_date prevents double-sends within the same local day.
+async function handleScheduled(env) {
+  const { results: subs } = await env.DB.prepare(
+    `SELECT ps.id as id, ps.endpoint as endpoint, ps.p256dh as p256dh, ps.auth as auth, ps.last_push_sent_date as last_push_sent_date,
+            u.id as user_id, u.timezone as timezone
+     FROM push_subscriptions ps JOIN users u ON u.id = ps.user_id`,
+  ).all();
+  if (!subs || !subs.length) return;
+  if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY_JWK) return;
+  const vapidPrivateJwk = JSON.parse(env.VAPID_PRIVATE_KEY_JWK);
+
+  for (const sub of subs) {
+    const localHour = localHourFor(sub.timezone);
+    if (localHour !== PUSH_REMINDER_LOCAL_HOUR) continue;
+    const today = todayDateStr(sub.timezone);
+    if (sub.last_push_sent_date === today) continue;
+
+    const pending = await env.DB.prepare(
+      "SELECT COUNT(*) as n FROM user_question_progress WHERE user_id = ? AND queued_for_date = ? AND status != 'done'",
+    )
+      .bind(sub.user_id, today)
+      .first();
+    if (!pending || !pending.n) continue;
+
+    try {
+      const resp = await sendWebPush(
+        { endpoint: sub.endpoint, p256dh: sub.p256dh, auth: sub.auth },
+        { title: "Interview Prep", body: `You still have ${pending.n} question${pending.n === 1 ? "" : "s"} left today.`, url: "/" },
+        env.VAPID_PUBLIC_KEY,
+        vapidPrivateJwk,
+        "mailto:support@example.com",
+      );
+      if (resp.status === 404 || resp.status === 410) {
+        // Dead/expired subscription — remove it so future runs don't keep trying it.
+        await env.DB.prepare("DELETE FROM push_subscriptions WHERE id = ?").bind(sub.id).run();
+        continue;
+      }
+      if (resp.ok) {
+        await env.DB.prepare("UPDATE push_subscriptions SET last_push_sent_date = ? WHERE id = ?").bind(today, sub.id).run();
+      }
+    } catch {
+      // Network/crypto failure — leave the subscription as-is, retried next hour.
+    }
+  }
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -2188,6 +2281,16 @@ export default {
           return applySecurityHeaders(await handleAnswerTest(request, env, user));
         }
 
+        if (url.pathname === "/api/push/vapid-public-key" && request.method === "GET") {
+          return applySecurityHeaders(json({ publicKey: env.VAPID_PUBLIC_KEY || null }));
+        }
+        if (url.pathname === "/api/push/subscribe" && request.method === "POST") {
+          return applySecurityHeaders(await handlePushSubscribe(request, env, user));
+        }
+        if (url.pathname === "/api/push/unsubscribe" && request.method === "POST") {
+          return applySecurityHeaders(await handlePushUnsubscribe(request, env, user));
+        }
+
         return applySecurityHeaders(json({ error: "Not found." }, { status: 404 }));
       } catch (err) {
         return applySecurityHeaders(
@@ -2199,5 +2302,9 @@ export default {
     // Static app (public/) — index.html, app.js, styles.css, questions.js
     const assetResponse = await env.ASSETS.fetch(request);
     return applySecurityHeaders(assetResponse);
+  },
+
+  async scheduled(event, env) {
+    await handleScheduled(env);
   },
 };
