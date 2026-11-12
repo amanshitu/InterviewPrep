@@ -573,7 +573,7 @@ function wirePullToRefresh() {
   main.addEventListener(
     "touchstart",
     (e) => {
-      if (!isMobileLayout() || main.scrollTop > 0 || e.touches.length !== 1) {
+      if (!isMobileLayout() || !isOnline() || main.scrollTop > 0 || e.touches.length !== 1) {
         startX = null;
         startY = null;
         return;
@@ -955,6 +955,25 @@ if ("serviceWorker" in navigator) {
 }
 
 $all(".footer-year").forEach((node) => { node.textContent = new Date().getFullYear(); });
+
+// Persistent connectivity bar — shown on every screen (auth/about/app), not
+// gated by login, since "you're offline" is ongoing state the user should
+// see regardless of which screen they're on. Also what pull-to-refresh
+// checks before arming (same gating MealSathi uses: a disabled gesture
+// instead of a network call that's doomed to fail).
+export function isOnline() {
+  return typeof navigator.onLine !== "boolean" || navigator.onLine;
+}
+
+function wireConnectionStatus() {
+  const banner = $("#offline-banner");
+  if (!banner) return;
+  const update = () => { banner.hidden = isOnline(); };
+  update();
+  window.addEventListener("online", update);
+  window.addEventListener("offline", update);
+}
+wireConnectionStatus();
 
 (async function init() {
   setupAuthScreen();

@@ -614,6 +614,15 @@ img { max-width: 100%; }
 :root:not([data-theme="light"]) .toast-error { background: var(--danger); color: var(--on-primary); border: none; }
 :root:not([data-theme="light"]) .toast-warning { background: var(--warn); color: var(--on-primary); border: none; }
 
+/* Persistent connectivity bar (app.js wireConnectionStatus) — shown the
+   whole time the browser is offline, on every screen (auth/about/app),
+   not just a toast, since it's ongoing state rather than a one-off event. */
+.offline-banner {
+  position: sticky; top: 0; z-index: 90; display: flex; align-items: center; justify-content: center;
+  gap: 8px; padding: 8px 16px; padding-top: max(8px, env(safe-area-inset-top));
+  background: var(--warn-soft); color: var(--warn); font-size: 13px; font-weight: 600; text-align: center;
+}
+
 .review-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .range-label { font-size: 13px; color: var(--text-muted); font-weight: 600; }
 input[type="range"] { accent-color: var(--primary); width: 160px; }

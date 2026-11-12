@@ -1024,3 +1024,18 @@ Fix: added `overscroll-behavior-y: contain` on `html` itself, applied unconditio
 | Re-verified the full custom gesture still works identically after this change (zero navigations, genuine `/api/me` + bank-count + current-page data refresh) | Done |
 | **Known test-environment limit**: Chrome's native pull-to-refresh is part of the browser's own UI chrome, not the page's rendered DOM — it cannot be triggered or observed through a headless/automated browser the way the custom in-page gesture can. The CSS property is the correct, documented fix either way, but final confirmation that the native browser gesture itself no longer appears can only come from testing on a real phone after deploy | Noted |
 | Deploy | Not yet — pending |
+
+## Phase 6.10 — offline awareness (connectivity banner + pull-to-refresh gating)
+
+**Status: implemented and verified with a real Playwright/Chromium browser; not yet deployed.**
+
+Asked to study how a sibling app (MealSathi) handles pull-to-refresh and offline support, and bring the same behavior here. MealSathi's offline story turns out to be two separate things: (1) a persistent "You're offline" status bar driven by `navigator.onLine` + online/offline events, shown on every screen, and (2) every pull-to-refresh instance passes `disabled={!online}` so the gesture simply never arms while offline — no failed network attempt, no dead spinner. Their deeper offline data layer (IndexedDB personal-data cache + Workbox-cached published-content routes) is built on React Query/Vite-PWA tooling this app doesn't have and would be a substantial new subsystem on its own, not a drop-in port — flagged back to the user as a separate, bigger decision rather than silently attempting a mismatched reimplementation.
+
+Ported the two directly-applicable pieces: a new `#offline-banner` (shown on auth/about/app screens alike, not gated by login, since connectivity is ongoing state independent of whether you're signed in yet) wired by a new `wireConnectionStatus()` called unconditionally at script load; and a new exported `isOnline()` helper added to `wirePullToRefresh()`'s existing guard conditions (alongside the mobile-only and scrollTop-zero checks), so the gesture never arms offline, same as MealSathi.
+
+| Item | Status |
+|---|---|
+| Persistent "You're offline" banner, shown on every screen regardless of auth state | Done |
+| Pull-to-refresh gated on `isOnline()` — never arms while offline | Done |
+| Verified via Playwright (`page.context().setOffline()`): banner correctly shows/hides across the online→offline→online transitions, visible on the pre-login auth screen too; confirmed a full touch drag sequence while offline does not add the `is-dragging` class (gesture never armed) | Done |
+| Deploy | Not yet — pending |
