@@ -828,3 +828,19 @@ Dictation (mic button, feature-detected via a new `getSpeechRecognitionCtor()` i
 | Verified empty-answer validation, "New question" skip, and the Settings quota card all render and behave correctly end-to-end via Playwright | Done |
 | AI feedback content itself not visually verified locally — local Workers AI has no inference simulator (same pre-existing limitation documented for MCQ generation); graceful 502 handling confirmed instead | Known limitation |
 | Deploy | Not yet — pending |
+
+## Phase 6.0 — warm visual rebrand (palette + pill buttons)
+
+**Status: implemented and verified with a real Playwright/Chromium browser; not yet deployed.**
+
+First of a planned enhancement batch (Phases 6.0–6.6), prompted by a deep review of the app's full feature set plus a look at a sibling app (MealSathi) for UI inspiration. Decision locked in directly with the user: a full rebrand, not an additive accent picker — the cool indigo default palette is replaced outright with a warm saffron/cream one, and buttons become fully pill-shaped everywhere.
+
+Touched `public/styles.css` only — every color is already referenced through the existing CSS custom-property tokens (`--bg`, `--surface`, `--primary`, etc.), so this was a token-value swap in the `:root` block and both dark-mode override blocks (the `prefers-color-scheme` media query and the explicit `[data-theme="dark"]` override, kept identical to each other as before), not a markup or per-page change. A new `--radius-full: 999px` token was added and wired only into the base `.btn` rule's `border-radius` — deliberately a new token rather than repointing the existing `--radius-sm` (8px), since that token is shared with cards/inputs/tiles which must keep their current rectangular rounding, not become pills.
+
+| Item | Status |
+|---|---|
+| Warm saffron/cream light palette + warm dark-brown dark palette, both token-only changes | Done |
+| All buttons now fully pill-shaped (`--radius-full`), cards/inputs/tiles unaffected | Done |
+| Confirmed no hardcoded hex colors exist outside the token blocks (grepped the whole file) | Done |
+| Verified login screen, Today, and Settings pages in both light and dark via Playwright/Chromium — text legible, buttons pill-shaped, cards still rectangular | Done |
+| Deploy | Not yet — pending |
