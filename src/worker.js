@@ -798,9 +798,9 @@ async function handleGetActivity(request, env, user) {
             a.question_id as question_id, a.result as result, q.q as question_text
      FROM activity_log a
      LEFT JOIN questions q ON q.id = a.question_id
-     WHERE a.user_id = ? ORDER BY a.occurred_at DESC LIMIT ?`,
+     WHERE a.user_id = ? AND a.category_id = ? ORDER BY a.occurred_at DESC LIMIT ?`,
   )
-    .bind(user.id, limit)
+    .bind(user.id, user.activeCategoryId, limit)
     .all();
   return json({ events: rows.results || [] });
 }
@@ -1017,9 +1017,9 @@ async function handleCompleteQuestion(request, env, user) {
 
   const topicRow = await env.DB.prepare("SELECT topic_label FROM questions WHERE id = ?").bind(questionId).first();
   await env.DB.prepare(
-    "INSERT INTO activity_log (user_id, occurred_at, event_type, topic_id, question_id, result) VALUES (?, ?, 'reveal', ?, ?, NULL)",
+    "INSERT INTO activity_log (user_id, occurred_at, event_type, topic_id, question_id, result, category_id) VALUES (?, ?, 'reveal', ?, ?, NULL, ?)",
   )
-    .bind(user.id, now, topicRow ? topicRow.topic_label : null, questionId)
+    .bind(user.id, now, topicRow ? topicRow.topic_label : null, questionId, user.activeCategoryId)
     .run();
 
   return json({ ok: true });
@@ -1078,9 +1078,9 @@ async function handleFlagQuestionForReview(request, env, user) {
 
   const topicRow = await env.DB.prepare("SELECT topic_label FROM questions WHERE id = ?").bind(questionId).first();
   await env.DB.prepare(
-    "INSERT INTO activity_log (user_id, occurred_at, event_type, topic_id, question_id, result) VALUES (?, ?, 'review', ?, ?, 'again')",
+    "INSERT INTO activity_log (user_id, occurred_at, event_type, topic_id, question_id, result, category_id) VALUES (?, ?, 'review', ?, ?, 'again', ?)",
   )
-    .bind(user.id, now, topicRow ? topicRow.topic_label : null, questionId)
+    .bind(user.id, now, topicRow ? topicRow.topic_label : null, questionId, user.activeCategoryId)
     .run();
 
   return json({ ok: true });
@@ -1127,9 +1127,9 @@ async function handleReviewResult(request, env, user) {
 
   const topicRow = await env.DB.prepare("SELECT topic_label FROM questions WHERE id = ?").bind(questionId).first();
   await env.DB.prepare(
-    "INSERT INTO activity_log (user_id, occurred_at, event_type, topic_id, question_id, result) VALUES (?, ?, 'review', ?, ?, ?)",
+    "INSERT INTO activity_log (user_id, occurred_at, event_type, topic_id, question_id, result, category_id) VALUES (?, ?, 'review', ?, ?, ?, ?)",
   )
-    .bind(user.id, now, topicRow ? topicRow.topic_label : null, questionId, result)
+    .bind(user.id, now, topicRow ? topicRow.topic_label : null, questionId, result, user.activeCategoryId)
     .run();
 
   return json({ ok: true });
@@ -1144,9 +1144,10 @@ async function handleGetReview(request, env, user) {
             p.last_result as last_result, p.correct_streak as correct_streak, p.times_shown as times_shown
      FROM user_question_progress p
      JOIN questions q ON q.id = p.question_id
+     JOIN question_set_categories qsc ON qsc.set_id = q.set_id AND qsc.category_id = ?
      WHERE p.user_id = ? AND p.status = 'done'`,
   )
-    .bind(user.id)
+    .bind(user.activeCategoryId, user.id)
     .all();
 
   const pool = rows.results || [];
@@ -1605,17 +1606,17 @@ async function getOrCreateMcqVariant(env, user, question) {
 
 async function handleGetStatsInsight(request, env, user) {
   const today = todayDateStr(user.timezone);
-  const cached = await env.DB.prepare("SELECT insight, generated_by FROM ai_stats_insights WHERE user_id = ? AND date = ?")
-    .bind(user.id, today)
+  const cached = await env.DB.prepare("SELECT insight, generated_by FROM ai_stats_insights WHERE user_id = ? AND category_id = ? AND date = ?")
+    .bind(user.id, user.activeCategoryId, today)
     .first();
   if (cached) return json({ insight: cached.insight, generatedBy: cached.generated_by, cached: true });
 
   const rows = await env.DB.prepare(
     `SELECT topic_id, result FROM activity_log
-     WHERE user_id = ? AND event_type = 'review' AND result IS NOT NULL
+     WHERE user_id = ? AND category_id = ? AND event_type = 'review' AND result IS NOT NULL
      ORDER BY occurred_at DESC LIMIT 300`,
   )
-    .bind(user.id)
+    .bind(user.id, user.activeCategoryId)
     .all();
   const events = rows.results || [];
 
@@ -1666,10 +1667,10 @@ async function handleGetStatsInsight(request, env, user) {
 
   const insight = (raw && raw.trim().slice(0, 600)) || "Keep at it — steady daily review is what moves the needle most, and there isn't a clear weak spot yet to call out.";
   await env.DB.prepare(
-    `INSERT INTO ai_stats_insights (user_id, date, insight, generated_by, generated_at) VALUES (?, ?, ?, ?, ?)
-     ON CONFLICT(user_id, date) DO UPDATE SET insight = excluded.insight, generated_by = excluded.generated_by, generated_at = excluded.generated_at`,
+    `INSERT INTO ai_stats_insights (user_id, category_id, date, insight, generated_by, generated_at) VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT(user_id, category_id, date) DO UPDATE SET insight = excluded.insight, generated_by = excluded.generated_by, generated_at = excluded.generated_at`,
   )
-    .bind(user.id, today, insight, generatedBy, new Date().toISOString())
+    .bind(user.id, user.activeCategoryId, today, insight, generatedBy, new Date().toISOString())
     .run();
 
   return json({ insight, generatedBy, cached: false });
@@ -1851,21 +1852,22 @@ async function handleGetStatsProgress(request, env, user) {
             MIN(q.topic_order) as minOrder
      FROM questions q
      JOIN user_question_sets uqs ON uqs.set_id = q.set_id AND uqs.user_id = ?
+     JOIN question_set_categories qsc ON qsc.set_id = q.set_id AND qsc.category_id = ?
      LEFT JOIN user_question_progress p ON p.user_id = ? AND p.question_id = q.id
      GROUP BY q.topic_label
      ORDER BY minOrder ASC`,
   )
-    .bind(user.id, user.id)
+    .bind(user.id, user.activeCategoryId, user.id)
     .all();
 
   const accuracyRows = await env.DB.prepare(
     `SELECT topic_id as topic, COUNT(*) as attempts,
             SUM(CASE WHEN result = 'again' THEN 1 ELSE 0 END) as againCount
      FROM activity_log
-     WHERE user_id = ? AND event_type = 'review' AND result IS NOT NULL AND topic_id IS NOT NULL
+     WHERE user_id = ? AND category_id = ? AND event_type = 'review' AND result IS NOT NULL AND topic_id IS NOT NULL
      GROUP BY topic_id`,
   )
-    .bind(user.id)
+    .bind(user.id, user.activeCategoryId)
     .all();
 
   const accuracyByTopic = {};
@@ -2139,9 +2141,9 @@ async function handleAnswerTest(request, env, user) {
     .run();
 
   await env.DB.prepare(
-    "INSERT INTO activity_log (user_id, occurred_at, event_type, topic_id, question_id, result) VALUES (?, ?, 'test_answer', NULL, ?, ?)",
+    "INSERT INTO activity_log (user_id, occurred_at, event_type, topic_id, question_id, result, category_id) VALUES (?, ?, 'test_answer', NULL, ?, ?, ?)",
   )
-    .bind(user.id, now, questionId, correct ? "got_it" : "again")
+    .bind(user.id, now, questionId, correct ? "got_it" : "again", user.activeCategoryId)
     .run();
 
   return json({ ok: true, correct: !!correct, correctIndex: variant.correct_index });

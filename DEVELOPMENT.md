@@ -1095,3 +1095,24 @@ Extends category-scoping to the remaining practice surfaces. `daily_test_results
 | Mock Interview inherits category-scoping automatically (reuses Self Test's endpoints, no changes needed) | Done |
 | **Verified end-to-end against local D1**: seeded a Railway-only question; confirmed Self Test under Railway returns *only* that question (not Interview Prep's); completed it, confirmed Railway's Daily Test pool contains exactly that one question while Interview Prep's Daily Test stays empty (zero leakage); inserted category-tagged `self_test_results` rows and confirmed `/api/self-test/history` returns only the active category's scores when switching between categories | Done |
 | Deploy | Not yet — pending |
+
+## Phase 7.3 — category-aware Stats and Daily Review
+
+**Status: implemented and verified end-to-end via curl against local D1; not yet deployed.**
+
+Finishes category-scoping the remaining read surfaces. `activity_log` gained a plain additive `category_id` column (not part of any key — every row's `id INTEGER PRIMARY KEY AUTOINCREMENT` was never involved in a uniqueness constraint tying category in, so no table rebuild needed here, unlike the ledger/test-results tables in Phases 7.1/7.2). `ai_stats_insights`' `PRIMARY KEY (user_id, date)` did need the same rebuild treatment as before, becoming `(user_id, category_id, date)` — one cached AI coaching insight per category per day, not one blended insight across everything (migration `0015_stats_categories.sql`).
+
+`handleGetStatsProgress`'s topic-totals query gained the `question_set_categories` join, and its accuracy query now filters `activity_log` by `category_id` too — this specifically matters because two categories could reuse the same `topic_label` string (e.g. both have a "Behavioral" topic) and would otherwise blend their progress/accuracy into one row. All four of the live `activity_log` insert sites (`handleCompleteQuestion`, `handleFlagQuestionForReview`, `handleReviewResult`, `handleAnswerTest`) now carry `category_id = user.activeCategoryId`; the legacy, unused `PUT /api/state` insert path is deliberately left without one (dead code, not worth entangling). `handleGetActivity` (`/api/activity`, which feeds Stats' "This week" and "Accuracy trend" charts) and `handleGetStatsInsight`'s cache read/write both filter by active category too.
+
+Also brought **Daily Review** (`handleGetReview`) into the category-scoping pattern — it wasn't explicitly called out in the plan's Phase 7.2 list, but the same `question_set_categories` join was clearly needed for consistency: without it, switching to Railway and opening Daily Review would have pulled from the user's entire completed-question history across every category, not just Railway's.
+
+| Item | Status |
+|---|---|
+| `activity_log` gains a plain additive `category_id` column | Done |
+| `ai_stats_insights` rebuilt with `category_id` in its primary key | Done |
+| `handleGetStatsProgress`'s topic totals + accuracy both scoped to the active category | Done |
+| All 4 live `activity_log` insert sites now carry the active category | Done |
+| `handleGetActivity` (Stats' chart data feed) and `handleGetStatsInsight`'s cache both filtered by active category | Done |
+| Daily Review (`handleGetReview`) brought into the same category-scoping pattern, for consistency with Self Test/Daily Test | Done |
+| **Verified end-to-end against local D1**: completing a Railway-only question shows it (and only it) in Stats' topic breakdown, the raw activity feed, and Daily Review's pool while active=Railway; switching back to Interview Prep shows all three as completely empty for that same activity — zero cross-category leakage anywhere in Stats | Done |
+| Deploy | Not yet — pending |
