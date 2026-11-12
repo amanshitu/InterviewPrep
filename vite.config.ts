@@ -19,7 +19,20 @@ export default defineConfig({
   // needs the production-equivalent wrangler-dev-against-dist/ check.
   server: {
     proxy: {
-      "/api": "http://127.0.0.1:8787",
+      "/api": {
+        target: "http://127.0.0.1:8787",
+        // src/web/api/*.ts source files happen to live at a dev-server URL
+        // path that also starts with "/api" (same prefix as the real
+        // backend's REST routes, since Vite's root is src/web). Real
+        // backend calls never have a file extension (e.g. /api/me,
+        // /api/queue/today); bypass the proxy for anything that does, so
+        // Vite serves/transforms those source files itself instead of
+        // forwarding the module request to the backend and getting a
+        // confusing 401/404 back instead of the actual TypeScript file.
+        bypass(req) {
+          if (/\.[a-z]+$/i.test(req.url || "")) return req.url;
+        },
+      },
     },
   },
   build: {

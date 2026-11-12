@@ -124,3 +124,36 @@ export function LogOutIcon(props: SVGProps<SVGSVGElement>) {
     </Icon>
   );
 }
+
+export function BackIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M19 12H5M11 18l-6-6 6-6" />
+    </Icon>
+  );
+}
+
+export function MicIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <rect x="9" y="2" width="6" height="12" rx="3" strokeLinejoin="round" />
+      <path d="M5 11a7 7 0 0 0 14 0M12 18v4" />
+    </Icon>
+  );
+}
+
+export function SparkleIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M12 3v5M12 16v5M3 12h5M16 12h5M5.5 5.5l3 3M15.5 15.5l3 3M18.5 5.5l-3 3M8.5 15.5l-3 3" strokeLinejoin="round" />
+    </Icon>
+  );
+}
+
+export function ShuffleIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M3 6h3l7 12h5M3 18h3l3-5M15 6h5M18 3l3 3-3 3M18 15l3 3-3 3" strokeLinejoin="round" />
+    </Icon>
+  );
+}
