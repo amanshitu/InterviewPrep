@@ -994,6 +994,19 @@ A pull only engages when the drag starts at `scrollTop === 0` and is clearly ver
 |---|---|
 | `overscroll-behavior-y: contain` on `.main` (mobile only) replaces the native bounce | Done |
 | New floating pull indicator, hidden by default outside the mobile breakpoint (fixed a real bug caught during testing: without an explicit desktop `display:none`, it rendered as a stray unstyled icon above `<main>` on desktop) | Done |
-| `wirePullToRefresh()`: starts only at `scrollTop === 0`, dominant-direction guard against horizontal swipes, damped drag, threshold-based "ready" state, real `location.reload()` on release | Done |
-| Verified via synthetic `TouchEvent`s in a real Chromium browser (mobile viewport): a vertical drag past the 70px damped threshold correctly reaches the "ready" state (arrow flips) and triggers an actual page reload (confirmed via the console log resetting after reload, not just a state flag); a mostly-horizontal drag correctly does **not** engage the gesture; confirmed the indicator is fully hidden (`display: none`) on a desktop-width viewport and `flex` on mobile | Done |
+| `wirePullToRefresh()`: starts only at `scrollTop === 0`, dominant-direction guard against horizontal swipes, damped drag, threshold-based "ready" state | Done |
+| Verified via synthetic `TouchEvent`s in a real Chromium browser (mobile viewport): a vertical drag past the 70px damped threshold correctly reaches the "ready" state (arrow flips); a mostly-horizontal drag correctly does **not** engage the gesture; confirmed the indicator is fully hidden (`display: none`) on a desktop-width viewport and `flex` on mobile | Done |
+| Deploy | Not yet — pending |
+
+### Phase 6.9 fix — soft refresh instead of a hard reload
+
+The initial version triggered `location.reload()` on release, which — correctly reported back — still "fluctuated," now showing a flash of the (hidden) auth screen before the current screen reappeared. Root cause: a hard reload re-runs the entire boot sequence (`checkSession()` → auth screen shown until `/api/me` resolves → app shell shown), which is visible even when the session is perfectly valid the whole time, since nothing about it was actually broken — the user was simply never logged out.
+
+Replaced with a genuine soft refresh, `refreshCurrentScreen()`: re-checks the session in place (`checkSession()`, updates `state.currentUser`, re-renders the shell's stat pills via the already-exported `renderShell()`) and re-renders the current route (`dispatchRoute(location.pathname)`, same function used for back/forward navigation), plus a `refreshBankStats()` call for the header's bank-count pill. No navigation ever occurs, so the app shell, topbar, and bottom nav never unmount, and the auth screen is never shown. Also added a smooth CSS transition for the indicator's return-to-hidden animation (previously an instant snap outside the active drag).
+
+| Item | Status |
+|---|---|
+| Replaced `location.reload()` with `refreshCurrentScreen()`: re-check session, refresh shell stat pills, re-render current route in place | Done |
+| Smooth transition added for the indicator's return/hide animation (was an instant snap) | Done |
+| Verified via Playwright: zero `framenavigated` events during a full pull-release cycle; the auth screen's `hidden` state polled continuously through the refresh window and never flipped to visible; confirmed the expected API calls (`/api/me`, `/api/questions/bank-count`, and the current page's own data endpoint) actually fire, proving this is a genuine data refresh and not a no-op | Done |
 | Deploy | Not yet — pending |

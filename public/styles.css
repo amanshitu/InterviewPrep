@@ -676,8 +676,10 @@ input[type="range"] { accent-color: var(--primary); width: 160px; }
     background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-2);
     align-items: center; justify-content: center; color: var(--text-muted);
     transform: translate(-50%, -60px); opacity: 0; pointer-events: none;
+    transition: transform .25s ease, opacity .25s ease, color .15s ease;
   }
-  .ptr-indicator.is-dragging { transition: none; }
+  /* Live-tracking the finger needs to be instant, not eased. */
+  .ptr-indicator.is-dragging { transition: color .15s ease; }
   .ptr-indicator.is-ready { color: var(--primary); }
   .ptr-indicator.is-ready svg { transform: rotate(180deg); }
   .ptr-indicator.is-refreshing svg { animation: ptr-spin .7s linear infinite; }

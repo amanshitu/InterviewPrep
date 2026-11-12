@@ -526,6 +526,20 @@ function wireMobileShell() {
 const PTR_THRESHOLD = 70; // px of (damped) pull before release triggers a refresh
 const PTR_MAX_PULL = 110; // px — caps how far the indicator can be dragged
 
+async function refreshCurrentScreen() {
+  try {
+    const user = await checkSession();
+    if (user) {
+      state.currentUser = user;
+      renderShell();
+    }
+  } catch {
+    /* best-effort — if this fails, the route re-render below still runs */
+  }
+  refreshBankStats();
+  await dispatchRoute(location.pathname);
+}
+
 function wirePullToRefresh() {
   const main = $("#main");
   const indicator = $("#ptr-indicator");
@@ -602,7 +616,17 @@ function wirePullToRefresh() {
       indicator.classList.add("is-refreshing");
       indicator.style.transform = `translate(-50%, ${-60 + PTR_THRESHOLD}px)`;
       indicator.style.opacity = "1";
-      setTimeout(() => location.reload(), 300); // brief so the spinner is actually visible
+      // A full location.reload() re-runs the whole boot sequence, which
+      // flashes the (hidden) auth screen before re-confirming the session —
+      // visible as "pulling down shows login then the current screen." A
+      // soft refresh instead: re-check the session in place, refresh the
+      // shell's stat pills, and re-render the current route — the user is
+      // never logged out so there's nothing to flash.
+      const minSpin = new Promise((resolve) => setTimeout(resolve, 450));
+      Promise.all([refreshCurrentScreen(), minSpin]).finally(() => {
+        indicator.classList.remove("is-refreshing");
+        reset();
+      });
     } else {
       reset();
     }
