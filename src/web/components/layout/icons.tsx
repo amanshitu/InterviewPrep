@@ -157,3 +157,156 @@ export function ShuffleIcon(props: SVGProps<SVGSVGElement>) {
     </Icon>
   );
 }
+
+export function SaveIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M5 4h11l3 3v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z" strokeLinejoin="round" />
+      <path d="M8 4v5h7V4M8 14h8v6H8z" strokeLinejoin="round" />
+    </Icon>
+  );
+}
+
+export function KeyIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <circle cx="8" cy="15" r="4" />
+      <path d="M11 12l8-8M16 7l2 2M19 4l2 2" strokeLinecap="round" />
+    </Icon>
+  );
+}
+
+export function CameraIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z" strokeLinejoin="round" />
+      <circle cx="12" cy="13" r="3.2" />
+    </Icon>
+  );
+}
+
+export function CheckIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M5 12.5l4.5 4.5L19 7" strokeLinecap="round" strokeLinejoin="round" />
+    </Icon>
+  );
+}
+
+export function PlusIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+    </Icon>
+  );
+}
+
+export function TrashIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-9 0 1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" strokeLinecap="round" strokeLinejoin="round" />
+    </Icon>
+  );
+}
+
+export function DownloadIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M12 4v11m0 0l-4-4m4 4l4-4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M4 18v1a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-1" strokeLinecap="round" />
+    </Icon>
+  );
+}
+
+export function UploadIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M12 20V9m0 0l-4 4m4-4l4 4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M4 18v1a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-1" strokeLinecap="round" />
+    </Icon>
+  );
+}
+
+export function SendIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M4 12l16-7-6 16-3-7-7-2Z" strokeLinejoin="round" />
+    </Icon>
+  );
+}
+
+export function ChevronLeftIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M15 5l-7 7 7 7" strokeLinecap="round" strokeLinejoin="round" />
+    </Icon>
+  );
+}
+
+export function ChevronRightIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M9 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
+    </Icon>
+  );
+}
+
+export function RefreshIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M4 12a8 8 0 0 1 13.7-5.7M20 12a8 8 0 0 1-13.7 5.7" strokeLinecap="round" />
+      <path d="M17.5 3v4h-4M6.5 21v-4h4" strokeLinecap="round" strokeLinejoin="round" />
+    </Icon>
+  );
+}
+
+export function ArrowRightIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+    </Icon>
+  );
+}
+
+export function EyeIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" strokeLinejoin="round" />
+      <circle cx="12" cy="12" r="2.6" />
+    </Icon>
+  );
+}
+
+export function CloseIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
+    </Icon>
+  );
+}
+
+export function BellIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M6 10a6 6 0 0 1 12 0c0 4 1.5 5.5 1.5 5.5h-15S6 14 6 10Z" strokeLinejoin="round" />
+      <path d="M10 18.5a2 2 0 0 0 4 0" strokeLinecap="round" />
+    </Icon>
+  );
+}
+
+export function FolderIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M3.5 7a1 1 0 0 1 1-1h5l1.5 2h8a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-14.5a1 1 0 0 1-1-1V7Z" strokeLinejoin="round" />
+    </Icon>
+  );
+}
+
+export function FlagIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M6 3v18" strokeLinecap="round" />
+      <path d="M6 4h11l-2.5 3.5L17 11H6" strokeLinejoin="round" />
+    </Icon>
+  );
+}
