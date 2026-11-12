@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, type ComponentType, type SVGProps } from "react";
 import { AppShell } from "../../components/layout/AppShell";
 import { AccountSection } from "../../components/settings/AccountSection";
 import { AiUsageSection } from "../../components/settings/AiUsageSection";
 import { AppearanceSection } from "../../components/settings/AppearanceSection";
 import { DataExportSection } from "../../components/settings/DataExportSection";
+import { AccountIcon, BellIcon, ClipboardIcon, DownloadIcon, FolderIcon, PaletteIcon, SparkleIcon } from "../../components/settings/icons";
 import { NotificationsSection } from "../../components/settings/NotificationsSection";
 import { PasswordSection, SessionsSection } from "../../components/settings/PasswordSection";
 import { PrepProfileSection } from "../../components/settings/PrepProfileSection";
@@ -15,14 +16,14 @@ import type { User } from "../../api/types";
 
 type TabId = "account" | "profile" | "appearance" | "ai" | "notifications" | "questionsets" | "data";
 
-const TABS: { id: TabId; label: string }[] = [
-  { id: "account", label: "Account" },
-  { id: "profile", label: "Prep profile" },
-  { id: "appearance", label: "Appearance & Accessibility" },
-  { id: "ai", label: "AI & Usage" },
-  { id: "notifications", label: "Notifications" },
-  { id: "questionsets", label: "Question Sets" },
-  { id: "data", label: "Data" },
+const TABS: { id: TabId; label: string; icon: ComponentType<SVGProps<SVGSVGElement>> }[] = [
+  { id: "account", label: "Account", icon: AccountIcon },
+  { id: "profile", label: "Prep profile", icon: ClipboardIcon },
+  { id: "appearance", label: "Appearance & Accessibility", icon: PaletteIcon },
+  { id: "ai", label: "AI & Usage", icon: SparkleIcon },
+  { id: "notifications", label: "Notifications", icon: BellIcon },
+  { id: "questionsets", label: "Question Sets", icon: FolderIcon },
+  { id: "data", label: "Data", icon: DownloadIcon },
 ];
 
 function SettingsContent({ user }: { user: User }) {
@@ -73,11 +74,11 @@ function SettingsContent({ user }: { user: User }) {
               key={t.id}
               type="button"
               onClick={() => setTab(t.id)}
-              className={`shrink-0 border-b-2 px-3 py-2 text-sm font-medium whitespace-nowrap ${
+              className={`inline-flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium whitespace-nowrap ${
                 tab === t.id ? "border-primary text-foreground" : "border-transparent text-muted-foreground"
               }`}
             >
-              {t.label}
+              <t.icon width={15} height={15} /> {t.label}
             </button>
           ))}
         </div>
@@ -91,11 +92,11 @@ function SettingsContent({ user }: { user: User }) {
                   <button
                     type="button"
                     onClick={() => setTab(t.id)}
-                    className={`w-full rounded-md px-3 py-2 text-left text-sm font-medium ${
+                    className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium ${
                       tab === t.id ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
                     }`}
                   >
-                    {t.label}
+                    <t.icon width={15} height={15} /> {t.label}
                   </button>
                 </li>
               ))}

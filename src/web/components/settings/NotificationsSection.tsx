@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getVapidPublicKey, subscribePush, unsubscribePush } from "../../api/push";
 import { useToast } from "../../hooks/use-toast";
+import { BellIcon } from "./icons";
 import { PrimaryButton, SecondaryButton, SectionCard } from "./SectionCard";
 
 function isPushSupported(): boolean {
@@ -83,7 +84,7 @@ export function NotificationsSection() {
     <SectionCard title="Notifications" subtitle="Get a browser reminder once a day if you still have questions left for today.">
       <p className="mb-3 text-sm text-muted-foreground">{ready ? statusText : "Checking…"}</p>
       <ButtonComponent onClick={() => void handleToggle()} disabled={!ready}>
-        {subscribed ? "Disable reminders" : "Enable reminders"}
+        <BellIcon /> {subscribed ? "Disable reminders" : "Enable reminders"}
       </ButtonComponent>
     </SectionCard>
   );

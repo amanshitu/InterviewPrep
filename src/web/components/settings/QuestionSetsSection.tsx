@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createQuestionSet, getMyQuestionSets, submitQuestionSet, type MyQuestionSet, type QuestionSetSection } from "../../api/queue";
 import { csvRowsToSections, parseCsv } from "../../lib/csv";
 import { useToast } from "../../hooks/use-toast";
-import { DownloadIcon, PlusIcon, SendIcon, TrashIcon, UploadIcon } from "./icons";
+import { CloseIcon, DownloadIcon, PlusIcon, SendIcon, TrashIcon, UploadIcon } from "./icons";
 import { ErrorText, PrimaryButton, SecondaryButton, SectionCard } from "./SectionCard";
 
 function downloadCsvTemplate() {
@@ -184,7 +184,7 @@ function ManualUploadForm({ onDone, onCancel }: { onDone: () => void; onCancel: 
           <SendIcon /> Submit
         </PrimaryButton>
         <SecondaryButton type="button" onClick={onCancel}>
-          Cancel
+          <CloseIcon /> Cancel
         </SecondaryButton>
       </div>
     </div>
@@ -227,7 +227,7 @@ function CsvImportForm({ fileName, sections, skipped, onDone, onCancel }: { file
           <UploadIcon /> Import
         </PrimaryButton>
         <SecondaryButton type="button" onClick={onCancel}>
-          Cancel
+          <CloseIcon /> Cancel
         </SecondaryButton>
       </div>
     </div>
