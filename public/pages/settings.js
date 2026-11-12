@@ -383,7 +383,7 @@ export function render() {
 // ---------- AI provider (BYOK) ----------
 const AI_PROVIDER_LABELS = { "workers-ai": "Workers AI (free, default)", openai: "OpenAI", anthropic: "Anthropic" };
 
-// Must match the server-side allowlist (WORKERS_AI_MODELS in src/worker.js)
+// Must match the server-side allowlist (WORKERS_AI_MODELS in src/worker/lib/ai.js)
 // — a request naming a model outside this list falls back to the default
 // there regardless, but keeping the two in sync avoids a confusing mismatch
 // between what's shown here and what's actually used.
