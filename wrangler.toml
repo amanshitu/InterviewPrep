@@ -2,6 +2,15 @@ name = "interviewprep"
 main = "src/worker/index.js"
 compatibility_date = "2025-01-01"
 
+[build]
+# Cloudflare Workers Builds (the git-push CI integration) and `wrangler
+# deploy`/`wrangler dev` all run this before anything else — this is the
+# one place that's guaranteed to build dist/ regardless of how the
+# Cloudflare dashboard's own build-command setting is configured (which
+# this repo can't inspect or verify), unlike package.json's predeploy
+# hook, which only fires for `npm run deploy` specifically.
+command = "npm run build:web"
+
 [assets]
 # Built by `npm run build:web` (Vite, multi-page mode — see vite.config.ts)
 # from src/web/. Every route is now a real document (true MPA, not a
