@@ -1010,3 +1010,17 @@ Replaced with a genuine soft refresh, `refreshCurrentScreen()`: re-checks the se
 | Smooth transition added for the indicator's return/hide animation (was an instant snap) | Done |
 | Verified via Playwright: zero `framenavigated` events during a full pull-release cycle; the auth screen's `hidden` state polled continuously through the refresh window and never flipped to visible; confirmed the expected API calls (`/api/me`, `/api/questions/bank-count`, and the current page's own data endpoint) actually fire, proving this is a genuine data refresh and not a no-op | Done |
 | Deploy | Not yet — pending |
+
+### Phase 6.9 fix #2 — disabled the browser's own native pull-to-refresh
+
+Reported again after fix #1 shipped: still reloading. Root cause this time was different from the first fix — a second, independent source of the same symptom. `overscroll-behavior-y: contain` had only been applied to `.main`, the inner div that actually scrolls (`overflow-y: auto`). But `html`/`body` themselves never scroll at all (since `#main` does all the scrolling internally), so from the *browser's* point of view the document is permanently "at the top" — which is exactly the condition Chrome's own native pull-to-refresh (a separate feature from this app's custom gesture, triggering an actual full navigation reload) watches for, regardless of any JS running on `#main`. `.main`'s own `overscroll-behavior` has no effect on that, because it only governs whether *its own* overscroll chains up to its parent — it says nothing about the document root's behavior.
+
+Fix: added `overscroll-behavior-y: contain` on `html` itself, applied unconditionally (not mobile-gated like the rest of the pull-to-refresh work, since it's a one-line, harmless, universally-correct setting) — this is the standard, documented way to disable a browser's native pull-to-refresh.
+
+| Item | Status |
+|---|---|
+| `overscroll-behavior-y: contain` added to `html` (document root), on top of the existing `.main` rule | Done |
+| Verified computed style: `html` now reports `overscroll-behavior-y: contain` at both desktop and mobile widths; `.main` continues to report `contain` only at the mobile breakpoint, as before | Done |
+| Re-verified the full custom gesture still works identically after this change (zero navigations, genuine `/api/me` + bank-count + current-page data refresh) | Done |
+| **Known test-environment limit**: Chrome's native pull-to-refresh is part of the browser's own UI chrome, not the page's rendered DOM — it cannot be triggered or observed through a headless/automated browser the way the custom in-page gesture can. The CSS property is the correct, documented fix either way, but final confirmation that the native browser gesture itself no longer appears can only come from testing on a real phone after deploy | Noted |
+| Deploy | Not yet — pending |

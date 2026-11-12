@@ -207,6 +207,14 @@
 
 * { box-sizing: border-box; }
 html, body { height: 100%; }
+/* Disables the browser's own native pull-to-refresh (Chrome/Android etc.),
+   which is tied to the document's scrolling element (html) — not to
+   .main's own overflow-y:auto. #main does all the actual scrolling, so
+   without this, html/body never scroll and the browser always thinks
+   the page is "at the top," letting its native PTR fire regardless of
+   any JS on #main (this was the real cause of the reported reload/flash,
+   independent of and in addition to the custom gesture in app.js). */
+html { overscroll-behavior-y: contain; }
 body {
   margin: 0;
   background: var(--bg);
