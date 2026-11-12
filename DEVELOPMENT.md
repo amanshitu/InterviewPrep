@@ -1076,3 +1076,22 @@ New endpoints: `GET /api/categories` (list + enrollment status), `POST /api/cate
 | New `GET /api/categories`, `POST /api/categories/enroll`, `POST /api/categories/switch`; `GET /api/me` gains `activeCategoryId` + `enrolledCategories` | Done |
 | **Verified end-to-end against local D1**: seeded a second category ("Railway Exam") with a Railway-only question set and a question set shared between Railway and Interview Prep (simulating "GK shared with Police/Railway"). Confirmed: (1) switching active category to Railway shows *only* Railway + shared-GK questions — zero leakage of Interview Prep's hr/pm/em/tech/ai content; (2) completing the shared GK question under Railway bumps Railway's completed count; (3) switching back to Interview Prep shows its streak/quota completely untouched (still 0/0, independent of Railway's activity); (4) the shared GK question does not reappear in Interview Prep's *active* queue (globally done) but correctly still shows in Interview Prep's "completed today" list too, since it really was completed today regardless of which category surfaced it | Done |
 | Deploy | Not yet — pending |
+
+## Phase 7.2 — category-aware Self Test, Mock Interview, and Daily Test
+
+**Status: implemented and verified end-to-end via curl against local D1; not yet deployed.**
+
+Extends category-scoping to the remaining practice surfaces. `daily_test_results`' `UNIQUE(user_id, date, question_id)` had to be rebuilt into `UNIQUE(user_id, category_id, date, question_id)` (migration `0014_test_history_categories.sql`, same table-rebuild requirement as Phase 7.1's ledger — SQLite can't alter a UNIQUE constraint in place) so each category gets its own daily MCQ test. `self_test_results` got a plain additive `category_id` column.
+
+`handleGetSelfTestQuestion` and `handleSelfTestAnalyze`'s question lookup both gained the same `question_set_categories` join used in Phase 7.1's queue, scoped to `user.activeCategoryId`. `handleGetSelfTestHistory` now filters by `category_id` too, so the Stats "Self Test score trend" chart (Phase 6.1) only ever shows the active category's scores. `handleGetTodayTest`'s MCQ pool-building query (drawn from `status='done'` questions) gained the same category join, and `handleAnswerTest`/the pool-insert both key on `(user_id, category_id, date, question_id)`. Mock Interview needed **zero changes** — it already reuses `handleSelfTestAnalyze`/`handleGetSelfTestQuestion` as-is (by design, from Phase 6.3), so it inherits category-scoping for free.
+
+| Item | Status |
+|---|---|
+| `daily_test_results` rebuilt with `category_id` in its unique key | Done |
+| `self_test_results` gains an additive `category_id` column | Done |
+| Self Test question selection + analyze-question-lookup scoped to the active category | Done |
+| Self Test history (`/api/self-test/history`) filtered by active category | Done |
+| Daily Test's MCQ pool-building and answer-persistence scoped to the active category | Done |
+| Mock Interview inherits category-scoping automatically (reuses Self Test's endpoints, no changes needed) | Done |
+| **Verified end-to-end against local D1**: seeded a Railway-only question; confirmed Self Test under Railway returns *only* that question (not Interview Prep's); completed it, confirmed Railway's Daily Test pool contains exactly that one question while Interview Prep's Daily Test stays empty (zero leakage); inserted category-tagged `self_test_results` rows and confirmed `/api/self-test/history` returns only the active category's scores when switching between categories | Done |
+| Deploy | Not yet — pending |

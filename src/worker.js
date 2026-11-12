@@ -1714,9 +1714,10 @@ async function handleGetSelfTestQuestion(request, env, user) {
     `SELECT q.id as id, q.q as q, q.a as a, q.topic_label as topic_label, qs.track as track FROM questions q
      JOIN user_question_sets uqs ON uqs.set_id = q.set_id AND uqs.user_id = ?
      JOIN question_sets qs ON qs.id = q.set_id
+     JOIN question_set_categories qsc ON qsc.set_id = q.set_id AND qsc.category_id = ?
      ORDER BY RANDOM() LIMIT 1`,
   )
-    .bind(user.id)
+    .bind(user.id, user.activeCategoryId)
     .first();
   if (!row) return json({ error: "No questions available yet — subscribe to or upload a question set first." }, { status: 400 });
   return json({ question: row });
@@ -1770,9 +1771,10 @@ async function handleSelfTestAnalyze(request, env, user) {
     `SELECT q.id as id, q.q as q, q.a as a, qs.track as track FROM questions q
      JOIN user_question_sets uqs ON uqs.set_id = q.set_id AND uqs.user_id = ?
      JOIN question_sets qs ON qs.id = q.set_id
+     JOIN question_set_categories qsc ON qsc.set_id = q.set_id AND qsc.category_id = ?
      WHERE q.id = ?`,
   )
-    .bind(user.id, questionId)
+    .bind(user.id, user.activeCategoryId, questionId)
     .first();
   if (!question) return json({ error: "Question not found." }, { status: 404 });
 
@@ -1817,9 +1819,9 @@ async function handleSelfTestAnalyze(request, env, user) {
 
   if (feedback.score !== null) {
     await env.DB.prepare(
-      `INSERT INTO self_test_results (user_id, question_id, date, score) VALUES (?, ?, ?, ?)`,
+      `INSERT INTO self_test_results (user_id, question_id, date, score, category_id) VALUES (?, ?, ?, ?, ?)`,
     )
-      .bind(user.id, questionId, todayDateStr(user.timezone), feedback.score)
+      .bind(user.id, questionId, todayDateStr(user.timezone), feedback.score, user.activeCategoryId)
       .run();
   }
 
@@ -1828,9 +1830,9 @@ async function handleSelfTestAnalyze(request, env, user) {
 
 async function handleGetSelfTestHistory(request, env, user) {
   const { results } = await env.DB.prepare(
-    `SELECT date, score FROM self_test_results WHERE user_id = ? ORDER BY created_at ASC LIMIT 500`,
+    `SELECT date, score FROM self_test_results WHERE user_id = ? AND category_id = ? ORDER BY created_at ASC LIMIT 500`,
   )
-    .bind(user.id)
+    .bind(user.id, user.activeCategoryId)
     .all();
   return json({ history: results || [] });
 }
@@ -2062,30 +2064,33 @@ async function handleGenerateResumePrompt(request, env, user) {
 
 async function handleGetTodayTest(request, env, user) {
   const today = todayDateStr(user.timezone);
+  const categoryId = user.activeCategoryId;
   const testQuery = `SELECT t.question_id as id, t.selected_index as selected_index, t.correct as correct,
             q.q as q, q.a as a, q.topic_label as topic_label
      FROM daily_test_results t JOIN questions q ON q.id = t.question_id
-     WHERE t.user_id = ? AND t.date = ? ORDER BY t.id ASC`;
+     WHERE t.user_id = ? AND t.category_id = ? AND t.date = ? ORDER BY t.id ASC`;
 
-  let testRows = ((await env.DB.prepare(testQuery).bind(user.id, today).all()).results) || [];
+  let testRows = ((await env.DB.prepare(testQuery).bind(user.id, categoryId, today).all()).results) || [];
 
   if (testRows.length === 0) {
     const pool = await env.DB.prepare(
-      `SELECT q.id as id FROM user_question_progress p JOIN questions q ON q.id = p.question_id
+      `SELECT q.id as id FROM user_question_progress p
+       JOIN questions q ON q.id = p.question_id
+       JOIN question_set_categories qsc ON qsc.set_id = q.set_id AND qsc.category_id = ?
        WHERE p.user_id = ? AND p.status = 'done' ORDER BY RANDOM() LIMIT ?`,
     )
-      .bind(user.id, TEST_SIZE)
+      .bind(categoryId, user.id, TEST_SIZE)
       .all();
     const ids = (pool.results || []).map((r) => r.id);
     if (ids.length) {
       const now = new Date().toISOString();
       const stmts = ids.map((qid) =>
         env.DB.prepare(
-          "INSERT INTO daily_test_results (user_id, date, question_id, selected_index, correct, answered_at) VALUES (?, ?, ?, NULL, 0, ?) ON CONFLICT(user_id, date, question_id) DO NOTHING",
-        ).bind(user.id, today, qid, now),
+          "INSERT INTO daily_test_results (user_id, category_id, date, question_id, selected_index, correct, answered_at) VALUES (?, ?, ?, ?, NULL, 0, ?) ON CONFLICT(user_id, category_id, date, question_id) DO NOTHING",
+        ).bind(user.id, categoryId, today, qid, now),
       );
       await env.DB.batch(stmts);
-      testRows = ((await env.DB.prepare(testQuery).bind(user.id, today).all()).results) || [];
+      testRows = ((await env.DB.prepare(testQuery).bind(user.id, categoryId, today).all()).results) || [];
     }
   }
 
@@ -2126,11 +2131,11 @@ async function handleAnswerTest(request, env, user) {
   const correct = selectedIndex === variant.correct_index ? 1 : 0;
 
   await env.DB.prepare(
-    `INSERT INTO daily_test_results (user_id, date, question_id, selected_index, correct, answered_at)
-     VALUES (?, ?, ?, ?, ?, ?)
-     ON CONFLICT(user_id, date, question_id) DO UPDATE SET selected_index = excluded.selected_index, correct = excluded.correct, answered_at = excluded.answered_at`,
+    `INSERT INTO daily_test_results (user_id, category_id, date, question_id, selected_index, correct, answered_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(user_id, category_id, date, question_id) DO UPDATE SET selected_index = excluded.selected_index, correct = excluded.correct, answered_at = excluded.answered_at`,
   )
-    .bind(user.id, today, questionId, selectedIndex, correct, now)
+    .bind(user.id, user.activeCategoryId, today, questionId, selectedIndex, correct, now)
     .run();
 
   await env.DB.prepare(
