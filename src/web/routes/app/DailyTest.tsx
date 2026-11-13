@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { BackIcon, CheckIcon, CloseIcon } from "../../components/layout/icons";
+import { Skeleton, SkeletonCard } from "../../components/layout/Skeleton";
 import { useToast } from "../../hooks/use-toast";
 import { answerTestQuestion, getTodaysTest, type DailyTestQuestion } from "../../api/dailytest";
 
@@ -51,8 +52,22 @@ function DailyTestBody() {
 
   if (batch === null) {
     return (
-      <div className="rounded-lg border border-border bg-card p-6 text-center text-muted-foreground">
-        Loading today's test — generating questions can take a few seconds the first time.
+      <div className="flex flex-col gap-4">
+        <SkeletonCard>
+          <Skeleton className="h-5 w-28" />
+          <Skeleton className="mt-2 h-4 w-56" />
+        </SkeletonCard>
+        <p className="text-center text-sm text-muted-foreground">Generating today's test can take a few seconds the first time.</p>
+        {Array.from({ length: 3 }).map((_, i) => (
+          <SkeletonCard key={i}>
+            <Skeleton className="h-4 w-5/6" />
+            <div className="mt-3 flex flex-col gap-2">
+              {Array.from({ length: 4 }).map((_, j) => (
+                <Skeleton key={j} className="h-9 w-full" />
+              ))}
+            </div>
+          </SkeletonCard>
+        ))}
       </div>
     );
   }

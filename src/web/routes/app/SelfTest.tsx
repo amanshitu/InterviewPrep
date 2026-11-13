@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { BackIcon, MicIcon, ShuffleIcon, SparkleIcon } from "../../components/layout/icons";
+import { Skeleton, SkeletonCard } from "../../components/layout/Skeleton";
 import { useToast } from "../../hooks/use-toast";
 import {
   analyzeSelfTestAnswer,
@@ -210,7 +211,16 @@ function SelfTestBody() {
 
   if (current === undefined) {
     return (
-      <div className="rounded-lg border border-border bg-card p-6 text-center text-muted-foreground">Loading a question…</div>
+      <div className="flex flex-col gap-4">
+        <SkeletonCard>
+          <Skeleton className="h-5 w-24" />
+          <Skeleton className="mt-2 h-4 w-80" />
+        </SkeletonCard>
+        <SkeletonCard>
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="mt-2 h-4 w-3/4" />
+        </SkeletonCard>
+      </div>
     );
   }
 

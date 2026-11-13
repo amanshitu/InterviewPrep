@@ -12,6 +12,7 @@ import { HistoryPanel } from "../../components/admin/HistoryPanel";
 import { UsersPanel } from "../../components/admin/UsersPanel";
 import { useToast } from "../../hooks/use-toast";
 import type { User } from "../../api/types";
+import { Skeleton, SkeletonCard } from "../../components/layout/Skeleton";
 
 type Tab = "categories" | "pending" | "history" | "users";
 
@@ -78,7 +79,16 @@ function AdminDashboard() {
           <KpiCard label="Question sets" value={overview.totalQuestionSets} />
           <KpiCard label="Pending approvals" value={overview.pendingApprovalCount} />
         </div>
-      ) : null}
+      ) : (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <SkeletonCard key={i}>
+              <Skeleton className="h-4 w-20" />
+              <Skeleton className="mt-2 h-6 w-10" />
+            </SkeletonCard>
+          ))}
+        </div>
+      )}
 
       <div className="flex gap-1 overflow-x-auto border-b border-border">
         {TABS.map((t) => (
@@ -97,7 +107,11 @@ function AdminDashboard() {
       </div>
 
       {loading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <div className="flex flex-col gap-2">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-16 w-full" />
+          ))}
+        </div>
       ) : (
         <>
           {tab === "categories" ? (

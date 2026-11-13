@@ -5,6 +5,7 @@ import { getSelfTestHistory } from "../../api/selftest";
 import { useShellUser } from "../../components/layout/AppShell";
 import { TrendBarChart, WeeklyActivityChart, type TrendPoint } from "../../components/stats/charts";
 import type { User } from "../../api/types";
+import { Skeleton, SkeletonCard } from "../../components/layout/Skeleton";
 
 type Activity = ActivityEvent & { question_text?: string | null };
 
@@ -57,7 +58,32 @@ function StatsBody({ user }: { user: User }) {
 
   if (loading) {
     return (
-      <div className="rounded-xl border border-border bg-card p-6 text-center text-muted-foreground">Loading stats…</div>
+      <div className="flex flex-col gap-4">
+        <SkeletonCard>
+          <Skeleton className="h-5 w-24" />
+          <Skeleton className="mt-2 h-4 w-72" />
+        </SkeletonCard>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <SkeletonCard key={i}>
+              <Skeleton className="h-4 w-20" />
+              <Skeleton className="mt-2 h-6 w-10" />
+            </SkeletonCard>
+          ))}
+        </div>
+        <SkeletonCard>
+          <Skeleton className="h-5 w-28" />
+          <Skeleton className="mt-4 h-36 w-full" />
+        </SkeletonCard>
+        <SkeletonCard>
+          <Skeleton className="h-5 w-32" />
+          <div className="mt-3 flex flex-col gap-2">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-10 w-full" />
+            ))}
+          </div>
+        </SkeletonCard>
+      </div>
     );
   }
 

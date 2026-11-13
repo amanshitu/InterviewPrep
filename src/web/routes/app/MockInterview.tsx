@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { ArrowRightIcon, BackIcon, MicIcon, SparkleIcon } from "../../components/layout/icons";
+import { Skeleton, SkeletonCard } from "../../components/layout/Skeleton";
 import { useToast } from "../../hooks/use-toast";
 import {
   analyzeSelfTestAnswer,
@@ -161,8 +162,15 @@ function MockInterviewBody() {
 
   if (current === undefined) {
     return (
-      <div className="rounded-lg border border-border bg-card p-6 text-center text-muted-foreground">
-        Loading your first question…
+      <div className="flex flex-col gap-4">
+        <SkeletonCard>
+          <Skeleton className="h-5 w-32" />
+          <Skeleton className="mt-2 h-4 w-72" />
+        </SkeletonCard>
+        <SkeletonCard>
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="mt-2 h-4 w-3/4" />
+        </SkeletonCard>
       </div>
     );
   }

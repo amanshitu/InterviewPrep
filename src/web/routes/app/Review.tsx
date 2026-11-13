@@ -5,6 +5,7 @@ import { getReview, submitReviewResult } from "../../api/queue";
 import { ApiError } from "../../api/client";
 import type { Question } from "../../api/types";
 import { BackIcon, CheckIcon, EyeIcon, RefreshIcon, ShuffleIcon } from "../../components/layout/icons";
+import { Skeleton, SkeletonCard } from "../../components/layout/Skeleton";
 
 const DEFAULT_REVIEW_COUNT = 15;
 
@@ -99,7 +100,14 @@ function ReviewContent() {
       </div>
 
       {batch === null ? (
-        <div className="rounded-lg border border-border bg-card p-6 text-muted-foreground">Loading review batch…</div>
+        <div className="flex flex-col gap-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <SkeletonCard key={i}>
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="mt-2 h-5 w-3/4" />
+            </SkeletonCard>
+          ))}
+        </div>
       ) : batch.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border p-6 text-center text-muted-foreground">
           No completed questions yet — finish some of today's questions to unlock review.

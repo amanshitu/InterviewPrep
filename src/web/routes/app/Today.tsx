@@ -14,6 +14,7 @@ import {
 import { ApiError } from "../../api/client";
 import type { Question, User } from "../../api/types";
 import { CheckIcon, EyeIcon, PlusIcon, RefreshIcon, ShuffleIcon, SparkleIcon, SpeakerIcon, StopIcon } from "../../components/layout/icons";
+import { Skeleton, SkeletonCard } from "../../components/layout/Skeleton";
 
 const DEFAULT_REVIEW_COUNT = 15;
 
@@ -128,7 +129,30 @@ function TodayContent({ user }: { user: User }) {
   }, []);
 
   if (!queue) {
-    return <div className="rounded-lg border border-border bg-card p-6 text-muted-foreground">Loading today's questions…</div>;
+    return (
+      <div className="flex flex-col gap-4">
+        <SkeletonCard>
+          <Skeleton className="h-5 w-48" />
+          <Skeleton className="mt-2 h-4 w-64" />
+        </SkeletonCard>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <SkeletonCard key={i}>
+              <Skeleton className="h-4 w-16" />
+              <Skeleton className="mt-2 h-6 w-10" />
+            </SkeletonCard>
+          ))}
+        </div>
+        <SkeletonCard>
+          <Skeleton className="h-5 w-40" />
+          <div className="mt-4 flex flex-col gap-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-20 w-full" />
+            ))}
+          </div>
+        </SkeletonCard>
+      </div>
+    );
   }
 
   const pct = queue.target ? Math.round((queue.completed / queue.target) * 100) : 0;
@@ -234,6 +258,15 @@ function TodayContent({ user }: { user: User }) {
           {queue.questions.length === 0 && queue.remaining <= 0 ? (
             <div className="rounded-lg border border-dashed border-border p-6 text-center text-muted-foreground">
               All done for today — nice work. Come back tomorrow, or request more below.
+            </div>
+          ) : null}
+          {queue.questions.length === 0 && queue.remaining > 0 ? (
+            <div className="rounded-lg border border-dashed border-border p-6 text-center text-muted-foreground">
+              No questions available in your current category yet.{" "}
+              <Link to="/settings" className="font-semibold text-primary hover:underline">
+                Switch categories or upload a question set in Settings
+              </Link>{" "}
+              to get started.
             </div>
           ) : null}
           {queue.questions.map((q, idx) => (
