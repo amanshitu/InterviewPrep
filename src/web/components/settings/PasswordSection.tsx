@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { changePassword, revokeAllSessions } from "../../api/auth";
+import { useConfirm } from "../../hooks/use-confirm";
 import { useToast } from "../../hooks/use-toast";
 import { PrimaryButton, SecondaryButton, SectionCard, inputClass } from "./SectionCard";
 import { KeyIcon, LogoutIcon } from "./icons";
@@ -47,10 +48,17 @@ export function PasswordSection() {
 }
 
 export function SessionsSection() {
+  const confirm = useConfirm();
   const [revoking, setRevoking] = useState(false);
 
   async function handleRevokeAll() {
-    if (!confirm("Sign out of all devices, including this one?")) return;
+    const ok = await confirm({
+      title: "Sign out everywhere?",
+      message: "This signs out of all devices, including this one.",
+      confirmLabel: "Sign out",
+      destructive: true,
+    });
+    if (!ok) return;
     setRevoking(true);
     try {
       await revokeAllSessions();

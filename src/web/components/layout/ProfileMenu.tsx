@@ -2,6 +2,7 @@ import { useEffect, useState, type MouseEvent } from "react";
 import { Link } from "react-router";
 import { listCategories, switchCategory, unenrollCategory } from "../../api/categories";
 import type { Category, User } from "../../api/types";
+import { useConfirm } from "../../hooks/use-confirm";
 import { useToast } from "../../hooks/use-toast";
 import { CheckIcon, LayersIcon, LogOutIcon, SettingsIcon, SpinnerIcon, TrashIcon } from "./icons";
 
@@ -17,6 +18,7 @@ import { CheckIcon, LayersIcon, LogOutIcon, SettingsIcon, SpinnerIcon, TrashIcon
 // there for anything more.
 export function ProfileMenu({ user, onLogout }: { user: User; onLogout: () => void }) {
   const toast = useToast();
+  const confirm = useConfirm();
   const [open, setOpen] = useState(false);
   const [categories, setCategories] = useState<Category[] | null>(null);
   const [switchingId, setSwitchingId] = useState<string | null>(null);
@@ -43,7 +45,13 @@ export function ProfileMenu({ user, onLogout }: { user: User; onLogout: () => vo
 
   async function handleUnenroll(categoryId: string, name: string, e: MouseEvent) {
     e.stopPropagation();
-    if (!confirm(`Unenroll from ${name}? Your progress there is kept — re-enrolling picks up where you left off.`)) return;
+    const ok = await confirm({
+      title: `Unenroll from ${name}?`,
+      message: "Your progress there is kept — re-enrolling picks up where you left off.",
+      confirmLabel: "Unenroll",
+      destructive: true,
+    });
+    if (!ok) return;
     setSwitchingId(categoryId);
     try {
       await unenrollCategory(categoryId);
@@ -120,7 +128,10 @@ export function ProfileMenu({ user, onLogout }: { user: User; onLogout: () => vo
             </div>
           )}
           <div className="my-1 border-t border-sidebar-border" />
-          <Link to="/settings" className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground">
+          <Link
+            to="/settings?tab=profile"
+            className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+          >
             <SettingsIcon width={14} height={14} /> Manage categories in Settings
           </Link>
         </div>

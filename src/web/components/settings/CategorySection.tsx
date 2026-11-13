@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { listCategories, enrollCategory, switchCategory, unenrollCategory } from "../../api/categories";
 import type { Category, User } from "../../api/types";
+import { useConfirm } from "../../hooks/use-confirm";
 import { useToast } from "../../hooks/use-toast";
 import { GhostButton, PrimaryButton, SecondaryButton, SectionCard } from "./SectionCard";
 import { CheckIcon, LayersIcon, PlusIcon, TrashIcon } from "./icons";
@@ -17,6 +18,7 @@ import { CheckIcon, LayersIcon, PlusIcon, TrashIcon } from "./icons";
 // up the new active category immediately.
 export function CategorySection({ user }: { user: User }) {
   const toast = useToast();
+  const confirm = useConfirm();
   const [categories, setCategories] = useState<Category[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -53,7 +55,13 @@ export function CategorySection({ user }: { user: User }) {
   }
 
   async function handleUnenroll(categoryId: string, name: string) {
-    if (!confirm(`Unenroll from ${name}? Your progress there is kept — re-enrolling picks up where you left off.`)) return;
+    const ok = await confirm({
+      title: `Unenroll from ${name}?`,
+      message: "Your progress there is kept — re-enrolling picks up where you left off.",
+      confirmLabel: "Unenroll",
+      destructive: true,
+    });
+    if (!ok) return;
     setBusyId(categoryId);
     try {
       await unenrollCategory(categoryId);

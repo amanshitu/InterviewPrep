@@ -1,4 +1,5 @@
-import { useState, type ComponentType, type SVGProps } from "react";
+import { useCallback, useState, type ComponentType, type SVGProps } from "react";
+import { useSearchParams } from "react-router";
 import { useShellUser } from "../../components/layout/AppShell";
 import { AccountSection } from "../../components/settings/AccountSection";
 import { AiUsageSection } from "../../components/settings/AiUsageSection";
@@ -17,6 +18,8 @@ import type { User } from "../../api/types";
 
 type TabId = "account" | "profile" | "appearance" | "ai" | "notifications" | "questionsets" | "data";
 
+const DEFAULT_TAB: TabId = "account";
+
 const TABS: { id: TabId; label: string; icon: ComponentType<SVGProps<SVGSVGElement>> }[] = [
   { id: "account", label: "Account", icon: AccountIcon },
   { id: "profile", label: "Prep profile", icon: ClipboardIcon },
@@ -27,9 +30,29 @@ const TABS: { id: TabId; label: string; icon: ComponentType<SVGProps<SVGSVGEleme
   { id: "data", label: "Data", icon: DownloadIcon },
 ];
 
+const TAB_IDS = new Set<string>(TABS.map((t) => t.id));
+
+// Tab selection lives in the URL (?tab=appearance) rather than plain
+// useState, so a link — from ProfileMenu's "Manage categories", a toast
+// action, a bookmark, or a support message — can land directly on the
+// right section instead of always opening to Account and making the
+// visitor click again. Falls back to DEFAULT_TAB for a missing or
+// unrecognized value rather than rendering nothing.
 function SettingsContent({ user }: { user: User }) {
   const isMobile = useIsMobile();
-  const [tab, setTab] = useState<TabId>("account");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get("tab");
+  const tab: TabId = requestedTab && TAB_IDS.has(requestedTab) ? (requestedTab as TabId) : DEFAULT_TAB;
+  const setTab = useCallback(
+    (next: TabId) => {
+      setSearchParams((prev) => {
+        const params = new URLSearchParams(prev);
+        params.set("tab", next);
+        return params;
+      }, { replace: true });
+    },
+    [setSearchParams],
+  );
   const [currentUser, setCurrentUser] = useState(user);
 
   const activeContent = (() => {

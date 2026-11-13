@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type ComponentType, type SVGProps } from "react";
+import { useSearchParams } from "react-router";
 import { getApprovalHistory, getOverview, getPendingSets, type AdminOverview, type ApprovalHistoryEntry, type PendingQuestionSet } from "../../api/admin";
 import { listCategories } from "../../api/categories";
 import type { Category } from "../../api/types";
@@ -16,12 +17,16 @@ import { Skeleton, SkeletonCard } from "../../components/layout/Skeleton";
 
 type Tab = "categories" | "pending" | "history" | "users";
 
+const DEFAULT_TAB: Tab = "pending";
+
 const TABS: { key: Tab; label: string; icon: ComponentType<SVGProps<SVGSVGElement>> }[] = [
   { key: "pending", label: "Pending Approvals", icon: ClockIcon },
   { key: "categories", label: "Categories", icon: FolderIcon },
   { key: "history", label: "History", icon: RefreshIcon },
   { key: "users", label: "Users", icon: UsersIcon },
 ];
+
+const TAB_KEYS = new Set<string>(TABS.map((t) => t.key));
 
 export function AdminHome() {
   const user = useShellUser();
@@ -38,8 +43,26 @@ function Forbidden({ user }: { user: User }) {
   );
 }
 
+// Tab selection lives in the URL (?tab=users) rather than plain useState,
+// so a link can deep-link straight to a specific admin panel (e.g. a
+// support escalation linking the on-call admin to ?tab=users instead of
+// "open Admin, then click Users") instead of always landing on Pending
+// Approvals. Falls back to DEFAULT_TAB for a missing or unrecognized
+// value.
 function AdminDashboard() {
-  const [tab, setTab] = useState<Tab>("pending");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get("tab");
+  const tab: Tab = requestedTab && TAB_KEYS.has(requestedTab) ? (requestedTab as Tab) : DEFAULT_TAB;
+  const setTab = useCallback(
+    (next: Tab) => {
+      setSearchParams((prev) => {
+        const params = new URLSearchParams(prev);
+        params.set("tab", next);
+        return params;
+      }, { replace: true });
+    },
+    [setSearchParams],
+  );
   const [overview, setOverview] = useState<AdminOverview | null>(null);
   const [sets, setSets] = useState<PendingQuestionSet[]>([]);
   const [history, setHistory] = useState<ApprovalHistoryEntry[]>([]);

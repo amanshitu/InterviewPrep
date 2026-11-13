@@ -265,7 +265,7 @@ function TodayContent({ user }: { user: User }) {
           {queue.questions.length === 0 && queue.remaining > 0 ? (
             <div className="rounded-lg border border-dashed border-border p-6 text-center text-muted-foreground">
               No questions available in your current category yet.{" "}
-              <Link to="/settings" className="font-semibold text-primary hover:underline">
+              <Link to="/settings?tab=profile" className="font-semibold text-primary hover:underline">
                 Switch categories or upload a question set in Settings
               </Link>{" "}
               to get started.

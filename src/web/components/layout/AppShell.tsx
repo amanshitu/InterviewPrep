@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Outlet, useOutletContext } from "react-router";
 import type { User } from "../../api/types";
 import { logout } from "../../api/auth";
+import { ConfirmProvider } from "../../hooks/use-confirm";
 import { ToastProvider } from "../../hooks/use-toast";
 import { clearAuthedFlag } from "../../lib/auth-flag";
 import { AuthGate } from "./AuthGate";
@@ -39,19 +40,21 @@ export function AppShell() {
   useServiceWorkerRegistration();
   return (
     <ToastProvider>
-      <AuthGate>
-        {(user) => (
-          <div className="flex min-h-dvh bg-background text-foreground">
-            <Sidebar user={user} onLogout={() => void handleLogout()} />
-            <div className="flex min-w-0 flex-1 flex-col">
-              <MobileHeader user={user} onLogout={() => void handleLogout()} />
-              <main className="mx-auto w-full max-w-(--main-max) flex-1 px-4 py-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] sm:px-6">
-                <Outlet context={user} />
-              </main>
+      <ConfirmProvider>
+        <AuthGate>
+          {(user) => (
+            <div className="flex min-h-dvh bg-background text-foreground">
+              <Sidebar user={user} onLogout={() => void handleLogout()} />
+              <div className="flex min-w-0 flex-1 flex-col">
+                <MobileHeader user={user} onLogout={() => void handleLogout()} />
+                <main className="mx-auto w-full max-w-(--main-max) flex-1 px-4 py-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] sm:px-6">
+                  <Outlet context={user} />
+                </main>
+              </div>
             </div>
-          </div>
-        )}
-      </AuthGate>
+          )}
+        </AuthGate>
+      </ConfirmProvider>
     </ToastProvider>
   );
 }
