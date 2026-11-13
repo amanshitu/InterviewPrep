@@ -368,3 +368,12 @@ export function UsersIcon(props: SVGProps<SVGSVGElement>) {
     </Icon>
   );
 }
+
+export function LayersIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M12 3 3 8l9 5 9-5-9-5Z" strokeLinejoin="round" />
+      <path d="M3 13l9 5 9-5M3 18l9 5 9-5" strokeLinejoin="round" />
+    </Icon>
+  );
+}

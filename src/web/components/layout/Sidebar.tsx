@@ -3,7 +3,8 @@ import { Link, NavLink } from "react-router";
 import type { User } from "../../api/types";
 import { useSidebar } from "../../hooks/use-sidebar";
 import { primaryNav, secondaryNav, type NavItem } from "../../lib/nav";
-import { LogOutIcon, PanelLeftCloseIcon, PanelLeftOpenIcon } from "./icons";
+import { PanelLeftCloseIcon, PanelLeftOpenIcon } from "./icons";
+import { ProfileMenu } from "./ProfileMenu";
 
 // Desktop-only collapsible left sidebar, matching MealSathi's app-shell
 // sidebar mechanics: width/label-collapse driven entirely by the
@@ -53,22 +54,7 @@ export function Sidebar({ user, onLogout }: { user: User; onLogout: () => void }
       </nav>
 
       <div className="border-t border-sidebar-border p-2">
-        <div className="flex items-center gap-2 rounded-md px-2 py-2">
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-            {user.name.slice(0, 1).toUpperCase()}
-          </div>
-          <span className="rail:max-w-0 rail:opacity-0 min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-sm font-medium opacity-100 transition-[max-width,opacity] duration-(--rail-dur) ease-(--rail-ease)">
-            {user.name}
-          </span>
-          <button
-            type="button"
-            onClick={onLogout}
-            aria-label="Log out"
-            className="rail:hidden shrink-0 text-muted-foreground hover:text-foreground"
-          >
-            <LogOutIcon width={16} height={16} />
-          </button>
-        </div>
+        <ProfileMenu user={user} onLogout={onLogout} />
       </div>
     </aside>
   );
