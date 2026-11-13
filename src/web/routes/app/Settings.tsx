@@ -1,9 +1,10 @@
 import { useCallback, useState, type ComponentType, type SVGProps } from "react";
 import { useSearchParams } from "react-router";
-import { useShellUser } from "../../components/layout/AppShell";
+import { useRefreshUser, useShellUser } from "../../components/layout/AppShell";
 import { AccountSection } from "../../components/settings/AccountSection";
 import { AiUsageSection } from "../../components/settings/AiUsageSection";
 import { AppearanceSection } from "../../components/settings/AppearanceSection";
+import { CategoryAiPromptSection } from "../../components/settings/CategoryAiPromptSection";
 import { CategorySection } from "../../components/settings/CategorySection";
 import { DataExportSection } from "../../components/settings/DataExportSection";
 import { AccountIcon, BellIcon, ClipboardIcon, DownloadIcon, FolderIcon, PaletteIcon, SparkleIcon } from "../../components/settings/icons";
@@ -53,8 +54,19 @@ function SettingsContent({ user }: { user: User }) {
     },
     [setSearchParams],
   );
-  const [currentUser, setCurrentUser] = useState(user);
-
+  // The shell's `user` is the source of truth (sidebar, Today's greeting,
+  // etc. all read it), so a save here also calls refreshUser() — keeping
+  // only a local copy left the rest of the app showing the old name/track
+  // until a hard reload. `saved` just bridges the gap until that refetch
+  // lands: it's honored only while the shell user it was based on is still
+  // the current one.
+  const refreshUser = useRefreshUser();
+  const [saved, setSaved] = useState<{ base: User; user: User } | null>(null);
+  const currentUser = saved && saved.base === user ? saved.user : user;
+  const setCurrentUser = (updated: User) => {
+    setSaved({ base: user, user: updated });
+    void refreshUser();
+  };
   const activeContent = (() => {
     switch (tab) {
       case "account":
@@ -82,8 +94,9 @@ function SettingsContent({ user }: { user: User }) {
         return (
           <div className="flex flex-col gap-4">
             <QuestionSetsSection user={currentUser} />
+            <CategoryAiPromptSection user={currentUser} />
             <ResumePromptSection user={currentUser} />
-            <SuggestedSetsSection />
+            <SuggestedSetsSection activeCategoryId={currentUser.activeCategoryId} />
           </div>
         );
       case "data":

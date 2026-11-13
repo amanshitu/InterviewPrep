@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { updateProfile } from "../../api/account";
 import type { User } from "../../api/types";
 import { useToast } from "../../hooks/use-toast";
@@ -17,12 +17,27 @@ export function PrepProfileSection({ user, onUserChange }: { user: User; onUserC
   const [headline, setHeadline] = useState(user.headline ?? "");
   const [years, setYears] = useState(user.yearsExperience != null ? String(user.yearsExperience) : "");
   const [bio, setBio] = useState(user.bio ?? "");
-  const [timezone, setTimezone] = useState(user.timezone || "UTC");
+  // Canonicalized up front ("Asia/Calcutta", a legacy IANA alias a
+  // browser's auto-detection can hand back at signup, has no matching
+  // <option value> below — only "Asia/Kolkata" does) so the controlled
+  // <select>'s value always matches one of its own options. React ignores
+  // an <option>'s `selected` attribute once the <select> is controlled via
+  // `value`, so canonicalizing there instead of here wouldn't have worked.
+  const [timezone, setTimezone] = useState(canonicalTz(user.timezone || "UTC"));
   const [quota, setQuota] = useState(String(user.dailyQuota));
   const [saving, setSaving] = useState(false);
 
-  const tzOptions = timezoneSelectOptions(user.timezone || "UTC");
-  const canonicalCurrent = canonicalTz(timezone);
+  // Quota is per-category (switching category changes what the field
+  // should show), but it's the only field here that is — track/headline/
+  // years/bio/timezone are global profile fields, not reset by a category
+  // switch. This syncs just the one field in place rather than remounting
+  // the whole section on every switch, which used to wipe whatever the
+  // user was mid-typing into the other fields.
+  useEffect(() => {
+    setQuota(String(user.dailyQuota));
+  }, [user.dailyQuota]);
+
+  const tzOptions = timezoneSelectOptions(timezone);
 
   async function handleSave() {
     const dailyQuota = parseInt(quota, 10);
@@ -83,7 +98,7 @@ export function PrepProfileSection({ user, onUserChange }: { user: User; onUserC
         <span>Timezone</span>
         <select className={inputClass()} value={timezone} onChange={(e) => setTimezone(e.target.value)}>
           {tzOptions.map((o) => (
-            <option key={o.tz} value={o.tz} selected={canonicalTz(o.tz) === canonicalCurrent}>
+            <option key={o.tz} value={o.tz}>
               {o.label}
             </option>
           ))}

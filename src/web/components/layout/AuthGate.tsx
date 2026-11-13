@@ -1,17 +1,20 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { getMe } from "../../api/account";
 import type { User } from "../../api/types";
 import { clearAuthedFlag, likelyAuthed, markAuthed } from "../../lib/auth-flag";
 
-// Every page under src/web/routes/app|admin/* is its own real document (true
-// MPA, not client-side routing), so unlike the old single-index.html SPA
-// there's no "wrong screen" markup embedded in this page's HTML to flash —
-// each page's shell is just an empty #root. AuthGate's job is purely: avoid
-// a pointless network round trip for a visitor who almost certainly isn't
-// signed in (redirect to /login immediately), and show a neutral spinner —
-// never an incorrect screen — while actually-likely-signed-in visitors get
-// confirmed via GET /api/me.
-export function AuthGate({ children }: { children: (user: User) => ReactNode }) {
+export type RefreshUser = () => Promise<void>;
+
+// Mounted once per app visit, not once per page — AppShell (the layout
+// route wrapping every page under src/web/routes/app|admin/*) renders this
+// around a client-routed <Outlet/>, so this check runs on the very first
+// load and never again until a hard refresh. Login and About stay separate
+// real documents on purpose and never go through this. AuthGate's job is
+// purely: avoid a pointless network round trip for a visitor who almost
+// certainly isn't signed in (redirect to /login immediately), and show a
+// neutral spinner — never an incorrect screen — while actually-likely-
+// signed-in visitors get confirmed via GET /api/me.
+export function AuthGate({ children }: { children: (user: User, refreshUser: RefreshUser) => ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [redirecting, setRedirecting] = useState(false);
 
@@ -39,9 +42,31 @@ export function AuthGate({ children }: { children: (user: User) => ReactNode }) 
     };
   }, []);
 
+  // Re-fetches the user in place (no document reload) after something
+  // changes server-side state that's reflected on the user object —
+  // active category, enrolled categories, profile fields. Callers that
+  // mutate one of those (CategorySection, ProfileMenu) call this instead
+  // of window.location.reload(), which used to force the whole app shell
+  // — including the sidebar — to unmount and remount, producing the
+  // visible flash/flicker this replaces.
+  const refreshUser = useCallback<RefreshUser>(async () => {
+    try {
+      const { user } = await getMe();
+      markAuthed();
+      setUser(user);
+    } catch {
+      // Keep showing the last known user rather than tearing down the app
+      // on a transient failure. A real session loss (the cookie expired,
+      // revoked elsewhere) isn't actively detected here — it surfaces only
+      // when some other API call 401s, which each caller handles on its
+      // own (there's no shared "session expired, redirect to /login"
+      // interceptor in api/client.ts). A hard refresh always re-checks.
+    }
+  }, []);
+
   if (redirecting) return null;
   if (!user) return <PageSpinner />;
-  return <>{children(user)}</>;
+  return <>{children(user, refreshUser)}</>;
 }
 
 function PageSpinner() {

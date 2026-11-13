@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
-import { useShellUser } from "../../components/layout/AppShell";
+import { useRefreshUser, useShellUser } from "../../components/layout/AppShell";
 import { useToast } from "../../hooks/use-toast";
 import { useReadAloud } from "../../hooks/use-read-aloud";
-import { getMe } from "../../api/account";
 import {
   completeQuestion,
   flagForReview,
@@ -118,7 +117,12 @@ function TodayContent({ user }: { user: User }) {
   const [completedExpanded, setCompletedExpanded] = useState(false);
   const [reviewCount, setReviewCount] = useState(DEFAULT_REVIEW_COUNT);
   const [mockCount, setMockCount] = useState(5);
-  const [streak, setStreak] = useState(user.streak);
+  // Completing a question can bump the streak; refreshing the shell's user
+  // (rather than a private getMe() copy here) keeps Stats' streak tiles in
+  // step too — they read the same user object and no longer get a fresh
+  // /api/me per page load.
+  const refreshUser = useRefreshUser();
+  const streak = user.streak;
 
   useEffect(() => {
     getTodayQueue()
@@ -169,8 +173,7 @@ function TodayContent({ user }: { user: User }) {
     setQueue(next);
     try {
       await completeQuestion(qid);
-      const me = await getMe();
-      setStreak(me.user.streak);
+      await refreshUser();
       toast.success("Marked complete.");
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Failed to mark complete.");

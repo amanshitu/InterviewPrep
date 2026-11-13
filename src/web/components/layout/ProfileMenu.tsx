@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { Link } from "react-router";
-import { listCategories, switchCategory, unenrollCategory } from "../../api/categories";
-import type { Category, User } from "../../api/types";
+import { switchCategory, unenrollCategory } from "../../api/categories";
+import type { User } from "../../api/types";
 import { useConfirm } from "../../hooks/use-confirm";
 import { useToast } from "../../hooks/use-toast";
+import type { RefreshUser } from "./AuthGate";
 import { CheckIcon, LayersIcon, LogOutIcon, SettingsIcon, SpinnerIcon, TrashIcon } from "./icons";
 
 // Hover-opened popover on the sidebar's profile summary — lets a user
@@ -16,21 +17,24 @@ import { CheckIcon, LayersIcon, LogOutIcon, SettingsIcon, SpinnerIcon, TrashIcon
 // Prep profile (CategorySection.tsx) — this popover only offers a quick
 // switch among categories the user is already enrolled in, plus a link
 // there for anything more.
-export function ProfileMenu({ user, onLogout }: { user: User; onLogout: () => void }) {
+//
+// Switching/unenrolling calls refreshUser() (AppShell/AuthGate) instead of
+// window.location.reload() — a full reload used to unmount and remount
+// the entire app shell, including this sidebar, which is exactly the
+// visible flash/flicker this replaces. AppShell re-keys the routed page's
+// <Outlet/> on the user's activeCategoryId, so the current page's own
+// (now stale) data still gets refetched fresh, just without reloading the
+// document.
+export function ProfileMenu({ user, refreshUser, onLogout }: { user: User; refreshUser: RefreshUser; onLogout: () => void }) {
   const toast = useToast();
   const confirm = useConfirm();
   const [open, setOpen] = useState(false);
-  const [categories, setCategories] = useState<Category[] | null>(null);
   const [switchingId, setSwitchingId] = useState<string | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (open && !categories) {
-      listCategories()
-        .then((data) => setCategories(data.categories))
-        .catch(() => setCategories([]));
-    }
-  }, [open, categories]);
+  // Straight off the user object rather than its own GET /api/categories:
+  // a separately fetched (and cached) copy flashed "Loading…" on first
+  // hover and went stale whenever Settings enrolled/unenrolled a category.
+  const enrolled = user.enrolledCategories;
 
   // The popup sits directly above the trigger (no gap — see the dropdown's
   // className below) so a straight-up mouse path never leaves the hoverable
@@ -61,9 +65,12 @@ export function ProfileMenu({ user, onLogout }: { user: User; onLogout: () => vo
     setSwitchingId(categoryId);
     try {
       await switchCategory(categoryId);
-      window.location.reload();
+      await refreshUser();
+      setOpen(false);
+      toast.success("Switched category.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't switch category.");
+    } finally {
       setSwitchingId(null);
     }
   }
@@ -80,14 +87,14 @@ export function ProfileMenu({ user, onLogout }: { user: User; onLogout: () => vo
     setSwitchingId(categoryId);
     try {
       await unenrollCategory(categoryId);
-      window.location.reload();
+      await refreshUser();
+      toast.success(`Unenrolled from ${name}.`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't unenroll from that category.");
+    } finally {
       setSwitchingId(null);
     }
   }
-
-  const enrolled = (categories ?? []).filter((c) => c.enrolled);
 
   return (
     <div className="relative" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
@@ -113,9 +120,7 @@ export function ProfileMenu({ user, onLogout }: { user: User; onLogout: () => vo
           <div className="truncate px-2 py-1.5 text-xs text-muted-foreground">{user.email}</div>
           <div className="my-1 border-t border-sidebar-border" />
           <div className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Category</div>
-          {categories === null ? (
-            <p className="px-2 py-1.5 text-sm text-muted-foreground">Loading…</p>
-          ) : enrolled.length === 0 ? (
+          {enrolled.length === 0 ? (
             <p className="px-2 py-1.5 text-sm text-muted-foreground">No categories yet.</p>
           ) : (
             <div className="flex flex-col">

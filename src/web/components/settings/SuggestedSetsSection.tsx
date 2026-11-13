@@ -4,7 +4,12 @@ import { useToast } from "../../hooks/use-toast";
 import { PlusIcon } from "./icons";
 import { ErrorText, SectionCard } from "./SectionCard";
 
-export function SuggestedSetsSection() {
+// Suggestions are scoped server-side to the user's active category
+// (getSuggestedSets() reads activeCategoryId from the session), so this
+// takes it as a prop purely to refetch when it changes — passing it as a
+// value, not reading it via a hook, keeps this component from needing to
+// know about the shell at all.
+export function SuggestedSetsSection({ activeCategoryId }: { activeCategoryId: string | null }) {
   const toast = useToast();
   const [sets, setSets] = useState<SuggestedQuestionSet[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -14,7 +19,7 @@ export function SuggestedSetsSection() {
     getSuggestedSets()
       .then((data) => setSets(data.sets))
       .catch((err) => setError(err instanceof Error ? err.message : "Couldn't load suggested sets."));
-  }, [refreshKey]);
+  }, [refreshKey, activeCategoryId]);
 
   async function handleSubscribe(id: string) {
     try {

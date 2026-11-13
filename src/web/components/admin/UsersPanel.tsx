@@ -40,10 +40,13 @@ export function UsersPanel() {
 
   return (
     <div>
-      {loading ? (
+      {/* Only the first load swaps in "Loading…" — paging keeps the current
+          rows (dimmed) until the next page arrives, so the table doesn't
+          collapse and yank the Prev/Next buttons out from under the cursor. */}
+      {loading && users.length === 0 ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
       ) : (
-        <div className="overflow-x-auto">
+        <div className={`overflow-x-auto ${loading ? "opacity-60" : ""}`}>
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">

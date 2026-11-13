@@ -1,28 +1,18 @@
-import { useEffect } from "react";
-import { Outlet, useOutletContext } from "react-router";
+import { Outlet, useLocation, useOutletContext } from "react-router";
 import type { User } from "../../api/types";
 import { logout } from "../../api/auth";
 import { ConfirmProvider } from "../../hooks/use-confirm";
 import { ToastProvider } from "../../hooks/use-toast";
 import { clearAuthedFlag } from "../../lib/auth-flag";
+import type { RefreshUser } from "./AuthGate";
 import { AuthGate } from "./AuthGate";
 import { MobileHeader } from "./MobileHeader";
+import { PwaPrompts } from "./PwaPrompts";
 import { Sidebar } from "./Sidebar";
 
-// The old app registered the service worker unconditionally on every load
-// (public/app.js, module scope, not gated behind any feature) so the PWA
-// shell-cache and push-notification plumbing were always live, not just
-// when a visitor happened to open Notifications in Settings. Preserve that
-// here for every page that uses AppShell (NotificationsSection.tsx also
-// calls register(), harmlessly — registering the same URL twice is a no-op).
-function useServiceWorkerRegistration() {
-  useEffect(() => {
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch(() => {
-        /* best-effort */
-      });
-    }
-  }, []);
+interface ShellContext {
+  user: User;
+  refreshUser: RefreshUser;
 }
 
 // The authenticated app shell, mounted ONCE as a React Router layout route
@@ -36,24 +26,46 @@ function useServiceWorkerRegistration() {
 // the actual page content — swaps. This is the fix for the earlier
 // true-MPA architecture's "every click reloads the whole page" complaint:
 // matches MealSathi's own persistent-shell-plus-client-routing pattern.
+//
+// Service worker registration and the beforeinstallprompt/update listeners
+// are wired at module scope in entries/app.tsx, before this ever mounts —
+// not here — so an early event is never missed.
 export function AppShell() {
-  useServiceWorkerRegistration();
+  const { pathname } = useLocation();
   return (
     <ToastProvider>
       <ConfirmProvider>
         <AuthGate>
-          {(user) => (
+          {(user, refreshUser) => (
             <div className="flex min-h-dvh bg-background text-foreground">
-              <Sidebar user={user} onLogout={() => void handleLogout()} />
+              <Sidebar user={user} refreshUser={refreshUser} onLogout={() => void handleLogout()} />
               <div className="flex min-w-0 flex-1 flex-col">
                 <MobileHeader user={user} onLogout={() => void handleLogout()} />
                 <main className="mx-auto w-full max-w-(--main-max) flex-1 px-4 py-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] sm:px-6">
-                  <Outlet context={user} />
+                  {/* Keyed on activeCategoryId: switching/enrolling/unenrolling a
+                      category (CategorySection, ProfileMenu) calls refreshUser()
+                      rather than reloading the document — that fixed the sidebar's
+                      visible flash, but the current page's own data (fetched once
+                      on mount) is now category-scoped and stale. Changing this key
+                      remounts just the routed page fresh for the new category,
+                      while Sidebar/MobileHeader above stay mounted throughout.
+                      Settings and Admin are exempt: neither page's own data is
+                      category-scoped (Settings re-keys only its own category-scoped
+                      sections instead, see Settings.tsx; Admin's overview/pending-
+                      sets/history/users are platform-wide), so remounting either —
+                      a skeleton flash, and for Settings also CategorySection
+                      dropping back to "Loading…" mid-click — was a pure regression
+                      with nothing to show for it. */}
+                  <Outlet
+                    context={{ user, refreshUser } satisfies ShellContext}
+                    key={pathname === "/settings" || pathname === "/admin" ? "shell" : (user.activeCategoryId ?? "none")}
+                  />
                 </main>
               </div>
             </div>
           )}
         </AuthGate>
+        <PwaPrompts />
       </ConfirmProvider>
     </ToastProvider>
   );
@@ -61,9 +73,17 @@ export function AppShell() {
 
 // Every page component under routes/app|admin/* calls this instead of
 // receiving `user` as a prop, now that AppShell is a layout route rendering
-// <Outlet context={user}/> rather than a per-page render-prop wrapper.
+// <Outlet context={...}/> rather than a per-page render-prop wrapper.
 export function useShellUser(): User {
-  return useOutletContext<User>();
+  return useOutletContext<ShellContext>().user;
+}
+
+// Lets a page re-fetch /api/me in place (no document reload) after it
+// changes something reflected on the user object — active category,
+// enrolled categories, profile fields — so the sidebar and every other
+// consumer of `user` pick it up immediately.
+export function useRefreshUser(): RefreshUser {
+  return useOutletContext<ShellContext>().refreshUser;
 }
 
 async function handleLogout() {

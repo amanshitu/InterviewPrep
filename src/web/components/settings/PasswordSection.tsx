@@ -2,6 +2,7 @@ import { useState } from "react";
 import { changePassword, revokeAllSessions } from "../../api/auth";
 import { useConfirm } from "../../hooks/use-confirm";
 import { useToast } from "../../hooks/use-toast";
+import { clearAuthedFlag } from "../../lib/auth-flag";
 import { PrimaryButton, SecondaryButton, SectionCard, inputClass } from "./SectionCard";
 import { KeyIcon, LogoutIcon } from "./icons";
 import { PasswordField } from "../layout/PasswordField";
@@ -62,7 +63,12 @@ export function SessionsSection() {
     setRevoking(true);
     try {
       await revokeAllSessions();
-      window.location.reload();
+      // This session is revoked too, so leaving the SPA is required — but go
+      // straight to /login (as AppShell's handleLogout does) rather than
+      // reload(), which re-rendered the shell's spinner and waited on a
+      // doomed /api/me before AuthGate redirected there anyway.
+      clearAuthedFlag();
+      window.location.href = "/login";
     } catch {
       setRevoking(false);
     }

@@ -70,8 +70,11 @@ function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const { error } = useToast();
 
+  // `loading` only ever covers the first load: a refresh after an
+  // approve/reject/create updates the lists in place rather than swapping
+  // the whole tab for skeletons (which also remounted every card,
+  // collapsing any open "Review questions" panel).
   const load = useCallback(async () => {
-    setLoading(true);
     const [overviewResult, pendingResult, historyResult, categoriesResult] = await Promise.allSettled([
       getOverview(),
       getPendingSets(),

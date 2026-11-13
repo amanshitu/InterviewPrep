@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { listCategories, enrollCategory, switchCategory, unenrollCategory } from "../../api/categories";
 import type { Category, User } from "../../api/types";
+import { useRefreshUser } from "../layout/AppShell";
 import { useConfirm } from "../../hooks/use-confirm";
 import { useToast } from "../../hooks/use-toast";
 import { GhostButton, PrimaryButton, SecondaryButton, SectionCard } from "./SectionCard";
@@ -12,17 +13,25 @@ import { CheckIcon, LayersIcon, PlusIcon, TrashIcon } from "./icons";
 // vanilla-JS app's profile dropdown/mobile sheet but was never ported
 // during the React migration, even though the backend
 // (GET /api/categories, POST /api/categories/enroll|switch) was untouched
-// and fully working the whole time. A switch/enroll reloads the page
-// (matching PasswordSection's "sign out of all devices" pattern) so every
-// other part of the app — fetched server-side per request anyway — picks
-// up the new active category immediately.
+// and fully working the whole time. A switch/enroll/unenroll calls
+// refreshUser() (AppShell/AuthGate) instead of reloading the document —
+// that fixes the full-page flash a reload caused (the sidebar/header never
+// unmount); Settings re-keys its own category-scoped sections on the
+// user's activeCategoryId, and AppShell does the same for every other
+// routed page, so they still refetch fresh data for the new category.
 export function CategorySection({ user }: { user: User }) {
   const toast = useToast();
   const confirm = useConfirm();
+  const refreshUser = useRefreshUser();
   const [categories, setCategories] = useState<Category[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
+  // Fetched once, for the catalogue (names/descriptions) only — which ones
+  // are enrolled comes from user.enrolledCategories below, so the single
+  // refreshUser() after a mutation moves a row between the two lists and
+  // flips the Active badge in the same render (no second refetch, and no
+  // frame where the button has stopped spinning but the row hasn't moved).
   useEffect(() => {
     listCategories()
       .then((data) => setCategories(data.categories))
@@ -33,10 +42,11 @@ export function CategorySection({ user }: { user: User }) {
     setBusyId(categoryId);
     try {
       await switchCategory(categoryId);
-      toast.success("Switched category — reloading…");
-      window.location.href = "/";
+      await refreshUser();
+      toast.success("Switched category.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't switch category.");
+    } finally {
       setBusyId(null);
     }
   }
@@ -46,10 +56,11 @@ export function CategorySection({ user }: { user: User }) {
     try {
       await enrollCategory(categoryId);
       await switchCategory(categoryId);
-      toast.success("Enrolled — reloading…");
-      window.location.href = "/";
+      await refreshUser();
+      toast.success("Enrolled.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't enroll in that category.");
+    } finally {
       setBusyId(null);
     }
   }
@@ -65,16 +76,18 @@ export function CategorySection({ user }: { user: User }) {
     setBusyId(categoryId);
     try {
       await unenrollCategory(categoryId);
-      toast.success("Unenrolled — reloading…");
-      window.location.href = "/";
+      await refreshUser();
+      toast.success(`Unenrolled from ${name}.`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't unenroll from that category.");
+    } finally {
       setBusyId(null);
     }
   }
 
-  const enrolled = categories?.filter((c) => c.enrolled) ?? [];
-  const notEnrolled = categories?.filter((c) => !c.enrolled) ?? [];
+  const enrolledIds = new Set(user.enrolledCategories.map((c) => c.id));
+  const enrolled = categories?.filter((c) => enrolledIds.has(c.id)) ?? [];
+  const notEnrolled = categories?.filter((c) => !enrolledIds.has(c.id)) ?? [];
 
   return (
     <SectionCard

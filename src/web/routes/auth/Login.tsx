@@ -3,7 +3,7 @@ import { forgotPassword, login, resetPassword, signup } from "../../api/auth";
 import { listPublicCategories } from "../../api/categories";
 import { ApiError } from "../../api/client";
 import type { PublicCategory } from "../../api/types";
-import { markAuthed } from "../../lib/auth-flag";
+import { likelyAuthed, markAuthed } from "../../lib/auth-flag";
 import { BackIcon, CheckIcon, KeyIcon, LogoMark, PlusIcon, SendIcon, SpinnerIcon } from "../../components/layout/icons";
 import { PasswordField } from "../../components/layout/PasswordField";
 
@@ -35,6 +35,18 @@ export function Login() {
   const resetToken = new URLSearchParams(window.location.search).get("reset");
   const [form, setForm] = useState<FormKind>(resetToken ? "reset" : "login");
   const [loginSuccessMessage, setLoginSuccessMessage] = useState<string | null>(null);
+
+  // A signed-in visitor landing here (e.g. "Back to sign in" from the About
+  // page, or a bookmark) otherwise just sees the sign-in form again with no
+  // way back into the app short of typing the URL — bounce them to "/"
+  // instead, same likelyAuthed() heuristic AuthGate itself uses, so this
+  // doesn't cost a network round trip for the common case (someone who
+  // genuinely isn't signed in). Skipped for a password-reset link: someone
+  // resetting their password on a device that's still signed in as them
+  // (or as someone else) still needs to land on the reset form, not bounce.
+  useEffect(() => {
+    if (!resetToken && likelyAuthed()) window.location.href = "/";
+  }, [resetToken]);
 
   return (
     <div className="flex min-h-dvh items-center justify-center bg-background px-4 py-[calc(2.5rem+env(safe-area-inset-top,0px))]">

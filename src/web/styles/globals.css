@@ -233,6 +233,15 @@
    theme-init.js to avoid a layout flash). */
 @custom-variant rail (&:where([data-sidebar="collapsed"] *));
 
+html {
+  /* Reserves the scrollbar's width permanently instead of only when a
+     page happens to need one — otherwise a classic (non-overlay) OS
+     scrollbar appearing/disappearing as content height changes (a page
+     swap, a brief skeleton state) shifts the whole centered layout
+     sideways by its width for a frame, a visible horizontal jitter. */
+  scrollbar-gutter: stable;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
