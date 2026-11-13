@@ -15,6 +15,7 @@ import { ApiError } from "../../api/client";
 import type { Question, User } from "../../api/types";
 import { CheckIcon, EyeIcon, PlusIcon, RefreshIcon, ShuffleIcon, SparkleIcon, SpeakerIcon, StopIcon } from "../../components/layout/icons";
 import { Skeleton, SkeletonCard } from "../../components/layout/Skeleton";
+import { Markdown, renderInline } from "../../components/layout/Markdown";
 
 const DEFAULT_REVIEW_COUNT = 15;
 
@@ -76,7 +77,7 @@ function QuestionCard({
     <div className="rounded-lg border border-border bg-card p-4">
       <div className="inline-block rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold text-secondary-foreground">{q.topic_label}</div>
       <div className="mt-2 font-medium text-foreground">
-        <span className="text-xs font-semibold text-muted-foreground">Q{idx + 1}</span> {q.q}
+        <span className="text-xs font-semibold text-muted-foreground">Q{idx + 1}</span> {renderInline(q.q, `q-${q.id}`)}
       </div>
       {revealed ? (
         <>
@@ -85,7 +86,7 @@ function QuestionCard({
               <span className="rounded-full bg-warning/20 px-2 py-0.5 text-xs font-semibold text-foreground">Needs review</span>
             </div>
           ) : null}
-          <div className="answer-text mt-3 rounded-md bg-muted p-3 text-sm text-foreground">{q.a}</div>
+          <Markdown text={q.a} className="answer-text mt-3 rounded-md bg-muted p-3 text-sm text-foreground" />
           <div className="mt-3 flex flex-wrap gap-2">
             <button type="button" onClick={onComplete} className="inline-flex items-center gap-1.5 rounded-md bg-success px-3 py-1.5 text-sm font-semibold text-success-foreground"><CheckIcon width={16} height={16} /> Got it</button>
             <button type="button" onClick={onFlagReview} className="inline-flex items-center gap-1.5 rounded-md bg-warning px-3 py-1.5 text-sm font-semibold text-foreground"><RefreshIcon width={16} height={16} /> Review again soon</button>
@@ -305,12 +306,12 @@ function TodayContent({ user }: { user: User }) {
                     <div>
                       <div className="inline-block rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold text-secondary-foreground">{q.topic_label}</div>
                       <div className="mt-1 font-medium text-foreground">
-                        <span className="text-xs font-semibold text-muted-foreground">Q{idx + 1}</span> {q.q}
+                        <span className="text-xs font-semibold text-muted-foreground">Q{idx + 1}</span> {renderInline(q.q, `q-${q.id}`)}
                       </div>
                     </div>
                     <span className="shrink-0 rounded-full bg-success/20 px-2 py-0.5 text-xs font-semibold text-foreground">Done</span>
                   </div>
-                  <div className="answer-text mt-3 rounded-md bg-card p-3 text-sm text-foreground">{q.a}</div>
+                  <Markdown text={q.a} className="answer-text mt-3 rounded-md bg-card p-3 text-sm text-foreground" />
                   <button type="button" onClick={() => handleMoveBackToReview(q.id)} className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-warning px-3 py-1.5 text-sm font-semibold text-foreground">
                     <RefreshIcon width={16} height={16} /> Need Review
                   </button>

@@ -6,6 +6,7 @@ import { useShellUser } from "../../components/layout/AppShell";
 import { TrendBarChart, WeeklyActivityChart, type TrendPoint } from "../../components/stats/charts";
 import type { User } from "../../api/types";
 import { Skeleton, SkeletonCard } from "../../components/layout/Skeleton";
+import { Markdown } from "../../components/layout/Markdown";
 
 type Activity = ActivityEvent & { question_text?: string | null };
 
@@ -185,7 +186,7 @@ function StatsBody({ user }: { user: User }) {
             <p className="text-sm text-destructive">{insight.text}</p>
           ) : (
             <>
-              <p className="text-sm leading-relaxed text-card-foreground">{insight.text}</p>
+              <Markdown text={insight.text} className="text-sm leading-relaxed text-card-foreground" />
               {insight.meta ? <p className="mt-2 text-sm text-muted-foreground">{insight.meta}</p> : null}
             </>
           )}

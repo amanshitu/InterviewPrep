@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { BackIcon, CheckIcon, CloseIcon } from "../../components/layout/icons";
 import { Skeleton, SkeletonCard } from "../../components/layout/Skeleton";
+import { renderInline } from "../../components/layout/Markdown";
 import { useToast } from "../../hooks/use-toast";
 import { answerTestQuestion, getTodaysTest, type DailyTestQuestion } from "../../api/dailytest";
 
@@ -102,7 +103,7 @@ function DailyTestBody() {
                 {item.topic_label}
               </div>
               <div className="mt-2 font-medium text-foreground">
-                <span className="text-xs font-semibold text-muted-foreground">Q{idx + 1}</span> {item.q}
+                <span className="text-xs font-semibold text-muted-foreground">Q{idx + 1}</span> {renderInline(item.q, `q-${item.id}`)}
               </div>
               <div className="mt-3 flex flex-col gap-2">
                 {item.options.map((opt, optIdx) => {

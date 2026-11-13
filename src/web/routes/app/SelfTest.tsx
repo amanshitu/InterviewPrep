@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { BackIcon, MicIcon, ShuffleIcon, SparkleIcon } from "../../components/layout/icons";
 import { Skeleton, SkeletonCard } from "../../components/layout/Skeleton";
+import { Markdown, renderInline } from "../../components/layout/Markdown";
 import { useToast } from "../../hooks/use-toast";
 import {
   analyzeSelfTestAnswer,
@@ -80,8 +81,7 @@ export function FeedbackBubble({ feedback, modelAnswer }: { feedback: SelfTestFe
       ) : null}
       <div className="answer-text mt-3.5 rounded-md bg-card p-3 text-card-foreground">
         <strong>Model answer:</strong>
-        <br />
-        {modelAnswer}
+        <Markdown text={modelAnswer} className="mt-1" />
       </div>
     </ChatBubble>
   );
@@ -257,7 +257,7 @@ function SelfTestBody() {
           <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4">
             <ChatBubble from="ai">
               <div className="inline-block rounded-full bg-card px-2.5 py-0.5 text-xs font-medium">{current.topic_label}</div>
-              <div className="mt-1.5">{current.q}</div>
+              <div className="mt-1.5">{renderInline(current.q, "cur-q")}</div>
             </ChatBubble>
             {submittedAnswer ? <ChatBubble from="user">{submittedAnswer}</ChatBubble> : null}
             {feedback ? <FeedbackBubble feedback={feedback} modelAnswer={modelAnswer} /> : null}

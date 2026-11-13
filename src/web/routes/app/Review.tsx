@@ -6,6 +6,7 @@ import { ApiError } from "../../api/client";
 import type { Question } from "../../api/types";
 import { BackIcon, CheckIcon, EyeIcon, RefreshIcon, ShuffleIcon } from "../../components/layout/icons";
 import { Skeleton, SkeletonCard } from "../../components/layout/Skeleton";
+import { Markdown, renderInline } from "../../components/layout/Markdown";
 
 const DEFAULT_REVIEW_COUNT = 15;
 
@@ -118,11 +119,11 @@ function ReviewContent() {
             <div key={item.id} className="rounded-lg border border-border bg-card p-4">
               <div className="inline-block rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold text-secondary-foreground">{item.topic_label || ""}</div>
               <div className="mt-2 font-medium text-foreground">
-                <span className="text-xs font-semibold text-muted-foreground">Q{idx + 1}</span> {item.q}
+                <span className="text-xs font-semibold text-muted-foreground">Q{idx + 1}</span> {renderInline(item.q, `q-${item.id}`)}
               </div>
               {item.revealed ? (
                 <>
-                  <div className="answer-text mt-3 rounded-md bg-muted p-3 text-sm text-foreground">{item.a}</div>
+                  <Markdown text={item.a} className="answer-text mt-3 rounded-md bg-muted p-3 text-sm text-foreground" />
                   {item.graded ? (
                     <p className="mt-2 text-sm text-muted-foreground">Graded: {item.graded === "got_it" ? "Got it" : "Review again soon"}</p>
                   ) : (

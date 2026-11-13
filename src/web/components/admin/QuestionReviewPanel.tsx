@@ -2,6 +2,7 @@ import { useState } from "react";
 import { getSetQuestions } from "../../api/admin";
 import { useToast } from "../../hooks/use-toast";
 import { CloseIcon, EyeIcon } from "../layout/icons";
+import { Markdown, renderInline } from "../layout/Markdown";
 
 // Shared by the Pending Approvals and History panels — lets an admin expand
 // a set's actual question list before deciding (or to re-check an
@@ -57,9 +58,9 @@ export function QuestionReviewPanel({ setId }: { setId: string }) {
               <div key={idx} className="rounded-md border border-border bg-muted/40 p-3">
                 <div className="text-xs font-semibold uppercase tracking-wide text-primary">{q.topic_label}</div>
                 <div className="mt-1 text-sm font-medium text-foreground">
-                  Q{idx + 1}. {q.q}
+                  Q{idx + 1}. {renderInline(q.q, `q-${idx}`)}
                 </div>
-                <p className="mt-1.5 text-sm text-muted-foreground">{q.a}</p>
+                <Markdown text={q.a} className="mt-1.5 text-sm text-muted-foreground" />
               </div>
             ))}
         </div>

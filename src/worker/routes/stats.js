@@ -134,7 +134,7 @@ export async function handleGetStatsInsight(request, env, user) {
       ? weakTopics.map((t) => `${t.label} (marked "review again" on ${Math.round(t.rate * 100)}% of ${t.total} attempts)`).join("; ")
       : "none stand out yet"
   }.`;
-  const prompt = `You are a supportive interview-prep coach. Based on this user's profile and stats, write a short, specific, encouraging insight (2-3 sentences, plain text, no markdown) and one concrete suggestion for what to focus on next — tailor it to their stated role/experience/goal when given.\n\nProfile & stats: ${summary}`;
+  const prompt = `You are a supportive interview-prep coach. Based on this user's profile and stats, write a short, specific, encouraging insight (2-3 sentences) and one concrete suggestion for what to focus on next — tailor it to their stated role/experience/goal when given. You may use **bold** for the one or two most important terms (e.g. a specific topic name or the key suggestion) — nothing else needs formatting, and don't use headings or bullet lists for a response this short.\n\nProfile & stats: ${summary}`;
 
   const { raw, generatedBy, capped } = await callConfiguredAi(env, user, prompt, "stats insight");
   if (capped) {

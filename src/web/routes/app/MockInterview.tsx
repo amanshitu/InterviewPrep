@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { ArrowRightIcon, BackIcon, MicIcon, SparkleIcon } from "../../components/layout/icons";
 import { Skeleton, SkeletonCard } from "../../components/layout/Skeleton";
+import { renderInline } from "../../components/layout/Markdown";
 import { useToast } from "../../hooks/use-toast";
 import {
   analyzeSelfTestAnswer,
@@ -208,7 +209,7 @@ function MockInterviewBody() {
           <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4">
             <ChatBubble from="ai">
               <div className="inline-block rounded-full bg-card px-2.5 py-0.5 text-xs font-medium">{current.topic_label}</div>
-              <div className="mt-1.5">{current.q}</div>
+              <div className="mt-1.5">{renderInline(current.q, "cur-q")}</div>
             </ChatBubble>
             {submittedAnswer ? <ChatBubble from="user">{submittedAnswer}</ChatBubble> : null}
             {feedback ? <FeedbackBubble feedback={feedback} modelAnswer={modelAnswer} /> : null}
