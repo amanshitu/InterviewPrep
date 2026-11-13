@@ -101,8 +101,9 @@ function DailyTestBody() {
               <div className="inline-block rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground">
                 {item.topic_label}
               </div>
-              <div className="mt-2 text-xs font-semibold text-muted-foreground">Q{idx + 1}</div>
-              <div className="mt-0.5 font-medium text-foreground">{item.q}</div>
+              <div className="mt-2 font-medium text-foreground">
+                <span className="text-xs font-semibold text-muted-foreground">Q{idx + 1}</span> {item.q}
+              </div>
               <div className="mt-3 flex flex-col gap-2">
                 {item.options.map((opt, optIdx) => {
                   let cls = "rounded-md border border-border px-3 py-2 text-left text-sm transition-colors";

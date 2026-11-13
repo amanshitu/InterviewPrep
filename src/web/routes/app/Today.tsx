@@ -75,8 +75,9 @@ function QuestionCard({
   return (
     <div className="rounded-lg border border-border bg-card p-4">
       <div className="inline-block rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold text-secondary-foreground">{q.topic_label}</div>
-      <div className="mt-2 text-xs font-semibold text-muted-foreground">Q{idx + 1}</div>
-      <div className="mt-0.5 font-medium text-foreground">{q.q}</div>
+      <div className="mt-2 font-medium text-foreground">
+        <span className="text-xs font-semibold text-muted-foreground">Q{idx + 1}</span> {q.q}
+      </div>
       {revealed ? (
         <>
           {needsReview ? (
@@ -303,8 +304,9 @@ function TodayContent({ user }: { user: User }) {
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <div className="inline-block rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold text-secondary-foreground">{q.topic_label}</div>
-                      <div className="mt-1 text-xs font-semibold text-muted-foreground">Q{idx + 1}</div>
-                      <div className="mt-0.5 font-medium text-foreground">{q.q}</div>
+                      <div className="mt-1 font-medium text-foreground">
+                        <span className="text-xs font-semibold text-muted-foreground">Q{idx + 1}</span> {q.q}
+                      </div>
                     </div>
                     <span className="shrink-0 rounded-full bg-success/20 px-2 py-0.5 text-xs font-semibold text-foreground">Done</span>
                   </div>
