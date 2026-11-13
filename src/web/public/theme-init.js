@@ -17,6 +17,21 @@ try {
   if (a) document.documentElement.setAttribute("data-accent", a);
 } catch (e) { /* localStorage unavailable — falls back to system preference */ }
 
+// Answer text size (Settings -> Appearance). Previously only got applied
+// while AppearanceSection's AnswerFontSizeCard happened to be mounted
+// (its own useEffect calling setAnswerFontSize()), so a reveal on Today/
+// Review/Self Test/Mock Interview on a fresh page load (before ever
+// visiting Settings this session) silently fell back to the default size
+// instead of the saved one. Applied here instead, same pre-paint pattern
+// as theme/accent above. Keep in sync with ANSWER_FONT_SIZES in
+// components/settings/appearance-prefs.ts.
+try {
+  var sizes = { small: 14, medium: 16, large: 18, xlarge: 21 };
+  var fs = localStorage.getItem("answerFontSize");
+  var px = sizes[fs] || sizes.small;
+  document.documentElement.style.setProperty("--answer-font-size", px + "px");
+} catch (e) { /* localStorage unavailable — falls back to the CSS default (inherit) */ }
+
 // Collapsible-sidebar state, restored before first paint so the sidebar
 // never flashes expanded-then-collapsed (or vice versa) on load. Default,
 // when nothing's been chosen yet, follows viewport width: narrow screens

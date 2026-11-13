@@ -7,35 +7,34 @@
    captured in full — see DEVELOPMENT.md Phase 8.x). */
 
 :root {
-  --background: oklch(0.985 0.012 75);
+  /* "-base" tokens are the pre-tint neutral surfaces; the derived block
+     below (:root:root) mixes var(--primary) into them to produce the
+     actual --background/--sidebar/--secondary/--accent/--border tokens —
+     this is what lets an accent choice recolor more than just buttons,
+     matching MealSathi's accent system (see globals.css's derived-token
+     comment further down for the full rationale). */
+  --bg-base: oklch(0.985 0.012 75);
   --foreground: oklch(0.24 0.03 45);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.24 0.03 45);
   --primary: oklch(0.56 0.17 45);
   --primary-foreground: oklch(0.99 0.01 75);
-  --secondary: oklch(0.95 0.03 80);
-  --secondary-foreground: oklch(0.24 0.03 45);
   --muted: oklch(0.955 0.015 75);
   --muted-foreground: oklch(0.5 0.03 50);
-  --accent: oklch(0.93 0.05 140);
-  --accent-foreground: oklch(0.24 0.03 45);
   --destructive: oklch(0.53 0.21 27);
   --destructive-foreground: oklch(0.99 0.01 75);
   --success: oklch(0.6 0.14 150);
   --success-foreground: oklch(0.99 0.01 75);
   --warning: oklch(0.78 0.15 80);
   --warning-foreground: oklch(0.24 0.03 45);
-  --border: oklch(0.91 0.02 70);
+  --border-base: oklch(0.91 0.02 70);
   --input: oklch(0.91 0.02 70);
   --ring: oklch(0.56 0.17 45);
   --radius: 1rem;
 
   /* Sidebar is its own surface, tinted slightly darker than --card. */
-  --sidebar: oklch(0.975 0.015 75);
+  --sidebar-base: oklch(0.975 0.015 75);
   --sidebar-foreground: oklch(0.24 0.03 45);
-  --sidebar-accent: oklch(0.93 0.05 140);
-  --sidebar-accent-foreground: oklch(0.24 0.03 45);
-  --sidebar-border: oklch(0.91 0.02 70);
 
   /* Collapsible-sidebar layout (consumed by the AppShell built in a later
      phase; defined here so the tokens exist from the start). */
@@ -55,46 +54,77 @@
 }
 
 .dark {
-  --background: oklch(0.18 0.015 45);
+  --bg-base: oklch(0.18 0.015 45);
   --foreground: oklch(0.95 0.015 75);
   --card: oklch(0.22 0.02 45);
   --card-foreground: oklch(0.95 0.015 75);
   --primary: oklch(0.65 0.16 45);
   --primary-foreground: oklch(0.16 0.02 45);
-  --secondary: oklch(0.28 0.025 60);
-  --secondary-foreground: oklch(0.95 0.015 75);
   --muted: oklch(0.26 0.02 50);
   --muted-foreground: oklch(0.68 0.025 60);
-  --accent: oklch(0.3 0.05 140);
-  --accent-foreground: oklch(0.95 0.015 75);
   --destructive: oklch(0.58 0.2 27);
   --destructive-foreground: oklch(0.97 0.01 75);
   --success: oklch(0.62 0.13 150);
   --success-foreground: oklch(0.16 0.02 45);
   --warning: oklch(0.72 0.14 80);
   --warning-foreground: oklch(0.16 0.02 45);
-  --border: oklch(0.32 0.02 50);
+  --border-base: oklch(0.32 0.02 50);
   --input: oklch(0.32 0.02 50);
   --ring: oklch(0.65 0.16 45);
 
-  --sidebar: oklch(0.2 0.018 45);
+  --sidebar-base: oklch(0.2 0.018 45);
   --sidebar-foreground: oklch(0.95 0.015 75);
-  --sidebar-accent: oklch(0.3 0.05 140);
-  --sidebar-accent-foreground: oklch(0.95 0.015 75);
-  --sidebar-border: oklch(0.32 0.02 50);
 }
 
-/* Accent swatches (Settings -> Appearance). Only --primary/--ring change -
-   the active-nav-item background uses --sidebar-accent (a deliberately
-   separate herb-green token), not the brand accent, so it's untouched.
-   Placed after .dark so an accent choice still wins while dark mode is
-   also active (equal specificity to .dark - :root[attr] vs .dark both
-   single-selector - so source order decides the tie). */
+/* Accent swatches (Settings -> Appearance) — just override --primary/--ring;
+   the derived block below recomputes every tinted surface from these
+   automatically. Placed after .dark so an accent choice still wins while
+   dark mode is also active (equal specificity to .dark - :root[attr] vs
+   .dark both single-selector - so source order decides the tie). */
 :root[data-accent="ocean"] { --primary: #1f6f9c; --ring: #1f6f9c; }
 :root[data-accent="forest"] { --primary: #1f7a4d; --ring: #1f7a4d; }
 :root[data-accent="plum"] { --primary: #7a3a9c; --ring: #7a3a9c; }
 :root[data-accent="rose"] { --primary: #b8305a; --ring: #b8305a; }
 :root[data-accent="slate"] { --primary: #3f5468; --ring: #3f5468; }
+
+/* Derived, accent-aware surface tokens — recompute automatically for
+   whichever --primary is active (default brand color, a chosen accent
+   swatch, and light/dark mode all flow through here), matching
+   MealSathi's own accent system: there, changing the accent tints
+   --background/--sidebar/--secondary/--accent/--border/--sidebar-border
+   plus the native accent-color/caret-color and ::selection highlight —
+   not just buttons and focus rings. :root:root is used for its doubled
+   specificity so this wins over the plain :root defaults, .dark, and
+   every [data-accent] block above (each of which only sets --primary/
+   --ring; this block reads that var and recomputes the rest from it). */
+:root:root {
+  --background: color-mix(in oklab, var(--primary) 2.5%, var(--bg-base));
+  --sidebar: color-mix(in oklab, var(--primary) 5%, var(--sidebar-base));
+  --secondary: color-mix(in oklab, var(--primary) 10%, var(--bg-base));
+  --secondary-foreground: var(--foreground);
+  --accent: color-mix(in oklab, var(--primary) 12%, var(--bg-base));
+  --accent-foreground: var(--foreground);
+  --sidebar-accent: color-mix(in oklab, var(--primary) 14%, var(--sidebar-base));
+  --sidebar-accent-foreground: var(--sidebar-foreground);
+  --border: color-mix(in oklab, var(--primary) 9%, var(--border-base));
+  --sidebar-border: color-mix(in oklab, var(--primary) 9%, var(--border-base));
+  accent-color: var(--primary);
+  caret-color: var(--primary);
+}
+::selection {
+  background: color-mix(in oklab, var(--primary) 28%, transparent);
+}
+
+/* Scrollbar thumb also picks up the accent (Chromium/WebKit + Firefox). */
+* {
+  scrollbar-color: color-mix(in oklab, var(--primary) 35%, transparent) transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, var(--primary) 35%, transparent);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in oklab, var(--primary) 60%, transparent);
+}
 
 /* Answer text size (Settings -> Appearance). Set as a CSS var by
    appearance-prefs.ts's setAnswerFontSize(); applied here to every
