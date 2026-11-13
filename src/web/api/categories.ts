@@ -12,3 +12,7 @@ export function enrollCategory(categoryId: string): Promise<{ ok: true }> {
 export function switchCategory(categoryId: string): Promise<{ ok: true; activeCategoryId: string }> {
   return apiPost<{ ok: true; activeCategoryId: string }>("/api/categories/switch", { categoryId });
 }
+
+export function unenrollCategory(categoryId: string): Promise<{ ok: true; activeCategoryId: string | null }> {
+  return apiPost<{ ok: true; activeCategoryId: string | null }>("/api/categories/unenroll", { categoryId });
+}

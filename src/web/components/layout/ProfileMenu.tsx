@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type MouseEvent } from "react";
 import { Link } from "react-router";
-import { listCategories, switchCategory } from "../../api/categories";
+import { listCategories, switchCategory, unenrollCategory } from "../../api/categories";
 import type { Category, User } from "../../api/types";
 import { useToast } from "../../hooks/use-toast";
-import { CheckIcon, LayersIcon, LogOutIcon, SettingsIcon, SpinnerIcon } from "./icons";
+import { CheckIcon, LayersIcon, LogOutIcon, SettingsIcon, SpinnerIcon, TrashIcon } from "./icons";
 
 // Hover-opened popover on the sidebar's profile summary — lets a user
 // switch their active category (which drives Today/Stats/Daily Test
@@ -37,6 +37,19 @@ export function ProfileMenu({ user, onLogout }: { user: User; onLogout: () => vo
       window.location.reload();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't switch category.");
+      setSwitchingId(null);
+    }
+  }
+
+  async function handleUnenroll(categoryId: string, name: string, e: MouseEvent) {
+    e.stopPropagation();
+    if (!confirm(`Unenroll from ${name}? Your progress there is kept — re-enrolling picks up where you left off.`)) return;
+    setSwitchingId(categoryId);
+    try {
+      await unenrollCategory(categoryId);
+      window.location.reload();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't unenroll from that category.");
       setSwitchingId(null);
     }
   }
@@ -77,19 +90,31 @@ export function ProfileMenu({ user, onLogout }: { user: User; onLogout: () => vo
                 const active = c.id === user.activeCategoryId;
                 const switching = switchingId === c.id;
                 return (
-                  <button
-                    key={c.id}
-                    type="button"
-                    disabled={switching}
-                    onClick={() => void handleSwitch(c.id)}
-                    className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm ${
-                      active ? "font-semibold text-sidebar-foreground" : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                    }`}
-                  >
-                    <LayersIcon width={14} height={14} className="shrink-0" />
-                    <span className="min-w-0 flex-1 truncate">{c.name}</span>
-                    {switching ? <SpinnerIcon width={14} height={14} /> : active ? <CheckIcon width={14} height={14} /> : null}
-                  </button>
+                  <div key={c.id} className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      disabled={switching}
+                      onClick={() => void handleSwitch(c.id)}
+                      className={`flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm ${
+                        active ? "font-semibold text-sidebar-foreground" : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                      }`}
+                    >
+                      <LayersIcon width={14} height={14} className="shrink-0" />
+                      <span className="min-w-0 flex-1 truncate">{c.name}</span>
+                      {switching ? <SpinnerIcon width={14} height={14} /> : active ? <CheckIcon width={14} height={14} /> : null}
+                    </button>
+                    {enrolled.length > 1 ? (
+                      <button
+                        type="button"
+                        disabled={switching}
+                        onClick={(e) => void handleUnenroll(c.id, c.name, e)}
+                        aria-label={`Unenroll from ${c.name}`}
+                        className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-sidebar-accent hover:text-destructive"
+                      >
+                        <TrashIcon width={13} height={13} />
+                      </button>
+                    ) : null}
+                  </div>
                 );
               })}
             </div>

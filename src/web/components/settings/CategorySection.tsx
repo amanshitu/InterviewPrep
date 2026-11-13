@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { listCategories, enrollCategory, switchCategory } from "../../api/categories";
+import { listCategories, enrollCategory, switchCategory, unenrollCategory } from "../../api/categories";
 import type { Category, User } from "../../api/types";
 import { useToast } from "../../hooks/use-toast";
-import { PrimaryButton, SecondaryButton, SectionCard } from "./SectionCard";
-import { CheckIcon, LayersIcon, PlusIcon } from "./icons";
+import { GhostButton, PrimaryButton, SecondaryButton, SectionCard } from "./SectionCard";
+import { CheckIcon, LayersIcon, PlusIcon, TrashIcon } from "./icons";
 
 // Lets a user see every category they're enrolled in, switch which one is
 // active (drives Today/Stats/Daily Test/etc. server-side), and enroll in a
@@ -52,13 +52,26 @@ export function CategorySection({ user }: { user: User }) {
     }
   }
 
+  async function handleUnenroll(categoryId: string, name: string) {
+    if (!confirm(`Unenroll from ${name}? Your progress there is kept — re-enrolling picks up where you left off.`)) return;
+    setBusyId(categoryId);
+    try {
+      await unenrollCategory(categoryId);
+      toast.success("Unenrolled — reloading…");
+      window.location.href = "/";
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't unenroll from that category.");
+      setBusyId(null);
+    }
+  }
+
   const enrolled = categories?.filter((c) => c.enrolled) ?? [];
   const notEnrolled = categories?.filter((c) => !c.enrolled) ?? [];
 
   return (
     <SectionCard
       title="Categories"
-      subtitle="Each category has its own daily quota, streak, and question pool — switch to change what Today/Stats/Daily Test pull from, or enroll in a new one."
+      subtitle="Each category has its own daily quota, streak, and question pool — switch to change what Today/Stats/Daily Test pull from, enroll in a new one, or unenroll from one you're done with (you'll always need at least one)."
     >
       {error ? (
         <p className="text-sm text-destructive">{error}</p>
@@ -84,11 +97,23 @@ export function CategorySection({ user }: { user: User }) {
                       </div>
                       {c.description ? <p className="mt-0.5 text-xs text-muted-foreground">{c.description}</p> : null}
                     </div>
-                    {!active ? (
-                      <SecondaryButton onClick={() => void handleSwitch(c.id)} loading={busyId === c.id} loadingText="Switching…" className="shrink-0">
-                        Switch
-                      </SecondaryButton>
-                    ) : null}
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      {!active ? (
+                        <SecondaryButton onClick={() => void handleSwitch(c.id)} loading={busyId === c.id} loadingText="Switching…">
+                          Switch
+                        </SecondaryButton>
+                      ) : null}
+                      {enrolled.length > 1 ? (
+                        <GhostButton
+                          onClick={() => void handleUnenroll(c.id, c.name)}
+                          disabled={busyId !== null && busyId !== c.id}
+                          aria-label={`Unenroll from ${c.name}`}
+                          className="text-muted-foreground hover:text-destructive"
+                        >
+                          <TrashIcon width={14} height={14} />
+                        </GhostButton>
+                      ) : null}
+                    </div>
                   </div>
                 );
               })}

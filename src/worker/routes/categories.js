@@ -44,6 +44,43 @@ export async function handleSwitchCategory(request, env, user) {
   return json({ ok: true, activeCategoryId: categoryId });
 }
 
+// A user must always stay enrolled in at least one category (Today/Stats/
+// Daily Test/etc. all key off a single activeCategoryId, so leaving zero
+// would dangle it with nothing to fall back to) — enforced here, not just
+// in the UI, since this is a real invariant the rest of the app depends on.
+// Progress/streak/quota history for the category is left untouched (it's
+// keyed by user_categories' own row being gone, not deleted separately),
+// so re-enrolling later picks back up where it left off. Unenrolling the
+// currently-active category switches to another enrolled one automatically.
+export async function handleUnenrollCategory(request, env, user) {
+  const parsed = await readJsonBody(request, 500);
+  if (!parsed.ok) return json({ error: parsed.error }, { status: parsed.status });
+  const categoryId = (parsed.body.categoryId || "").toString();
+
+  const enrollment = await env.DB.prepare("SELECT user_id FROM user_categories WHERE user_id = ? AND category_id = ?")
+    .bind(user.id, categoryId)
+    .first();
+  if (!enrollment) return json({ error: "You're not enrolled in that category." }, { status: 400 });
+
+  const countRow = await env.DB.prepare("SELECT COUNT(*) as n FROM user_categories WHERE user_id = ?").bind(user.id).first();
+  if ((countRow?.n || 0) <= 1) {
+    return json({ error: "You must stay enrolled in at least one category." }, { status: 400 });
+  }
+
+  await env.DB.prepare("DELETE FROM user_categories WHERE user_id = ? AND category_id = ?").bind(user.id, categoryId).run();
+
+  let activeCategoryId = user.activeCategoryId;
+  if (activeCategoryId === categoryId) {
+    const next = await env.DB.prepare("SELECT category_id FROM user_categories WHERE user_id = ? ORDER BY enrolled_at ASC LIMIT 1")
+      .bind(user.id)
+      .first();
+    activeCategoryId = next ? next.category_id : null;
+    await env.DB.prepare("UPDATE users SET active_category_id = ? WHERE id = ?").bind(activeCategoryId, user.id).run();
+  }
+
+  return json({ ok: true, activeCategoryId });
+}
+
 export async function handleCreateCategory(request, env, user) {
   const parsed = await readJsonBody(request, 2000);
   if (!parsed.ok) return json({ error: parsed.error }, { status: parsed.status });

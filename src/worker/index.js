@@ -37,6 +37,7 @@ import {
   handleListCategories,
   handleEnrollCategory,
   handleSwitchCategory,
+  handleUnenrollCategory,
   handleCreateCategory,
 } from "./routes/categories.js";
 import {
@@ -121,6 +122,9 @@ export default {
         }
         if (url.pathname === "/api/categories/switch" && request.method === "POST") {
           return applySecurityHeaders(await handleSwitchCategory(request, env, user));
+        }
+        if (url.pathname === "/api/categories/unenroll" && request.method === "POST") {
+          return applySecurityHeaders(await handleUnenrollCategory(request, env, user));
         }
         if (url.pathname === "/api/state" && request.method === "GET") {
           return applySecurityHeaders(await handleGetState(request, env, user));
