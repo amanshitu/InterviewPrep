@@ -19,7 +19,7 @@ export function Sidebar({ user, refreshUser, onLogout }: { user: User; refreshUs
 
   return (
     <aside
-      className="hidden sm:flex sticky top-0 h-dvh shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-(--rail-dur) ease-(--rail-ease)"
+      className="hidden sm:flex sticky top-0 h-full shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-(--rail-dur) ease-(--rail-ease)"
       style={{ width: "var(--sidebar-w)" }}
     >
       <div className="flex min-h-14 items-center justify-between gap-2 px-3 py-2 rail:h-auto rail:flex-col rail:justify-center rail:gap-2 rail:py-3">

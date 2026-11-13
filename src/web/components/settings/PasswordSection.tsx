@@ -3,6 +3,7 @@ import { changePassword, revokeAllSessions } from "../../api/auth";
 import { useConfirm } from "../../hooks/use-confirm";
 import { useToast } from "../../hooks/use-toast";
 import { clearAuthedFlag } from "../../lib/auth-flag";
+import { clearAllSnapshots } from "../../lib/offline-store";
 import { PrimaryButton, SecondaryButton, SectionCard, inputClass } from "./SectionCard";
 import { KeyIcon, LogoutIcon } from "./icons";
 import { PasswordField } from "../layout/PasswordField";
@@ -68,6 +69,7 @@ export function SessionsSection() {
       // reload(), which re-rendered the shell's spinner and waited on a
       // doomed /api/me before AuthGate redirected there anyway.
       clearAuthedFlag();
+      clearAllSnapshots();
       window.location.href = "/login";
     } catch {
       setRevoking(false);

@@ -4,9 +4,11 @@ import { logout } from "../../api/auth";
 import { ConfirmProvider } from "../../hooks/use-confirm";
 import { ToastProvider } from "../../hooks/use-toast";
 import { clearAuthedFlag } from "../../lib/auth-flag";
+import { clearAllSnapshots } from "../../lib/offline-store";
 import type { RefreshUser } from "./AuthGate";
 import { AuthGate } from "./AuthGate";
 import { MobileHeader } from "./MobileHeader";
+import { OfflineBanner } from "./OfflineBanner";
 import { PwaPrompts } from "./PwaPrompts";
 import { Sidebar } from "./Sidebar";
 
@@ -37,30 +39,33 @@ export function AppShell() {
       <ConfirmProvider>
         <AuthGate>
           {(user, refreshUser) => (
-            <div className="flex min-h-dvh bg-background text-foreground">
-              <Sidebar user={user} refreshUser={refreshUser} onLogout={() => void handleLogout()} />
-              <div className="flex min-w-0 flex-1 flex-col">
-                <MobileHeader user={user} onLogout={() => void handleLogout()} />
-                <main className="mx-auto w-full max-w-(--main-max) flex-1 px-4 py-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] sm:px-6">
-                  {/* Keyed on activeCategoryId: switching/enrolling/unenrolling a
-                      category (CategorySection, ProfileMenu) calls refreshUser()
-                      rather than reloading the document — that fixed the sidebar's
-                      visible flash, but the current page's own data (fetched once
-                      on mount) is now category-scoped and stale. Changing this key
-                      remounts just the routed page fresh for the new category,
-                      while Sidebar/MobileHeader above stay mounted throughout.
-                      Settings and Admin are exempt: neither page's own data is
-                      category-scoped (Settings re-keys only its own category-scoped
-                      sections instead, see Settings.tsx; Admin's overview/pending-
-                      sets/history/users are platform-wide), so remounting either —
-                      a skeleton flash, and for Settings also CategorySection
-                      dropping back to "Loading…" mid-click — was a pure regression
-                      with nothing to show for it. */}
-                  <Outlet
-                    context={{ user, refreshUser } satisfies ShellContext}
-                    key={pathname === "/settings" || pathname === "/admin" ? "shell" : (user.activeCategoryId ?? "none")}
-                  />
-                </main>
+            <div className="flex min-h-dvh flex-col bg-background text-foreground">
+              <OfflineBanner />
+              <div className="flex min-h-0 flex-1">
+                <Sidebar user={user} refreshUser={refreshUser} onLogout={() => void handleLogout()} />
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <MobileHeader user={user} onLogout={() => void handleLogout()} />
+                  <main className="mx-auto w-full max-w-(--main-max) flex-1 px-4 py-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] sm:px-6">
+                    {/* Keyed on activeCategoryId: switching/enrolling/unenrolling a
+                        category (CategorySection, ProfileMenu) calls refreshUser()
+                        rather than reloading the document — that fixed the sidebar's
+                        visible flash, but the current page's own data (fetched once
+                        on mount) is now category-scoped and stale. Changing this key
+                        remounts just the routed page fresh for the new category,
+                        while Sidebar/MobileHeader above stay mounted throughout.
+                        Settings and Admin are exempt: neither page's own data is
+                        category-scoped (Settings re-keys only its own category-scoped
+                        sections instead, see Settings.tsx; Admin's overview/pending-
+                        sets/history/users are platform-wide), so remounting either —
+                        a skeleton flash, and for Settings also CategorySection
+                        dropping back to "Loading…" mid-click — was a pure regression
+                        with nothing to show for it. */}
+                    <Outlet
+                      context={{ user, refreshUser } satisfies ShellContext}
+                      key={pathname === "/settings" || pathname === "/admin" ? "shell" : (user.activeCategoryId ?? "none")}
+                    />
+                  </main>
+                </div>
               </div>
             </div>
           )}
@@ -88,6 +93,7 @@ export function useRefreshUser(): RefreshUser {
 
 async function handleLogout() {
   clearAuthedFlag();
+  clearAllSnapshots();
   try {
     await logout();
   } finally {

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { getMe } from "../../api/account";
 import type { User } from "../../api/types";
 import { clearAuthedFlag, likelyAuthed, markAuthed } from "../../lib/auth-flag";
+import { loadUserSnapshot, saveUserSnapshot } from "../../lib/offline-store";
 
 export type RefreshUser = () => Promise<void>;
 
@@ -29,10 +30,22 @@ export function AuthGate({ children }: { children: (user: User, refreshUser: Ref
       .then(({ user }) => {
         if (cancelled) return;
         markAuthed();
+        saveUserSnapshot(user);
         setUser(user);
       })
       .catch(() => {
         if (cancelled) return;
+        // Offline rather than actually logged out: getMe() never reached
+        // the server to say either way, so assuming "logged out" would
+        // bounce an offline visitor to /login for no reason. Fall back to
+        // whichever user was last successfully loaded on this device.
+        if (!navigator.onLine) {
+          const cached = loadUserSnapshot<User>();
+          if (cached) {
+            setUser(cached.data);
+            return;
+          }
+        }
         clearAuthedFlag();
         setRedirecting(true);
         window.location.href = "/login";
@@ -53,6 +66,7 @@ export function AuthGate({ children }: { children: (user: User, refreshUser: Ref
     try {
       const { user } = await getMe();
       markAuthed();
+      saveUserSnapshot(user);
       setUser(user);
     } catch {
       // Keep showing the last known user rather than tearing down the app
