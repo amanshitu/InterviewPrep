@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { getMe } from "../../api/account";
+import { ApiError } from "../../api/client";
 import type { User } from "../../api/types";
 import { clearAuthedFlag, likelyAuthed, markAuthed } from "../../lib/auth-flag";
 import { loadUserSnapshot, saveUserSnapshot } from "../../lib/offline-store";
@@ -33,13 +34,17 @@ export function AuthGate({ children }: { children: (user: User, refreshUser: Ref
         saveUserSnapshot(user);
         setUser(user);
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         if (cancelled) return;
-        // Offline rather than actually logged out: getMe() never reached
-        // the server to say either way, so assuming "logged out" would
-        // bounce an offline visitor to /login for no reason. Fall back to
-        // whichever user was last successfully loaded on this device.
-        if (!navigator.onLine) {
+        // Only a server-confirmed 401/403 means "actually logged out."
+        // Anything else — offline, a 5xx, or (the bug report this fixes)
+        // a request a rapid Ctrl+F5 aborted mid-flight before the server
+        // even got to answer — is a transient failure, not proof the
+        // session is gone, so it must not clear it or bounce to /login.
+        // Fall back to whichever user was last successfully loaded on
+        // this device instead.
+        const unauthorized = err instanceof ApiError && (err.status === 401 || err.status === 403);
+        if (!unauthorized) {
           const cached = loadUserSnapshot<User>();
           if (cached) {
             setUser(cached.data);
