@@ -10,9 +10,12 @@ try {
   if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
   // New (MealSathi-style) pages key dark mode off a .dark class rather
   // than the data-theme attribute above — both are set here so either
-  // system works while the migration is in progress.
-  var resolvedDark = t === "dark" || (t !== "light" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  // system works while the migration is in progress. "futuristic" is a
+  // 4th, always-dark option (see theme-prefs.ts) — it forces dark
+  // regardless of system preference, same as an explicit "dark" choice.
+  var resolvedDark = t === "dark" || t === "futuristic" || (t !== "light" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
   document.documentElement.classList.toggle("dark", !!resolvedDark);
+  document.documentElement.classList.toggle("futuristic", t === "futuristic");
   var a = localStorage.getItem("accent");
   if (a) document.documentElement.setAttribute("data-accent", a);
 } catch (e) { /* localStorage unavailable — falls back to system preference */ }

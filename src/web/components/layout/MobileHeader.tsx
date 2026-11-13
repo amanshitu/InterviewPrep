@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, NavLink } from "react-router";
 import type { User } from "../../api/types";
 import { primaryNav, secondaryNav, type NavItem } from "../../lib/nav";
-import { LogOutIcon } from "./icons";
+import { LogOutIcon, LogoMark } from "./icons";
 
 // Mobile-only sticky header (sidebar is desktop-only, hidden below the
 // `sm:` breakpoint — see Sidebar.tsx) — brand on the left, a drawer menu
@@ -14,10 +14,7 @@ export function MobileHeader({ user, onLogout }: { user: User; onLogout: () => v
     <>
       <header className="sm:hidden sticky top-0 z-30 flex min-h-14 items-center justify-between border-b border-border bg-background/90 px-4 backdrop-blur pt-[env(safe-area-inset-top,0px)]">
         <Link to="/" className="flex items-center gap-2">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="text-primary">
-            <path d="M12 2 3 6.5v6C3 17.2 6.9 21.3 12 22.5 17.1 21.3 21 17.2 21 12.5v-6L12 2Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-            <path d="M8.5 12.2l2.3 2.3 4.7-4.9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+          <LogoMark size={20} />
           <span className="text-sm font-bold text-foreground">ExamStreak</span>
         </Link>
         <button

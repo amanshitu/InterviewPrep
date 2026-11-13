@@ -76,16 +76,42 @@
   --sidebar-foreground: oklch(0.95 0.015 75);
 }
 
+/* "Futuristic" theme (Settings -> Appearance -> Theme) — a 4th, always-dark
+   option: the control-room palette from the ExamStreak logo-concepts
+   artifact, instead of the normal warm-dark surfaces. Only the "-base"/
+   foreground/card/muted tokens change; --primary/--ring default to cyan
+   here (only takes effect while no accent is explicitly chosen — see the
+   accent swatches below, which come after this block so an explicit
+   choice still wins). */
+.dark.futuristic {
+  --bg-base: oklch(0.17 0.02 260);
+  --foreground: oklch(0.94 0.015 255);
+  --card: oklch(0.21 0.025 260);
+  --card-foreground: oklch(0.94 0.015 255);
+  --muted: oklch(0.26 0.03 260);
+  --muted-foreground: oklch(0.65 0.03 255);
+  --border-base: oklch(0.3 0.035 260);
+  --input: oklch(0.3 0.035 260);
+  --sidebar-base: oklch(0.15 0.02 260);
+  --sidebar-foreground: oklch(0.94 0.015 255);
+  --primary: #28e0ff;
+  --ring: #28e0ff;
+}
+
 /* Accent swatches (Settings -> Appearance) — just override --primary/--ring;
    the derived block below recomputes every tinted surface from these
-   automatically. Placed after .dark so an accent choice still wins while
-   dark mode is also active (equal specificity to .dark - :root[attr] vs
-   .dark both single-selector - so source order decides the tie). */
+   automatically. Placed after .dark (and .dark.futuristic) so an accent
+   choice still wins while dark/futuristic mode is also active (equal
+   specificity to those - :root[attr] vs .dark/.dark.futuristic - so source
+   order decides the tie). */
 :root[data-accent="ocean"] { --primary: #1f6f9c; --ring: #1f6f9c; }
 :root[data-accent="forest"] { --primary: #1f7a4d; --ring: #1f7a4d; }
 :root[data-accent="plum"] { --primary: #7a3a9c; --ring: #7a3a9c; }
 :root[data-accent="rose"] { --primary: #b8305a; --ring: #b8305a; }
 :root[data-accent="slate"] { --primary: #3f5468; --ring: #3f5468; }
+:root[data-accent="cyan"] { --primary: #28e0ff; --ring: #28e0ff; }
+:root[data-accent="violet"] { --primary: #8b6bff; --ring: #8b6bff; }
+:root[data-accent="amber"] { --primary: #d98214; --ring: #d98214; }
 
 /* Derived, accent-aware surface tokens — recompute automatically for
    whichever --primary is active (default brand color, a chosen accent

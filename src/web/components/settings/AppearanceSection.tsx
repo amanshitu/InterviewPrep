@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useReadAloud } from "../../hooks/use-read-aloud";
-import { MonitorIcon, MoonIcon, SpeakerIcon, StopIcon, SunIcon } from "./icons";
+import { MonitorIcon, MoonIcon, SparkleIcon, SpeakerIcon, StopIcon, SunIcon } from "./icons";
 import { SectionCard } from "./SectionCard";
 import { ACCENT_OPTIONS, ANSWER_FONT_SIZES, getAccent, getAnswerFontSize, setAccent, setAnswerFontSize } from "./appearance-prefs";
 import { getTheme, setTheme, type ThemeValue } from "./theme-prefs";
@@ -9,12 +9,16 @@ const THEME_OPTIONS: { id: ThemeValue; label: string; icon: typeof SunIcon }[] =
   { id: "system", label: "System", icon: MonitorIcon },
   { id: "light", label: "Light", icon: SunIcon },
   { id: "dark", label: "Dark", icon: MoonIcon },
+  { id: "futuristic", label: "Futuristic", icon: SparkleIcon },
 ];
 
 function ThemeCard() {
   const [current, setCurrent] = useState(getTheme());
   return (
-    <SectionCard title="Theme" subtitle="System follows your device's light/dark setting automatically. Saved to this browser.">
+    <SectionCard
+      title="Theme"
+      subtitle="System follows your device's light/dark setting automatically. Futuristic is a dark, always-on control-room look (pairs well with the Cyan, Violet, or Amber accents below). Saved to this browser."
+    >
       <div className="flex flex-wrap gap-2">
         {THEME_OPTIONS.map((opt) => (
           <button

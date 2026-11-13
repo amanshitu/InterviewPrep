@@ -1,8 +1,9 @@
 // Verbatim-ported localStorage-backed appearance preferences from app.js.
-// The accent swatches here set `data-accent` + persist the choice exactly
-// as app.js's setAccent() did; the actual CSS recoloring rules per
-// `[data-accent="X"]` live in globals.css and are a known follow-up gap —
-// see Settings.tsx's top-of-file note.
+// The accent swatches here set `data-accent` + persist the choice; the
+// actual CSS recoloring rules per `[data-accent="X"]` live in globals.css,
+// which also derives --background/--sidebar/--secondary/--accent/--border/
+// scrollbar/selection from whichever --primary is active, so an accent
+// choice recolors the whole surface, not just buttons.
 export const ACCENT_OPTIONS = [
   { id: "terracotta", label: "Terracotta", swatch: "#c2501f" },
   { id: "ocean", label: "Ocean", swatch: "#1f6f9c" },
@@ -10,6 +11,9 @@ export const ACCENT_OPTIONS = [
   { id: "plum", label: "Plum", swatch: "#7a3a9c" },
   { id: "rose", label: "Rose", swatch: "#b8305a" },
   { id: "slate", label: "Slate", swatch: "#3f5468" },
+  { id: "cyan", label: "Cyan", swatch: "#28e0ff" },
+  { id: "violet", label: "Violet", swatch: "#8b6bff" },
+  { id: "amber", label: "Amber", swatch: "#d98214" },
 ];
 
 const ACCENT_KEY = "accent";

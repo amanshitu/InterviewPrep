@@ -80,6 +80,21 @@ export function SettingsIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+// The brand mark ("Circuit E" — an E drawn as a single circuit trace with
+// a lit node at its end), shown in the sidebar, mobile header, and login
+// screen. Fixed cyan/amber regardless of the active accent color, same as
+// the generated favicon/PWA icons (scripts/… was run once to produce
+// those as static PNGs — this is the live, scalable version for in-app
+// use). Matches the "Circuit E" concept from the ExamStreak rename.
+export function LogoMark({ size = 24, ...props }: { size?: number } & SVGProps<SVGSVGElement>) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 64 64" fill="none" aria-hidden="true" {...props}>
+      <path d="M48 10 H16 V30 H40 V34 H16 V54 H48" stroke="#28e0ff" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="48" cy="10" r="4.2" fill="#ffb02e" />
+    </svg>
+  );
+}
+
 export function AdminIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <Icon {...props}>

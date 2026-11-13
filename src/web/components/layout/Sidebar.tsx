@@ -3,7 +3,7 @@ import { Link, NavLink } from "react-router";
 import type { User } from "../../api/types";
 import { useSidebar } from "../../hooks/use-sidebar";
 import { primaryNav, secondaryNav, type NavItem } from "../../lib/nav";
-import { PanelLeftCloseIcon, PanelLeftOpenIcon } from "./icons";
+import { LogoMark, PanelLeftCloseIcon, PanelLeftOpenIcon } from "./icons";
 import { ProfileMenu } from "./ProfileMenu";
 
 // Desktop-only collapsible left sidebar, matching MealSathi's app-shell
@@ -23,10 +23,7 @@ export function Sidebar({ user, onLogout }: { user: User; onLogout: () => void }
     >
       <div className="flex h-14 items-center justify-between gap-2 px-3 rail:h-auto rail:flex-col rail:justify-center rail:gap-2 rail:py-3">
         <Link to="/" className="flex min-w-0 items-center gap-2 overflow-hidden">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="shrink-0 text-primary">
-            <path d="M12 2 3 6.5v6C3 17.2 6.9 21.3 12 22.5 17.1 21.3 21 17.2 21 12.5v-6L12 2Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-            <path d="M8.5 12.2l2.3 2.3 4.7-4.9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+          <LogoMark size={22} className="shrink-0" />
           <span className="rail:max-w-0 rail:opacity-0 max-w-35 overflow-hidden whitespace-nowrap text-sm font-bold opacity-100 transition-[max-width,opacity] duration-(--rail-dur) ease-(--rail-ease)">
             ExamStreak
           </span>

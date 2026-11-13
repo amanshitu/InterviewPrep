@@ -3,14 +3,20 @@
 // (the pre-paint script every page's <head> includes) already reads to
 // avoid a flash on load — this just adds the interactive side: an actual
 // control to change it, which didn't exist anywhere in the React rewrite.
-export type ThemeValue = "system" | "light" | "dark";
+// "futuristic" is a 4th, deliberately single-look option (not a light/dark
+// variant) — the dark control-room palette from the ExamStreak logo-concepts
+// artifact, always dark regardless of system preference. It layers on top
+// of the normal dark-mode token set (same accent-color system still picks
+// --primary/--ring; see globals.css's `.dark.futuristic` block).
+export type ThemeValue = "system" | "light" | "dark" | "futuristic";
+const VALID_THEMES: ThemeValue[] = ["system", "light", "dark", "futuristic"];
 
 const THEME_KEY = "theme";
 
 export function getTheme(): ThemeValue {
   try {
     const saved = localStorage.getItem(THEME_KEY);
-    return saved === "light" || saved === "dark" ? saved : "system";
+    return (VALID_THEMES as string[]).includes(saved || "") ? (saved as ThemeValue) : "system";
   } catch {
     return "system";
   }
@@ -23,6 +29,9 @@ export function setTheme(value: ThemeValue): void {
     /* best-effort — localStorage unavailable */
   }
   const resolvedDark =
-    value === "dark" || (value === "system" && typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    value === "dark" ||
+    value === "futuristic" ||
+    (value === "system" && typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
   document.documentElement.classList.toggle("dark", !!resolvedDark);
+  document.documentElement.classList.toggle("futuristic", value === "futuristic");
 }

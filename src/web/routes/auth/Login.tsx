@@ -2,7 +2,7 @@ import { useState, type FormEvent, type ComponentType, type ReactNode, type SVGP
 import { forgotPassword, login, resetPassword, signup } from "../../api/auth";
 import { ApiError } from "../../api/client";
 import { markAuthed } from "../../lib/auth-flag";
-import { BackIcon, CheckIcon, KeyIcon, PlusIcon, SendIcon, SpinnerIcon } from "../../components/layout/icons";
+import { BackIcon, CheckIcon, KeyIcon, LogoMark, PlusIcon, SendIcon, SpinnerIcon } from "../../components/layout/icons";
 import { PasswordField } from "../../components/layout/PasswordField";
 
 type FormKind = "login" | "signup" | "forgot" | "reset";
@@ -38,10 +38,7 @@ export function Login() {
     <div className="flex min-h-dvh items-center justify-center bg-background px-4 py-[calc(2.5rem+env(safe-area-inset-top,0px))]">
       <div className="w-full max-w-md rounded-lg border border-border bg-card p-6 text-card-foreground shadow-sm sm:p-8">
         <div className="mb-1 flex items-center gap-2">
-          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="text-primary">
-            <path d="M12 2 3 6.5v6C3 17.2 6.9 21.3 12 22.5 17.1 21.3 21 17.2 21 12.5v-6L12 2Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-            <path d="M8.5 12.2l2.3 2.3 4.7-4.9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+          <LogoMark size={30} />
           <span className="text-lg font-bold">ExamStreak</span>
         </div>
         <p className="mb-5 text-sm text-muted-foreground">
