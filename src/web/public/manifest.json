@@ -1,7 +1,7 @@
 {
-  "name": "Interview Prep Tracker",
-  "short_name": "Interview Prep",
-  "description": "Daily interview-prep questions, spaced review, and an AI-generated multiple-choice test.",
+  "name": "ExamStreak",
+  "short_name": "ExamStreak",
+  "description": "Daily interview and exam-prep questions, spaced review, and an AI-generated multiple-choice test.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

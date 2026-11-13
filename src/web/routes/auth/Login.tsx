@@ -42,10 +42,10 @@ export function Login() {
             <path d="M12 2 3 6.5v6C3 17.2 6.9 21.3 12 22.5 17.1 21.3 21 17.2 21 12.5v-6L12 2Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
             <path d="M8.5 12.2l2.3 2.3 4.7-4.9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          <span className="text-lg font-bold">Interview Prep</span>
+          <span className="text-lg font-bold">ExamStreak</span>
         </div>
         <p className="mb-5 text-sm text-muted-foreground">
-          A daily interview-prep tracker: everyone gets the shared HR/behavioral curriculum, plus whatever question
+          A daily interview and exam prep tracker: everyone gets the shared HR/behavioral curriculum, plus whatever question
           sets you or others upload — a fresh batch every day sized to your own pace, plus spaced-repetition review
           of everything you've covered.
         </p>

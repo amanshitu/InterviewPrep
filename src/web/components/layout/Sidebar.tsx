@@ -28,7 +28,7 @@ export function Sidebar({ user, onLogout }: { user: User; onLogout: () => void }
             <path d="M8.5 12.2l2.3 2.3 4.7-4.9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
           <span className="rail:max-w-0 rail:opacity-0 max-w-35 overflow-hidden whitespace-nowrap text-sm font-bold opacity-100 transition-[max-width,opacity] duration-(--rail-dur) ease-(--rail-ease)">
-            Interview Prep
+            ExamStreak
           </span>
         </Link>
         <button

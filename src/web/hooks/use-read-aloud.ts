@@ -131,7 +131,7 @@ function startBackgroundKeepAlive(title?: string) {
   getKeepAliveAudio().play().catch(() => { /* best-effort — autoplay restrictions, etc. */ });
   if ("mediaSession" in navigator) {
     try {
-      navigator.mediaSession.metadata = new MediaMetadata({ title: title || "Reading answer aloud", artist: "Interview Prep" });
+      navigator.mediaSession.metadata = new MediaMetadata({ title: title || "Reading answer aloud", artist: "ExamStreak" });
       navigator.mediaSession.playbackState = "playing";
       navigator.mediaSession.setActionHandler("pause", stopSpeaking);
       navigator.mediaSession.setActionHandler("stop", stopSpeaking);

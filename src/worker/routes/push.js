@@ -84,7 +84,7 @@ export async function handleScheduled(env) {
     try {
       const resp = await sendWebPush(
         { endpoint: sub.endpoint, p256dh: sub.p256dh, auth: sub.auth },
-        { title: "Interview Prep", body, url: "/" },
+        { title: "ExamStreak", body, url: "/" },
         env.VAPID_PUBLIC_KEY,
         vapidPrivateJwk,
         "mailto:support@example.com",

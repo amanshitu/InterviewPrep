@@ -153,12 +153,13 @@ export function About() {
     <div className="min-h-screen bg-background">
       <div className="mx-auto flex max-w-2xl flex-col gap-5 px-4 py-10">
         <Card className="bg-linear-to-br from-primary/10 to-transparent">
-          <SectionTitle size="lg">What is Interview Prep Tracker?</SectionTitle>
+          <SectionTitle size="lg">What is ExamStreak?</SectionTitle>
           <p className="mt-2 text-sm text-muted-foreground">
-            A daily interview-prep companion. Every day you get a personalized batch of questions sized to your own
-            pace, spaced-repetition review of everything you've covered, and an AI-generated multiple-choice test —
-            built on a shared curriculum (HR &amp; Behavioral, Delivery &amp; Program Management, People Management,
-            Technical Architecture, AI Automation) plus anything you or other users contribute.
+            A daily interview and exam prep companion. Every day you get a personalized batch of questions sized to
+            your own pace, spaced-repetition review of everything you've covered, and an AI-generated multiple-choice
+            test — covering interview curriculum (HR &amp; Behavioral, Delivery &amp; Program Management, People
+            Management, Technical Architecture, AI Automation) as well as competitive-exam categories like Railway,
+            Police, SSC, Banking, Teaching, and Mathematics, plus anything you or other users contribute.
           </p>
         </Card>
 

@@ -34,7 +34,7 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("push", (event) => {
-  let data = { title: "Interview Prep", body: "You have questions waiting today.", url: "/" };
+  let data = { title: "ExamStreak", body: "You have questions waiting today.", url: "/" };
   try {
     if (event.data) data = { ...data, ...event.data.json() };
   } catch { /* keep default */ }

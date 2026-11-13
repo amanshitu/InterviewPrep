@@ -1,4 +1,4 @@
-// Interview Prep Tracker — Cloudflare Worker
+// ExamStreak — Cloudflare Worker
 //
 // Serves the static app (public/) and a small JSON API backed by D1 for
 // email+password auth and per-user progress state. The question bank
