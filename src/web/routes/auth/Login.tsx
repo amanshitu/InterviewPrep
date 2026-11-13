@@ -1,6 +1,8 @@
-import { useState, type FormEvent, type ComponentType, type ReactNode, type SVGProps } from "react";
+import { useEffect, useState, type FormEvent, type ComponentType, type ReactNode, type SVGProps } from "react";
 import { forgotPassword, login, resetPassword, signup } from "../../api/auth";
+import { listPublicCategories } from "../../api/categories";
 import { ApiError } from "../../api/client";
+import type { PublicCategory } from "../../api/types";
 import { markAuthed } from "../../lib/auth-flag";
 import { BackIcon, CheckIcon, KeyIcon, LogoMark, PlusIcon, SendIcon, SpinnerIcon } from "../../components/layout/icons";
 import { PasswordField } from "../../components/layout/PasswordField";
@@ -196,11 +198,19 @@ function SignupForm() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [categories, setCategories] = useState<PublicCategory[] | null>(null);
+  const [categoryId, setCategoryId] = useState("");
   const [track, setTrack] = useState("");
   const [headline, setHeadline] = useState("");
   const [dailyQuota, setDailyQuota] = useState(10);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    listPublicCategories()
+      .then((data) => setCategories(data.categories))
+      .catch(() => setCategories([]));
+  }, []);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -211,6 +221,7 @@ function SignupForm() {
         name: name.trim(),
         email: email.trim(),
         password,
+        categoryId,
         track: track.trim(),
         headline: headline.trim(),
         dailyQuota: dailyQuota || 10,
@@ -224,6 +235,8 @@ function SignupForm() {
     }
   }
 
+  const selectedCategory = categories?.find((c) => c.id === categoryId);
+
   return (
     <form onSubmit={onSubmit}>
       <Field label="Your name">
@@ -235,7 +248,27 @@ function SignupForm() {
       <Field label="Password" hint="At least 8 characters.">
         <PasswordField required minLength={8} autoComplete="new-password" className={inputClass} value={password} onChange={(e) => setPassword(e.target.value)} />
       </Field>
-      <Field label="What are you preparing for?" hint="Optional — helps us suggest relevant question sets later.">
+      <Field
+        label="Which category do you want to start with?"
+        hint={selectedCategory?.description ?? "This decides your first question bank — you can switch or enroll in more any time in Settings."}
+      >
+        <select
+          required
+          className={inputClass}
+          value={categoryId}
+          onChange={(e) => setCategoryId(e.target.value)}
+        >
+          <option value="" disabled>
+            {categories === null ? "Loading…" : "Choose a category"}
+          </option>
+          {(categories ?? []).map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field label="What are you preparing for?" hint="Optional — a short label like a job title, helps us suggest relevant question sets later.">
         <input type="text" placeholder="e.g. Engineering Management" className={inputClass} value={track} onChange={(e) => setTrack(e.target.value)} />
       </Field>
       <Field label="Current role (optional)">

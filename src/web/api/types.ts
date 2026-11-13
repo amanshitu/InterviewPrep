@@ -38,6 +38,15 @@ export interface Category {
   enrolled: boolean;
 }
 
+// Same rows as Category, minus `enrolled` — returned by the unauthenticated
+// /api/categories/public listing used by the signup form's category picker,
+// where there's no user yet to have an enrollment status.
+export interface PublicCategory {
+  id: string;
+  name: string;
+  description: string | null;
+}
+
 export interface Question {
   id: string;
   q: string;

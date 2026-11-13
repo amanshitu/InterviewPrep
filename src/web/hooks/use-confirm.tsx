@@ -59,7 +59,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
     <ConfirmContext.Provider value={confirm}>
       {children}
       {pending ? (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4" onClick={() => settle(false)}>
+        <div className="fixed inset-0 z-200 flex items-center justify-center bg-black/50 p-4" onClick={() => settle(false)}>
           <div
             role="alertdialog"
             aria-modal="true"

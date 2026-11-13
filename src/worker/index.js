@@ -34,6 +34,7 @@ import {
   handleExportProgress,
 } from "./routes/account.js";
 import {
+  handleListPublicCategories,
   handleListCategories,
   handleEnrollCategory,
   handleSwitchCategory,
@@ -105,6 +106,9 @@ export default {
           const limited = await checkRateLimit(env, request, "password-reset");
           if (limited) return applySecurityHeaders(limited);
           return applySecurityHeaders(await handleResetPassword(request, env));
+        }
+        if (url.pathname === "/api/categories/public" && request.method === "GET") {
+          return applySecurityHeaders(await handleListPublicCategories(request, env));
         }
 
         // Everything below requires an authenticated session.

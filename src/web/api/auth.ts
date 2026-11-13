@@ -9,6 +9,7 @@ export interface SignupRequest {
   dailyQuota?: number;
   headline?: string;
   timezone?: string;
+  categoryId?: string;
 }
 
 export interface LoginRequest {

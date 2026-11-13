@@ -18,10 +18,21 @@ export async function handleSignup(request, env) {
   const dailyQuota = clampQuota(body.dailyQuota);
   const headline = body.headline ? String(body.headline).trim().slice(0, 140) : null;
   const timezone = normalizeTimezone(body.timezone);
+  const requestedCategoryId = body.categoryId ? String(body.categoryId).trim() : null;
 
   if (!name) return json({ error: "Please enter your name." }, { status: 400 });
   if (!isValidEmail(email)) return json({ error: "Please enter a valid email." }, { status: 400 });
   if (password.length < 8) return json({ error: "Password must be at least 8 characters." }, { status: 400 });
+
+  // The signup form always sends a categoryId (it's a required picker, not
+  // free text), but we fall back to the original 'interview-prep' default
+  // for any other caller of this endpoint (an unrecognized or missing id)
+  // rather than rejecting the whole signup over a category mismatch.
+  let categoryId = "interview-prep";
+  if (requestedCategoryId) {
+    const category = await env.DB.prepare("SELECT id FROM categories WHERE id = ? AND is_active = 1").bind(requestedCategoryId).first();
+    if (category) categoryId = category.id;
+  }
 
   // This is a small, invite-only app shared with a handful of known people,
   // so revealing that an email is already registered (rather than genericizing
@@ -59,23 +70,21 @@ export async function handleSignup(request, env) {
   );
   if (subs.length) await env.DB.batch(subs);
 
-  // Every account also starts enrolled in the default category (same one
-  // existing accounts were backfilled into) with the quota they signed up
-  // with — a real category picker at signup comes in a later phase; for now
-  // this keeps new accounts working exactly like existing ones.
+  // Every account starts enrolled in — and active on — whichever category
+  // they picked on the signup form, with the quota they signed up with.
   await env.DB.prepare(
-    "INSERT INTO user_categories (user_id, category_id, daily_quota) VALUES (?, 'interview-prep', ?)",
+    "INSERT INTO user_categories (user_id, category_id, daily_quota) VALUES (?, ?, ?)",
   )
-    .bind(id, dailyQuota)
+    .bind(id, categoryId, dailyQuota)
     .run();
-  await env.DB.prepare("UPDATE users SET active_category_id = 'interview-prep' WHERE id = ?").bind(id).run();
+  await env.DB.prepare("UPDATE users SET active_category_id = ? WHERE id = ?").bind(categoryId, id).run();
 
   return startSession(
     env,
     id,
     await userPayloadWithCategories(env, {
       id, email, name, createdAt: now, track, role: "user", dailyQuota,
-      activeCategoryId: "interview-prep",
+      activeCategoryId: categoryId,
       streakCount: 0, streakLongest: 0, streakLastActive: null,
       aiProvider: null, aiKeyCiphertext: null, aiKeyIv: null,
       headline, yearsExperience: null, bio: null, timezone,

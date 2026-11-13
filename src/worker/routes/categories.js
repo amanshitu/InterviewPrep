@@ -2,6 +2,19 @@ import { json } from "../lib/http.js";
 import { readJsonBody } from "../lib/request.js";
 
 // ---------- categories (multi-category platform) ----------
+
+// Unauthenticated listing for the signup form's category picker — same
+// rows as handleListCategories below, minus the per-user `enrolled` flag
+// (there's no user yet at signup time). Kept deliberately read-only and
+// free of any user-supplied input, so no rate limiting beyond what the
+// platform already applies to every request.
+export async function handleListPublicCategories(request, env) {
+  const { results } = await env.DB.prepare(
+    `SELECT id, name, description FROM categories WHERE is_active = 1 ORDER BY name ASC`,
+  ).all();
+  return json({ categories: results || [] });
+}
+
 export async function handleListCategories(request, env, user) {
   const { results } = await env.DB.prepare(
     `SELECT c.id as id, c.name as name, c.description as description,
