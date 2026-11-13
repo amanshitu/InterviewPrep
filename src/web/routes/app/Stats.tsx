@@ -113,6 +113,25 @@ function StatsBody({ user }: { user: User }) {
     return { label: d.slice(5), value: pct, displayValue: `${pct}%` };
   });
 
+  // Daily Test results (locked once answered — see DailyTest.tsx) already
+  // flow into activity_log as event_type "test_answer" via handleAnswerTest,
+  // but were never surfaced on this page — this is that missing visibility.
+  const testAnswerEvents = events.filter((e) => e.event_type === "test_answer" && e.result);
+  const byDayTest: Record<string, { got: number; again: number }> = {};
+  for (const e of testAnswerEvents) {
+    const day = (e.occurred_at || "").slice(0, 10);
+    byDayTest[day] ||= { got: 0, again: 0 };
+    if (e.result === "got_it") byDayTest[day].got++;
+    else byDayTest[day].again++;
+  }
+  const testDays = Object.keys(byDayTest).sort().slice(-14);
+  const testAccuracyTrend: TrendPoint[] = testDays.map((d) => {
+    const { got, again } = byDayTest[d];
+    const total = got + again;
+    const pct = total ? Math.round((got / total) * 100) : 0;
+    return { label: d.slice(5), value: pct, displayValue: `${pct}%` };
+  });
+
   const byDayScore: Record<string, number[]> = {};
   for (const r of selfTestHistory) {
     byDayScore[r.date] ||= [];
@@ -186,6 +205,14 @@ function StatsBody({ user }: { user: User }) {
           <EmptyNote text="No Self Test attempts yet — try it from Today's Self Test card." />
         ) : (
           <TrendBarChart data={scoreTrend} ariaLabel="Self Test score trend chart" />
+        )}
+      </ChartCard>
+
+      <ChartCard title="Daily Test accuracy" icon={<BarsIcon />} subtitle={`% answered correctly on each day you took the daily test, last ${testAccuracyTrend.length} days. Each answer locks in once selected.`}>
+        {testAccuracyTrend.length === 0 ? (
+          <EmptyNote text="No Daily Test attempts yet — try it from Today's Daily Test card." />
+        ) : (
+          <TrendBarChart data={testAccuracyTrend} ariaLabel="Daily Test accuracy trend chart" />
         )}
       </ChartCard>
 
