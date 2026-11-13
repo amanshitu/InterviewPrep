@@ -99,13 +99,13 @@ function QuestionCard({
               </button>
             ) : null}
             <button type="button" onClick={onToggleReveal} className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-semibold text-foreground">
-              <EyeOffIcon width={16} height={16} /> Hide answer
+              <EyeOffIcon width={16} height={16} /> Hide Answer
             </button>
           </div>
         </>
       ) : (
         <button type="button" onClick={onToggleReveal} className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-semibold text-foreground">
-          <EyeIcon width={16} height={16} /> Show model answer
+          <EyeIcon width={16} height={16} /> Show Answer
         </button>
       )}
     </div>
