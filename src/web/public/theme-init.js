@@ -10,12 +10,20 @@ try {
   if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
   // New (MealSathi-style) pages key dark mode off a .dark class rather
   // than the data-theme attribute above — both are set here so either
-  // system works while the migration is in progress. "futuristic" is a
-  // 4th, always-dark option (see theme-prefs.ts) — it forces dark
-  // regardless of system preference, same as an explicit "dark" choice.
-  var resolvedDark = t === "dark" || t === "futuristic" || (t !== "light" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  // system works while the migration is in progress. "futuristic",
+  // "midnight", and "noirgold" are deliberate always-dark options (see
+  // theme-prefs.ts) — each forces dark regardless of system preference,
+  // same as an explicit "dark" choice. "ivory" is the mirror case: a
+  // deliberate always-light option, excluded from the system-preference
+  // fallback below so a dark OS setting can't flip it dark.
+  var resolvedDark =
+    t === "dark" || t === "futuristic" || t === "midnight" || t === "noirgold" ||
+    (t !== "light" && t !== "ivory" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
   document.documentElement.classList.toggle("dark", !!resolvedDark);
   document.documentElement.classList.toggle("futuristic", t === "futuristic");
+  document.documentElement.classList.toggle("midnight", t === "midnight");
+  document.documentElement.classList.toggle("noirgold", t === "noirgold");
+  document.documentElement.classList.toggle("ivory", t === "ivory");
   var a = localStorage.getItem("accent");
   if (a) document.documentElement.setAttribute("data-accent", a);
 } catch (e) { /* localStorage unavailable — falls back to system preference */ }

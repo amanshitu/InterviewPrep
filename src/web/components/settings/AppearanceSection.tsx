@@ -10,6 +10,9 @@ const THEME_OPTIONS: { id: ThemeValue; label: string; icon: typeof SunIcon }[] =
   { id: "light", label: "Light", icon: SunIcon },
   { id: "dark", label: "Dark", icon: MoonIcon },
   { id: "futuristic", label: "Futuristic", icon: SparkleIcon },
+  { id: "midnight", label: "Midnight", icon: MoonIcon },
+  { id: "noirgold", label: "Noir Gold", icon: MoonIcon },
+  { id: "ivory", label: "Ivory", icon: SunIcon },
 ];
 
 function ThemeCard() {
@@ -17,7 +20,7 @@ function ThemeCard() {
   return (
     <SectionCard
       title="Theme"
-      subtitle="System follows your device's light/dark setting automatically. Futuristic is a dark, always-on control-room look (pairs well with the Cyan, Violet, or Amber accents below). Saved to this browser."
+      subtitle="System follows your device's light/dark setting automatically. Futuristic, Midnight, and Noir Gold are always-dark looks; Ivory is an always-light one — each is a deliberate single look, not tied to System. Saved to this browser."
     >
       <div className="flex flex-wrap gap-2">
         {THEME_OPTIONS.map((opt) => (

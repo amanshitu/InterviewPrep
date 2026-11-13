@@ -98,6 +98,62 @@
   --ring: #28e0ff;
 }
 
+/* "Midnight" — a 5th, always-dark option: cool near-black blue-gray
+   surfaces (no warm/brown undertone, unlike the normal Dark theme) with a
+   crisp indigo-blue primary — a sleek dashboard look. */
+.dark.midnight {
+  --bg-base: oklch(0.16 0.015 262);
+  --foreground: oklch(0.96 0.008 262);
+  --card: oklch(0.205 0.018 262);
+  --card-foreground: oklch(0.96 0.008 262);
+  --muted: oklch(0.255 0.018 262);
+  --muted-foreground: oklch(0.66 0.02 262);
+  --border-base: oklch(0.3 0.02 262);
+  --input: oklch(0.3 0.02 262);
+  --sidebar-base: oklch(0.125 0.015 262);
+  --sidebar-foreground: oklch(0.96 0.008 262);
+  --primary: #5b6ef5;
+  --ring: #5b6ef5;
+}
+
+/* "Noir Gold" — a 6th, always-dark option: deep charcoal-black surfaces
+   with almost no chroma, paired with a metallic gold primary — a luxury,
+   private-banking feel. */
+.dark.noirgold {
+  --bg-base: oklch(0.145 0.008 85);
+  --foreground: oklch(0.93 0.018 85);
+  --card: oklch(0.185 0.012 85);
+  --card-foreground: oklch(0.93 0.018 85);
+  --muted: oklch(0.225 0.014 85);
+  --muted-foreground: oklch(0.62 0.02 85);
+  --border-base: oklch(0.28 0.02 85);
+  --input: oklch(0.28 0.02 85);
+  --sidebar-base: oklch(0.11 0.008 85);
+  --sidebar-foreground: oklch(0.93 0.018 85);
+  --primary: #d4af37;
+  --ring: #d4af37;
+}
+
+/* "Ivory" — a light-mode counterpart to the dark options above (never
+   forces dark — see theme-prefs.ts): warm cream/paper surfaces, deep
+   espresso foreground text, and an antique-gold primary — an elegant,
+   editorial/stationery feel, distinct from the normal Light theme's more
+   neutral warm off-white. */
+:root.ivory {
+  --bg-base: oklch(0.955 0.025 85);
+  --foreground: oklch(0.28 0.035 50);
+  --card: oklch(0.99 0.012 85);
+  --card-foreground: oklch(0.28 0.035 50);
+  --muted: oklch(0.905 0.025 85);
+  --muted-foreground: oklch(0.48 0.035 55);
+  --border-base: oklch(0.855 0.025 80);
+  --input: oklch(0.855 0.025 80);
+  --sidebar-base: oklch(0.925 0.025 85);
+  --sidebar-foreground: oklch(0.28 0.035 50);
+  --primary: #a8761a;
+  --ring: #a8761a;
+}
+
 /* Accent swatches (Settings -> Appearance) — just override --primary/--ring;
    the derived block below recomputes every tinted surface from these
    automatically. Placed after .dark (and .dark.futuristic) so an accent
