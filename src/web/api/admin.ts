@@ -1,4 +1,6 @@
 import { apiFetch, apiPost } from "./client";
+import type { StatsProgressResponse } from "./stats";
+import type { ActivityEvent } from "./account";
 
 export interface PendingQuestionSet {
   id: string;
@@ -75,4 +77,15 @@ export interface AdminUserRow {
 
 export function getUsers(page = 1, pageSize = 50): Promise<{ users: AdminUserRow[]; total: number }> {
   return apiFetch(`/api/admin/users?page=${page}&pageSize=${pageSize}`);
+}
+
+export interface AdminUserStatsResponse {
+  user: { id: string; name: string; email: string; track: string | null; dailyQuota: number };
+  progress: StatsProgressResponse;
+  activity: (ActivityEvent & { question_text?: string | null })[];
+  selfTestHistory: { date: string; score: number }[];
+}
+
+export function getUserStats(userId: string): Promise<AdminUserStatsResponse> {
+  return apiFetch(`/api/admin/users/${encodeURIComponent(userId)}/stats`);
 }

@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
-import { getUsers, type AdminUserRow } from "../../api/admin";
+import { Fragment, useEffect, useState } from "react";
+import { getUsers, getUserStats, type AdminUserRow, type AdminUserStatsResponse } from "../../api/admin";
 import { useToast } from "../../hooks/use-toast";
-import { ChevronLeftIcon, ChevronRightIcon } from "../layout/icons";
+import { ChevronLeftIcon, ChevronRightIcon, EyeIcon } from "../layout/icons";
 import { StatusBadge } from "./StatusBadge";
+import { WeeklyActivityChart } from "../stats/charts";
 
 const PAGE_SIZE = 20;
 
@@ -11,6 +12,7 @@ export function UsersPanel() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const { error } = useToast();
 
   useEffect(() => {
@@ -50,23 +52,42 @@ export function UsersPanel() {
                 <th className="py-2 pr-3">Role</th>
                 <th className="py-2 pr-3">Joined</th>
                 <th className="py-2 pr-3">Categories</th>
+                <th className="py-2 pr-3" />
               </tr>
             </thead>
             <tbody>
               {users.map((u) => (
-                <tr key={u.id} className="border-b border-border/60">
-                  <td className="py-2 pr-3 font-medium text-foreground">{u.name}</td>
-                  <td className="py-2 pr-3 text-muted-foreground">{u.email}</td>
-                  <td className="py-2 pr-3">
-                    <StatusBadge status={u.role} />
-                  </td>
-                  <td className="py-2 pr-3 text-muted-foreground">
-                    {new Date(u.createdAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
-                  </td>
-                  <td className="py-2 pr-3 text-muted-foreground">
-                    {u.enrolledCategories.map((c) => c.name).join(", ") || "—"}
-                  </td>
-                </tr>
+                <Fragment key={u.id}>
+                  <tr className="border-b border-border/60">
+                    <td className="py-2 pr-3 font-medium text-foreground">{u.name}</td>
+                    <td className="py-2 pr-3 text-muted-foreground">{u.email}</td>
+                    <td className="py-2 pr-3">
+                      <StatusBadge status={u.role} />
+                    </td>
+                    <td className="py-2 pr-3 text-muted-foreground">
+                      {new Date(u.createdAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
+                    </td>
+                    <td className="py-2 pr-3 text-muted-foreground">
+                      {u.enrolledCategories.map((c) => c.name).join(", ") || "—"}
+                    </td>
+                    <td className="py-2 pr-3">
+                      <button
+                        type="button"
+                        onClick={() => setExpandedId((id) => (id === u.id ? null : u.id))}
+                        className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                      >
+                        <EyeIcon width={13} height={13} /> {expandedId === u.id ? "Hide stats" : "View stats"}
+                      </button>
+                    </td>
+                  </tr>
+                  {expandedId === u.id ? (
+                    <tr>
+                      <td colSpan={6} className="pb-4">
+                        <UserStatsPanel userId={u.id} />
+                      </td>
+                    </tr>
+                  ) : null}
+                </Fragment>
               ))}
             </tbody>
           </table>
@@ -99,6 +120,89 @@ export function UsersPanel() {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Read-only support view of a single user's own Stats-page data — lets an
+// admin see e.g. why a user reports "no questions on Today" (empty focus
+// areas / zero completion) without needing that user's own session.
+function UserStatsPanel({ userId }: { userId: string }) {
+  const [data, setData] = useState<AdminUserStatsResponse | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setData(null);
+    setErr(null);
+    getUserStats(userId)
+      .then((d) => {
+        if (!cancelled) setData(d);
+      })
+      .catch((e) => {
+        if (!cancelled) setErr(e instanceof Error ? e.message : "Failed to load this user's stats.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  if (err) return <p className="text-sm text-destructive">{err}</p>;
+  if (!data) return <p className="text-sm text-muted-foreground">Loading stats…</p>;
+
+  const completedEvents = data.activity.filter((e) => e.event_type === "reveal");
+  const today = new Date();
+  const weekDays: string[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    weekDays.push(d.toISOString().slice(0, 10));
+  }
+  const weekCounts = weekDays.map((day) => completedEvents.filter((e) => (e.occurred_at || "").slice(0, 10) === day).length);
+  const avgSelfTestScore = data.selfTestHistory.length
+    ? (data.selfTestHistory.reduce((sum, r) => sum + r.score, 0) / data.selfTestHistory.length).toFixed(1)
+    : "—";
+
+  return (
+    <div className="rounded-lg border border-border bg-muted/40 p-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <MiniStat label="Overall completion" value={`${data.progress.overall.completionPct}%`} />
+        <MiniStat label="Questions done" value={data.progress.overall.totalCompleted} />
+        <MiniStat label="Logged actions" value={data.activity.length} />
+        <MiniStat label="Avg Self Test score" value={`${avgSelfTestScore}/10`} />
+      </div>
+
+      <div className="mt-3">
+        <WeeklyActivityChart days={weekDays} counts={weekCounts} />
+      </div>
+
+      <div className="mt-3">
+        <div className="text-sm font-semibold text-foreground">Focus areas</div>
+        {data.progress.focusAreas.length === 0 ? (
+          <p className="mt-1 text-sm text-muted-foreground">No focus-area signal yet.</p>
+        ) : (
+          <div className="mt-1.5 flex flex-col gap-1.5">
+            {data.progress.focusAreas.map((t, i) => (
+              <div key={t.topic} className="flex items-center gap-2 text-sm">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">{i + 1}</span>
+                <span className="text-foreground">{t.topic}</span>
+                <span className="text-muted-foreground">
+                  {t.completed}/{t.total} done ({t.completionPct}%)
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-md border border-border bg-card p-3">
+      <div className="text-lg font-bold text-foreground">{value}</div>
+      <div className="text-xs text-muted-foreground">{label}</div>
     </div>
   );
 }

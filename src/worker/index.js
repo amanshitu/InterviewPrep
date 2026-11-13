@@ -72,6 +72,7 @@ import {
   handleAdminApprovalHistory,
   handleAdminOverview,
   handleAdminUsers,
+  handleAdminUserStats,
 } from "./routes/admin.js";
 import { handlePushSubscribe, handlePushUnsubscribe, handleScheduled } from "./routes/push.js";
 
@@ -241,6 +242,11 @@ export default {
         if (url.pathname === "/api/admin/users" && request.method === "GET") {
           if (user.role !== "admin") return applySecurityHeaders(json({ error: "Forbidden." }, { status: 403 }));
           return applySecurityHeaders(await handleAdminUsers(request, env, user));
+        }
+        const adminUserStats = url.pathname.match(/^\/api\/admin\/users\/([^/]+)\/stats$/);
+        if (adminUserStats && request.method === "GET") {
+          if (user.role !== "admin") return applySecurityHeaders(json({ error: "Forbidden." }, { status: 403 }));
+          return applySecurityHeaders(await handleAdminUserStats(request, env, user, adminUserStats[1]));
         }
 
         if (url.pathname === "/api/test/today" && request.method === "GET") {

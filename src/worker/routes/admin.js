@@ -1,5 +1,9 @@
 import { json } from "../lib/http.js";
 import { readJsonBody } from "../lib/request.js";
+import { mapUserRow } from "../lib/user.js";
+import { handleGetStatsProgress } from "./stats.js";
+import { handleGetActivity } from "./account.js";
+import { handleGetSelfTestHistory } from "./selftest.js";
 
 // ---------- admin: dashboard overview + user directory ----------
 
@@ -69,6 +73,36 @@ export async function handleAdminUsers(request, env, user) {
       enrolledCategories: categoriesByUser.get(r.id) || [],
     })),
     total: totalRow?.n || 0,
+  });
+}
+
+// Read-only view of any user's own Stats page data, for support/debugging
+// (e.g. "why doesn't this user see any questions"). Reuses the exact same
+// per-user stats logic the user's own Stats page calls
+// (handleGetStatsProgress/handleGetActivity/handleGetSelfTestHistory) by
+// building a user object for the admin-chosen target id instead of the
+// session user, rather than duplicating any of that SQL.
+export async function handleAdminUserStats(request, env, admin, targetUserId) {
+  const row = await env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(targetUserId).first();
+  if (!row) return json({ error: "User not found." }, { status: 404 });
+  const targetUser = mapUserRow(row);
+
+  const [progressRes, activityRes, selfTestRes] = await Promise.all([
+    handleGetStatsProgress(request, env, targetUser),
+    handleGetActivity(request, env, targetUser),
+    handleGetSelfTestHistory(request, env, targetUser),
+  ]);
+  const [progress, activity, selfTestHistory] = await Promise.all([
+    progressRes.json(),
+    activityRes.json(),
+    selfTestRes.json(),
+  ]);
+
+  return json({
+    user: { id: row.id, name: row.name, email: row.email, track: row.track, dailyQuota: row.daily_quota },
+    progress,
+    activity: activity.events || [],
+    selfTestHistory: selfTestHistory.history || [],
   });
 }
 
