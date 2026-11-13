@@ -28,3 +28,5 @@ export function FolderIcon(p: SVGProps<SVGSVGElement>) { return <Icon {...p}><pa
 export function SunIcon(p: SVGProps<SVGSVGElement>) { return <Icon {...p}><circle cx="12" cy="12" r="4.2" /><path d="M12 2.5v2.3M12 19.2v2.3M4.4 4.4l1.6 1.6M18 18l1.6 1.6M2.5 12h2.3M19.2 12h2.3M4.4 19.6l1.6-1.6M18 6l1.6-1.6" /></Icon>; }
 export function MoonIcon(p: SVGProps<SVGSVGElement>) { return <Icon {...p}><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5Z" strokeLinejoin="round" /></Icon>; }
 export function MonitorIcon(p: SVGProps<SVGSVGElement>) { return <Icon {...p}><rect x="3" y="4" width="18" height="13" rx="1.5" /><path d="M8 21h8M12 17v4" /></Icon>; }
+export function CheckIcon(p: SVGProps<SVGSVGElement>) { return <Icon {...p}><path d="M5 13l4 4L19 7" /></Icon>; }
+export function LayersIcon(p: SVGProps<SVGSVGElement>) { return <Icon {...p}><path d="M12 3 3 8l9 5 9-5-9-5Z" strokeLinejoin="round" /><path d="M3 13l9 5 9-5M3 18l9 5 9-5" strokeLinejoin="round" /></Icon>; }

@@ -3,6 +3,7 @@ import { useShellUser } from "../../components/layout/AppShell";
 import { AccountSection } from "../../components/settings/AccountSection";
 import { AiUsageSection } from "../../components/settings/AiUsageSection";
 import { AppearanceSection } from "../../components/settings/AppearanceSection";
+import { CategorySection } from "../../components/settings/CategorySection";
 import { DataExportSection } from "../../components/settings/DataExportSection";
 import { AccountIcon, BellIcon, ClipboardIcon, DownloadIcon, FolderIcon, PaletteIcon, SparkleIcon } from "../../components/settings/icons";
 import { NotificationsSection } from "../../components/settings/NotificationsSection";
@@ -42,7 +43,12 @@ function SettingsContent({ user }: { user: User }) {
           </div>
         );
       case "profile":
-        return <PrepProfileSection user={currentUser} onUserChange={setCurrentUser} />;
+        return (
+          <div className="flex flex-col gap-4">
+            <CategorySection user={currentUser} />
+            <PrepProfileSection user={currentUser} onUserChange={setCurrentUser} />
+          </div>
+        );
       case "appearance":
         return <AppearanceSection />;
       case "ai":
