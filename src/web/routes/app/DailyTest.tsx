@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AppShell } from "../../components/layout/AppShell";
+import { Link } from "react-router";
 import { BackIcon, CheckIcon, CloseIcon } from "../../components/layout/icons";
 import { useToast } from "../../hooks/use-toast";
 import { answerTestQuestion, getTodaysTest, type DailyTestQuestion } from "../../api/dailytest";
@@ -8,7 +8,7 @@ import { answerTestQuestion, getTodaysTest, type DailyTestQuestion } from "../..
 // questions the user has already completed. Faithful port of
 // public/pages/test.js — same endpoints, same behavior.
 export function DailyTest() {
-  return <AppShell>{() => <DailyTestBody />}</AppShell>;
+  return <DailyTestBody />;
 }
 
 function DailyTestBody() {
@@ -67,12 +67,12 @@ function DailyTestBody() {
         <p className="mt-1.5 text-sm text-muted-foreground">
           {answeredCount}/{batch.length} answered{answeredCount ? ` · ${correctCount} correct` : ""}
         </p>
-        <a
-          href="/"
+        <Link
+          to="/"
           className="mt-3.5 inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
         >
           <BackIcon /> Back to Today
-        </a>
+        </Link>
       </div>
 
       {batch.length === 0 ? (

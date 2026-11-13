@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { AppShell } from "../../components/layout/AppShell";
+import { Link, useSearchParams } from "react-router";
 import { ArrowRightIcon, BackIcon, MicIcon, SparkleIcon } from "../../components/layout/icons";
 import { useToast } from "../../hooks/use-toast";
 import {
@@ -19,7 +19,7 @@ import { ChatBubble, FeedbackBubble, quotaLine, useDictation } from "./SelfTest"
 // from the same token quota and gets STAR coaching on HR questions for
 // free — faithful port of public/pages/mockinterview.js, same behavior,
 // same endpoints (no new backend/API wrapper needed).
-const SESSION_TOTAL = 5;
+const DEFAULT_SESSION_TOTAL = 5;
 
 interface SessionResult {
   q: string;
@@ -28,11 +28,20 @@ interface SessionResult {
 }
 
 export function MockInterview() {
-  return <AppShell>{() => <MockInterviewBody />}</AppShell>;
+  return <MockInterviewBody />;
 }
 
 function MockInterviewBody() {
   const { success: toastSuccess, error: toastError } = useToast();
+  // Previously hardcoded to 5 regardless of Today's 3/5/8-question picker
+  // (?count=N in the link it generates) — a pre-existing gap, not
+  // something the SPA conversion introduced, fixed here since it's the
+  // same "read the live search params" pattern as Review.tsx's fix.
+  const [searchParams] = useSearchParams();
+  const SESSION_TOTAL = (() => {
+    const n = parseInt(searchParams.get("count") || "", 10);
+    return Number.isFinite(n) && n > 0 ? n : DEFAULT_SESSION_TOTAL;
+  })();
   const [sessionIndex, setSessionIndex] = useState(0);
   const [current, setCurrent] = useState<(Question & { track: string | null }) | null | undefined>(undefined);
   const [quota, setQuota] = useState<SelfTestQuota | null>(null);
@@ -142,9 +151,9 @@ function MockInterviewBody() {
           <button type="button" onClick={restart} className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">
             <SparkleIcon width={16} height={16} /> Start new mock interview
           </button>
-          <a href="/" className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-foreground">
+          <Link to="/" className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-foreground">
             <BackIcon /> Back to Today
-          </a>
+          </Link>
         </div>
       </div>
     );
@@ -166,13 +175,13 @@ function MockInterviewBody() {
           Question {sessionIndex + 1} of {SESSION_TOTAL} — write or speak your answer, then analyze to move to the next one.
         </p>
         {quota ? <p className="mt-1 text-sm text-muted-foreground">{quotaLine(quota)}</p> : null}
-        <a
-          href="/"
+        <Link
+          to="/"
           onClick={() => dictation.stop()}
           className="mt-3.5 inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
         >
           <BackIcon /> End session &amp; back to Today
-        </a>
+        </Link>
       </div>
 
       {!current ? (

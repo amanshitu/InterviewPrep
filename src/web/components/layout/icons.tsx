@@ -277,6 +277,28 @@ export function EyeIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function EyeOffIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M3 3l18 18" />
+      <path d="M10.6 5.6A10.6 10.6 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a13.2 13.2 0 0 1-3.2 3.9M7.4 7.3A13.5 13.5 0 0 0 2.5 12S6 18.5 12 18.5a10.3 10.3 0 0 0 4.1-.85" strokeLinejoin="round" />
+      <path d="M9.9 9.9a2.6 2.6 0 0 0 3.6 3.6" />
+    </Icon>
+  );
+}
+
+// A simple rotating-ring spinner for a button's loading state, matching
+// the existing icon stroke weight so it drops into the same icon slot a
+// button's normal icon occupies without any layout shift.
+export function SpinnerIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" className={`animate-spin ${props.className ?? ""}`} {...props}>
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" strokeOpacity="0.25" />
+      <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function CloseIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <Icon {...props}>

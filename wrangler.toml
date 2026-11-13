@@ -12,13 +12,16 @@ compatibility_date = "2025-01-01"
 command = "npm run build:web"
 
 [assets]
-# Built by `npm run build:web` (Vite, multi-page mode — see vite.config.ts)
-# from src/web/. Every route is now a real document (true MPA, not a
-# client-side-routed SPA), so unlike the old app, an unmatched path should
-# genuinely 404 rather than falling back to index.html.
+# Built by `npm run build:web` (Vite — see vite.config.ts) from src/web/.
+# index.html is a single-page app covering every authenticated route via
+# client-side routing (React Router), so an unmatched path (/review, /test,
+# /stats, etc. — they have no file of their own anymore) must fall back to
+# index.html for the router to handle, not 404. login.html/about.html are
+# still real, separate documents matched directly before this fallback
+# applies.
 directory = "./dist"
 binding = "ASSETS"
-not_found_handling = "404-page"
+not_found_handling = "single-page-application"
 # Without this, Cloudflare serves static files directly and never invokes
 # fetch() below for them, so security headers (CSP, nosniff, etc.) would
 # never get attached to index.html or other static responses.

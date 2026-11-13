@@ -1,4 +1,5 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect } from "react";
+import { Outlet, useOutletContext } from "react-router";
 import type { User } from "../../api/types";
 import { logout } from "../../api/auth";
 import { ToastProvider } from "../../hooks/use-toast";
@@ -23,14 +24,18 @@ function useServiceWorkerRegistration() {
   }, []);
 }
 
-// The authenticated app shell every page under routes/app/* and
-// routes/admin/* renders into: desktop gets a collapsible left sidebar,
-// mobile gets a sticky header + slide-out drawer (Sidebar.tsx / MobileHeader.tsx
-// self-select via Tailwind breakpoints — both are always mounted, CSS decides
-// which is visible). AuthGate wraps everything so no page has to repeat its
-// own session-check boilerplate; ToastProvider is per-page since each page is
-// its own document in this true-MPA architecture.
-export function AppShell({ children }: { children: (user: User) => ReactNode }) {
+// The authenticated app shell, mounted ONCE as a React Router layout route
+// wrapping every page under routes/app/* and routes/admin/*: desktop gets a
+// collapsible left sidebar, mobile gets a sticky header + slide-out drawer
+// (Sidebar.tsx / MobileHeader.tsx self-select via Tailwind breakpoints —
+// both are always mounted, CSS decides which is visible). Because this is
+// now a layout route (not re-mounted per page), the sidebar/header never
+// re-render on navigation between pages, AuthGate's session check runs only
+// once per app visit instead of once per click, and only the <Outlet/> —
+// the actual page content — swaps. This is the fix for the earlier
+// true-MPA architecture's "every click reloads the whole page" complaint:
+// matches MealSathi's own persistent-shell-plus-client-routing pattern.
+export function AppShell() {
   useServiceWorkerRegistration();
   return (
     <ToastProvider>
@@ -41,7 +46,7 @@ export function AppShell({ children }: { children: (user: User) => ReactNode }) 
             <div className="flex min-w-0 flex-1 flex-col">
               <MobileHeader user={user} onLogout={() => void handleLogout()} />
               <main className="mx-auto w-full max-w-(--main-max) flex-1 px-4 py-6 sm:px-6">
-                {children(user)}
+                <Outlet context={user} />
               </main>
             </div>
           </div>
@@ -49,6 +54,13 @@ export function AppShell({ children }: { children: (user: User) => ReactNode }) 
       </AuthGate>
     </ToastProvider>
   );
+}
+
+// Every page component under routes/app|admin/* calls this instead of
+// receiving `user` as a prop, now that AppShell is a layout route rendering
+// <Outlet context={user}/> rather than a per-page render-prop wrapper.
+export function useShellUser(): User {
+  return useOutletContext<User>();
 }
 
 async function handleLogout() {

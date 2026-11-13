@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { AppShell } from "../../components/layout/AppShell";
+import { Link } from "react-router";
+import { useShellUser } from "../../components/layout/AppShell";
 import { useToast } from "../../hooks/use-toast";
 import { useReadAloud } from "../../hooks/use-read-aloud";
 import { getMe } from "../../api/account";
@@ -294,21 +295,21 @@ function TodayContent({ user }: { user: User }) {
             <span>Count: <strong className="text-foreground">{reviewCount}</strong></span>
             <input type="range" min={10} max={20} step={1} value={reviewCount} onChange={(e) => setReviewCount(Number(e.target.value))} className="flex-1" />
           </div>
-          <a href={`/review?count=${reviewCount}`} className="mt-3.5 inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground">
+          <Link to={`/review?count=${reviewCount}`} className="mt-3.5 inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground">
             <ShuffleIcon width={16} height={16} /> Generate today's review
-          </a>
+          </Link>
         </div>
         <div className="rounded-lg border border-border bg-card p-5">
           <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">AI-generated</div>
           <div className="mt-1 text-base font-bold text-foreground">Daily test</div>
           <p className="mt-1.5 text-sm text-muted-foreground">10 multiple-choice questions drawn from what you've completed — same set all day, so you can pick it back up.</p>
-          <a href="/test" className="mt-3.5 inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground"><SparkleIcon width={16} height={16} /> Start today's test</a>
+          <Link to="/test" className="mt-3.5 inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground"><SparkleIcon width={16} height={16} /> Start today's test</Link>
         </div>
         <div className="rounded-lg border border-border bg-card p-5">
           <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">AI-generated</div>
           <div className="mt-1 text-base font-bold text-foreground">Self Test</div>
           <p className="mt-1.5 text-sm text-muted-foreground">Write or speak your own answer to a random question, and get AI feedback on how it compares to the model answer.</p>
-          <a href="/self-test" className="mt-3.5 inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground"><SparkleIcon width={16} height={16} /> Start self test</a>
+          <Link to="/self-test" className="mt-3.5 inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground"><SparkleIcon width={16} height={16} /> Start self test</Link>
         </div>
         <div className="rounded-lg border border-border bg-card p-5">
           <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">AI-generated</div>
@@ -326,9 +327,9 @@ function TodayContent({ user }: { user: User }) {
               </button>
             ))}
           </div>
-          <a href={`/mock-interview?count=${mockCount}`} className="mt-3.5 inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground">
+          <Link to={`/mock-interview?count=${mockCount}`} className="mt-3.5 inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground">
             <SparkleIcon width={16} height={16} /> Start mock interview
-          </a>
+          </Link>
         </div>
       </div>
     </div>
@@ -336,5 +337,6 @@ function TodayContent({ user }: { user: User }) {
 }
 
 export function Today() {
-  return <AppShell>{(user) => <TodayContent user={user} />}</AppShell>;
+  const user = useShellUser();
+  return <TodayContent user={user} />;
 }

@@ -3,13 +3,14 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { resolve } from "node:path";
 
-// Multi-page build: each route gets its own thin HTML entry + mount point
-// (src/web/entries/*.tsx), served as real, separate documents — deliberately
-// not a client-side-routed SPA. The actual page content lives in
-// src/web/routes/{app,admin,auth,public}/*.tsx, mirroring MealSathi's
-// frontend folder convention. index.html (not today.html) is the Today
-// page specifically, so it resolves at "/" to match nav.ts's href and the
-// old app's root route.
+// index.html is now the single-page app covering every authenticated route
+// (Today through Admin) via React Router + a persistent AppShell layout
+// (see entries/app.tsx) — matching MealSathi's own client-routed shell,
+// after an earlier true-MPA attempt (separate document per route) turned
+// out to feel like a full reload on every sidebar click. login.html and
+// about.html stay separate documents on purpose: real navigation
+// boundaries (signed-out/in, and a rarely-visited info page), not part of
+// the core click-between-constantly workflow the SPA conversion was for.
 export default defineConfig({
   root: "src/web",
   plugins: [react(), tailwindcss()],
@@ -43,13 +44,6 @@ export default defineConfig({
         index: resolve(__dirname, "src/web/index.html"),
         about: resolve(__dirname, "src/web/about.html"),
         login: resolve(__dirname, "src/web/login.html"),
-        review: resolve(__dirname, "src/web/review.html"),
-        test: resolve(__dirname, "src/web/test.html"),
-        selfTest: resolve(__dirname, "src/web/self-test.html"),
-        mockInterview: resolve(__dirname, "src/web/mock-interview.html"),
-        stats: resolve(__dirname, "src/web/stats.html"),
-        settings: resolve(__dirname, "src/web/settings.html"),
-        admin: resolve(__dirname, "src/web/admin.html"),
       },
     },
   },

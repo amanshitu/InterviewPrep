@@ -1,5 +1,5 @@
 import { useState, type ComponentType, type SVGProps } from "react";
-import { AppShell } from "../../components/layout/AppShell";
+import { useShellUser } from "../../components/layout/AppShell";
 import { AccountSection } from "../../components/settings/AccountSection";
 import { AiUsageSection } from "../../components/settings/AiUsageSection";
 import { AppearanceSection } from "../../components/settings/AppearanceSection";
@@ -110,5 +110,6 @@ function SettingsContent({ user }: { user: User }) {
 }
 
 export function Settings() {
-  return <AppShell>{(user) => <SettingsContent user={user} />}</AppShell>;
+  const user = useShellUser();
+  return <SettingsContent user={user} />;
 }

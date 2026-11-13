@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { AppShell } from "../../components/layout/AppShell";
+import { Link, useSearchParams } from "react-router";
 import { useToast } from "../../hooks/use-toast";
 import { getReview, submitReviewResult } from "../../api/queue";
 import { ApiError } from "../../api/client";
@@ -14,16 +14,21 @@ interface ReviewItem extends Question {
   times_shown?: number;
 }
 
-function getInitialCount(): number {
-  if (typeof window === "undefined") return DEFAULT_REVIEW_COUNT;
-  const fromQuery = new URLSearchParams(window.location.search).get("count");
-  const n = fromQuery ? parseInt(fromQuery, 10) : NaN;
+function parseCount(raw: string | null): number {
+  const n = raw ? parseInt(raw, 10) : NaN;
   return Number.isFinite(n) && n > 0 ? n : DEFAULT_REVIEW_COUNT;
 }
 
 function ReviewContent() {
   const toast = useToast();
-  const [count, setCount] = useState(getInitialCount);
+  // Reads the live ?count= from React Router's own search-params state
+  // (not a one-time window.location.search read) so that navigating here
+  // again with a different count — e.g. from Today's "Generate today's
+  // review" link — actually reloads with the new value, now that this is
+  // a persistent SPA route rather than a fresh document load every time.
+  const [searchParams] = useSearchParams();
+  const urlCount = parseCount(searchParams.get("count"));
+  const [count, setCount] = useState(urlCount);
   const [batch, setBatch] = useState<ReviewItem[] | null>(null);
 
   const load = useCallback((n: number) => {
@@ -39,9 +44,10 @@ function ReviewContent() {
   }, [toast]);
 
   useEffect(() => {
-    load(count);
+    setCount(urlCount);
+    load(urlCount);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [urlCount]);
 
   function reveal(idx: number) {
     setBatch((prev) => {
@@ -86,9 +92,9 @@ function ReviewContent() {
           <button type="button" onClick={reshuffle} className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-semibold text-foreground">
             <ShuffleIcon width={16} height={16} /> New batch
           </button>
-          <a href="/" className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold text-muted-foreground">
+          <Link to="/" className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold text-muted-foreground">
             <BackIcon width={14} height={14} /> Back to Today
-          </a>
+          </Link>
         </div>
       </div>
 
@@ -136,5 +142,5 @@ function ReviewContent() {
 }
 
 export function Review() {
-  return <AppShell>{() => <ReviewContent />}</AppShell>;
+  return <ReviewContent />;
 }

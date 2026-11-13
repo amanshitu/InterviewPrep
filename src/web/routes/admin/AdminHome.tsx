@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type ComponentType, type SVGProps } f
 import { getApprovalHistory, getOverview, getPendingSets, type AdminOverview, type ApprovalHistoryEntry, type PendingQuestionSet } from "../../api/admin";
 import { listCategories } from "../../api/categories";
 import type { Category } from "../../api/types";
-import { AppShell } from "../../components/layout/AppShell";
+import { useShellUser } from "../../components/layout/AppShell";
 import { ClockIcon, FolderIcon, RefreshIcon, UsersIcon } from "../../components/layout/icons";
 import { KpiCard } from "../../components/admin/KpiCard";
 import { Section } from "../../components/admin/Section";
@@ -23,7 +23,8 @@ const TABS: { key: Tab; label: string; icon: ComponentType<SVGProps<SVGSVGElemen
 ];
 
 export function AdminHome() {
-  return <AppShell>{(user) => (user.role === "admin" ? <AdminDashboard /> : <Forbidden user={user} />)}</AppShell>;
+  const user = useShellUser();
+  return user.role === "admin" ? <AdminDashboard /> : <Forbidden user={user} />;
 }
 
 function Forbidden({ user }: { user: User }) {

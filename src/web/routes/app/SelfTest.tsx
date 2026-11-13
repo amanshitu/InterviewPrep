@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { AppShell } from "../../components/layout/AppShell";
+import { Link } from "react-router";
 import { BackIcon, MicIcon, ShuffleIcon, SparkleIcon } from "../../components/layout/icons";
 import { useToast } from "../../hooks/use-toast";
 import {
@@ -146,7 +146,7 @@ export function quotaLine(quota: SelfTestQuota | null): string {
 }
 
 export function SelfTest() {
-  return <AppShell>{() => <SelfTestBody />}</AppShell>;
+  return <SelfTestBody />;
 }
 
 function SelfTestBody() {
@@ -222,13 +222,13 @@ function SelfTestBody() {
           A random question — write or speak your own answer, then get AI feedback on how it compares to the model answer.
         </p>
         {quota ? <p className="mt-1 text-sm text-muted-foreground">{quotaLine(quota)}</p> : null}
-        <a
-          href="/"
+        <Link
+          to="/"
           onClick={() => dictation.stop()}
           className="mt-3.5 inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
         >
           <BackIcon /> Back to Today
-        </a>
+        </Link>
       </div>
 
       {!current ? (

@@ -2,14 +2,15 @@ import { useEffect, useState } from "react";
 import type { ActivityEvent } from "../../api/account";
 import { getActivity, getStatsInsight, getStatsProgress, type StatsProgressResponse } from "../../api/stats";
 import { getSelfTestHistory } from "../../api/selftest";
-import { AppShell } from "../../components/layout/AppShell";
+import { useShellUser } from "../../components/layout/AppShell";
 import { TrendBarChart, WeeklyActivityChart, type TrendPoint } from "../../components/stats/charts";
 import type { User } from "../../api/types";
 
 type Activity = ActivityEvent & { question_text?: string | null };
 
 export function Stats() {
-  return <AppShell>{(user) => <StatsBody user={user} />}</AppShell>;
+  const user = useShellUser();
+  return <StatsBody user={user} />;
 }
 
 function StatsBody({ user }: { user: User }) {
