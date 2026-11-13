@@ -99,36 +99,54 @@ export async function handleCreateQuestionSet(request, env, user) {
 // Mirrors resume.js's buildPromptGenerationMetaPrompt pattern: the AI writes
 // a tailored *prompt* grounded in the chosen category's real name/
 // description, not the Q&A content itself — the user pastes that prompt
-// into their own ChatGPT/Claude, then pastes the reply back in to import.
-
+// into their own ChatGPT/Claude, then pastes (or uploads) the reply back
+// in to import. JSON rather than CSV: this app's answer text routinely
+// contains commas, quotes, and multi-line worked solutions (see
+// migrations/0040's numbered-step Markdown answers) that are exactly the
+// cases CSV quoting/escaping gets wrong in practice when a model writes
+// it by hand — JSON's quoting is both stricter and something every model
+// handles far more reliably when asked for valid JSON specifically.
 function categoryPromptFormatRules(count) {
-  return `Generate exactly ${count} questions total, organized into logical sub-topic sections appropriate for this category (group related questions under a shared section label; use as many or as few distinct sections as make sense for ${count} questions).
+  return `Generate exactly ${count} questions total, organized into logical sub-topic sections appropriate for this category (group related questions under a shared section label; use as many or as few distinct sections as make sense for ${count} questions — roughly 5-15 questions per section is a reasonable spread).
 
-Output ONLY a CSV — no commentary, no markdown code fences, nothing before or after it. Use exactly this header row:
-section,question,answer
+Respond with ONLY valid JSON — no commentary, no markdown code fences (do not wrap it in \`\`\`json), nothing before or after the JSON itself. Use exactly this shape:
+
+{
+  "sections": [
+    {
+      "label": "Section name",
+      "questions": [
+        { "q": "The question text.", "a": "The model answer text." }
+      ]
+    }
+  ]
+}
 
 Rules:
-- Each answer must be accurate, specific, and exam/interview-appropriate for this category — not generic filler.
-- If a field contains a comma, wrap the whole field in double quotes. If a field contains a double quote, escape it by doubling it ("").
-- Do not add row numbers, extra columns, or blank lines.`;
+- The top-level value is a single JSON object with exactly one key, "sections", whose value is an array.
+- Each section object has exactly two keys: "label" (a short string) and "questions" (an array).
+- Each question object has exactly two keys, "q" and "a", both strings.
+- Every answer must be accurate, specific, and exam/interview-appropriate for this category — not generic filler. Where a question has a worked solution (e.g. a calculation), write the answer as a numbered list of short steps ending in the final answer in bold Markdown (e.g. "1. First step.\\n2. Second step, so the answer is **42**."), and put any formula or computed expression in Markdown inline code (backticks), e.g. \`n(n+1)/2\`.
+- Escape every double quote, backslash, and newline inside a JSON string correctly (a literal newline inside a step-by-step answer must be written as \\n) so the result is valid, parseable JSON — this is parsed by a program, not read by a person.
+- Do not add any keys beyond "sections", "label", "questions", "q", and "a". Do not add comments, trailing commas, or any text outside the single JSON object.`;
 }
 
 function buildCategoryPromptMetaPrompt({ categoryName, categoryDescription, topics, count }) {
-  return `You are an expert exam/interview-prep content writer writing a prompt that will be pasted into a separate AI assistant (ChatGPT or Claude) to generate questions and model answers for a specific prep category on a study app.
+  return `You are an expert exam/interview-prep content writer writing a prompt that will be pasted into a separate AI assistant (ChatGPT or Claude) to generate questions and model answers for a specific prep category on a study app. The other assistant's reply will be imported automatically by a program, so the prompt you write must be precise enough that its output needs no manual cleanup.
 
-Your ONLY job is to write that prompt's text. Do NOT answer it yourself, do NOT generate any example questions or answers, and do NOT include any actual CSV rows — the other assistant does that part after receiving your prompt. Keep your own framing short: 3-5 sentences, nothing more.
+Your ONLY job is to write that prompt's text. Do NOT answer it yourself, do NOT generate any example questions or answers, and do NOT include any actual JSON — the other assistant does that part after receiving your prompt. Keep your own framing focused: 4-6 sentences, nothing more.
 
 Category: ${categoryName}
 Category description: ${categoryDescription || "(no description given)"}
 ${topics ? `Focus specifically on these topics/areas within the category: ${topics}` : "Cover a broad, representative spread of sub-topics within this category."}
 
-Base your framing on the category's actual real-world subject matter — be specific about the kind of questions and difficulty level appropriate for it (e.g. competitive-exam trivia vs. senior interview judgment questions — infer which fits from the category name/description), so the other assistant produces genuinely useful, on-topic content instead of generic placeholder questions.
+Base your framing on the category's actual real-world subject matter — be specific about the kind of questions and difficulty level appropriate for it (e.g. competitive-exam trivia vs. senior interview judgment questions, or step-by-step quantitative problems — infer which fits from the category name/description), the intended audience (someone actively preparing for it), and that each question should be distinct (no near-duplicates) and each answer self-contained, so the other assistant produces genuinely useful, directly-usable content instead of generic placeholder questions.
 
-Immediately after your framing, append the following output-format instructions verbatim — copy them exactly as given here, do not paraphrase, shorten, omit, or add anything after them, since another program will parse the other assistant's eventual reply as a CSV file:
+Immediately after your framing, append the following output-format instructions verbatim — copy them exactly as given here, do not paraphrase, shorten, omit, or add anything after them, since another program will parse the other assistant's eventual reply as JSON:
 
 ${categoryPromptFormatRules(count)}
 
-Respond with ONLY the finished prompt text itself (your framing immediately followed by the verbatim rules above) — no commentary about what you wrote, no markdown code fences, no example rows, nothing before or after it.`;
+Respond with ONLY the finished prompt text itself (your framing immediately followed by the verbatim rules above) — no commentary about what you wrote, no markdown code fences, no example JSON, nothing before or after it.`;
 }
 
 export async function handleGenerateCategoryPrompt(request, env, user) {
@@ -170,7 +188,7 @@ export async function handleGenerateCategoryPrompt(request, env, user) {
   if ((prompt.startsWith('"') && prompt.endsWith('"')) || (prompt.startsWith("“") && prompt.endsWith("”"))) {
     prompt = prompt.slice(1, -1).trim();
   }
-  if (!prompt.includes("section,question,answer")) {
+  if (!prompt.includes('"sections"')) {
     prompt += `\n\n${categoryPromptFormatRules(count)}`;
   }
 
