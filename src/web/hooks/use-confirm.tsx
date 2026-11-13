@@ -28,6 +28,11 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
   const pendingRef = useRef<PendingConfirm | null>(null);
 
   const confirm = useCallback<ConfirmFn>((options) => {
+    // A second confirm() while one is already pending would otherwise
+    // silently overwrite pendingRef without ever resolving the first
+    // caller's promise, leaving it awaiting forever — resolve it as
+    // cancelled first so no caller ever hangs.
+    pendingRef.current?.resolve(false);
     return new Promise<boolean>((resolve) => {
       const normalized: PendingConfirm = typeof options === "string" ? { message: options, resolve } : { ...options, resolve };
       pendingRef.current = normalized;
@@ -79,6 +84,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"
+                autoFocus
                 onClick={() => settle(false)}
                 className="inline-flex items-center gap-2 rounded-md border border-border bg-secondary px-3.5 py-2 text-sm font-semibold text-foreground hover:bg-muted"
               >
@@ -86,7 +92,6 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
               </button>
               <button
                 type="button"
-                autoFocus
                 onClick={() => settle(true)}
                 className={`inline-flex items-center gap-2 rounded-md px-3.5 py-2 text-sm font-semibold hover:opacity-90 ${
                   pending.destructive ? "bg-destructive text-destructive-foreground" : "bg-primary text-primary-foreground"
