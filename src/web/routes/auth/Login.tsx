@@ -2,7 +2,8 @@ import { useState, type FormEvent, type ComponentType, type ReactNode, type SVGP
 import { forgotPassword, login, resetPassword, signup } from "../../api/auth";
 import { ApiError } from "../../api/client";
 import { markAuthed } from "../../lib/auth-flag";
-import { BackIcon, CheckIcon, KeyIcon, PlusIcon, SendIcon } from "../../components/layout/icons";
+import { BackIcon, CheckIcon, KeyIcon, PlusIcon, SendIcon, SpinnerIcon } from "../../components/layout/icons";
+import { PasswordField } from "../../components/layout/PasswordField";
 
 type FormKind = "login" | "signup" | "forgot" | "reset";
 
@@ -125,14 +126,26 @@ function SuccessText({ children }: { children: string | null }) {
   return <p className="mb-3 text-sm font-medium text-success">{children}</p>;
 }
 
-function SubmitButton({ children, icon: Icon }: { children: ReactNode; icon: ComponentType<SVGProps<SVGSVGElement>> }) {
+function SubmitButton({
+  children,
+  icon: Icon,
+  loading,
+  loadingText,
+}: {
+  children: ReactNode;
+  icon: ComponentType<SVGProps<SVGSVGElement>>;
+  loading?: boolean;
+  loadingText?: string;
+}) {
   return (
     <button
       type="submit"
-      className="flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90"
+      disabled={loading}
+      aria-busy={loading}
+      className="flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-70"
     >
-      <Icon width={16} height={16} />
-      {children}
+      {loading ? <SpinnerIcon width={16} height={16} /> : <Icon width={16} height={16} />}
+      {loading ? loadingText ?? children : children}
     </button>
   );
 }
@@ -141,16 +154,19 @@ function LoginForm({ successMessage, onForgot }: { successMessage: string | null
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    setSubmitting(true);
     try {
       await login({ email: email.trim(), password });
       markAuthed();
       window.location.href = "/";
     } catch (err) {
       setError(errorMessage(err));
+      setSubmitting(false);
     }
   }
 
@@ -160,11 +176,13 @@ function LoginForm({ successMessage, onForgot }: { successMessage: string | null
         <input type="email" required autoComplete="email" className={inputClass} value={email} onChange={(e) => setEmail(e.target.value)} />
       </Field>
       <Field label="Password">
-        <input type="password" required autoComplete="current-password" className={inputClass} value={password} onChange={(e) => setPassword(e.target.value)} />
+        <PasswordField required autoComplete="current-password" className={inputClass} value={password} onChange={(e) => setPassword(e.target.value)} />
       </Field>
       <ErrorText>{error}</ErrorText>
       <SuccessText>{successMessage}</SuccessText>
-      <SubmitButton icon={SendIcon}>Sign in</SubmitButton>
+      <SubmitButton icon={SendIcon} loading={submitting} loadingText="Signing in…">
+        Sign in
+      </SubmitButton>
       <button
         type="button"
         onClick={onForgot}
@@ -185,10 +203,12 @@ function SignupForm() {
   const [headline, setHeadline] = useState("");
   const [dailyQuota, setDailyQuota] = useState(10);
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    setSubmitting(true);
     try {
       await signup({
         name: name.trim(),
@@ -203,6 +223,7 @@ function SignupForm() {
       window.location.href = "/";
     } catch (err) {
       setError(errorMessage(err));
+      setSubmitting(false);
     }
   }
 
@@ -215,7 +236,7 @@ function SignupForm() {
         <input type="email" required autoComplete="email" className={inputClass} value={email} onChange={(e) => setEmail(e.target.value)} />
       </Field>
       <Field label="Password" hint="At least 8 characters.">
-        <input type="password" required minLength={8} autoComplete="new-password" className={inputClass} value={password} onChange={(e) => setPassword(e.target.value)} />
+        <PasswordField required minLength={8} autoComplete="new-password" className={inputClass} value={password} onChange={(e) => setPassword(e.target.value)} />
       </Field>
       <Field label="What are you preparing for?" hint="Optional — helps us suggest relevant question sets later.">
         <input type="text" placeholder="e.g. Engineering Management" className={inputClass} value={track} onChange={(e) => setTrack(e.target.value)} />
@@ -227,7 +248,9 @@ function SignupForm() {
         <input type="number" min={5} max={50} className={inputClass} value={dailyQuota} onChange={(e) => setDailyQuota(parseInt(e.target.value, 10) || 10)} />
       </Field>
       <ErrorText>{error}</ErrorText>
-      <SubmitButton icon={PlusIcon}>Create account</SubmitButton>
+      <SubmitButton icon={PlusIcon} loading={submitting} loadingText="Creating account…">
+        Create account
+      </SubmitButton>
     </form>
   );
 }
@@ -236,16 +259,20 @@ function ForgotForm({ onCancel }: { onCancel: () => void }) {
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setSuccess(null);
+    setSubmitting(true);
     try {
       const data = await forgotPassword(email.trim());
       setSuccess(data.message || "If that email is registered, we've sent a reset link.");
     } catch (err) {
       setError(errorMessage(err));
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -257,7 +284,9 @@ function ForgotForm({ onCancel }: { onCancel: () => void }) {
       </Field>
       <ErrorText>{error}</ErrorText>
       <SuccessText>{success}</SuccessText>
-      <SubmitButton icon={KeyIcon}>Send reset link</SubmitButton>
+      <SubmitButton icon={KeyIcon} loading={submitting} loadingText="Sending…">
+        Send reset link
+      </SubmitButton>
       <button type="button" onClick={onCancel} className="mt-2 flex w-full items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted">
         <BackIcon width={15} height={15} />
         Back to sign in
@@ -269,15 +298,19 @@ function ForgotForm({ onCancel }: { onCancel: () => void }) {
 function ResetForm({ token, onDone }: { token: string; onDone: () => void }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    setSubmitting(true);
     try {
       await resetPassword(token, password);
       onDone();
     } catch (err) {
       setError(errorMessage(err));
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -285,10 +318,12 @@ function ResetForm({ token, onDone }: { token: string; onDone: () => void }) {
     <form onSubmit={onSubmit}>
       <p className="mb-4 text-sm text-muted-foreground">Choose a new password for your account.</p>
       <Field label="New password" hint="At least 8 characters.">
-        <input type="password" required minLength={8} autoComplete="new-password" className={inputClass} value={password} onChange={(e) => setPassword(e.target.value)} />
+        <PasswordField required minLength={8} autoComplete="new-password" className={inputClass} value={password} onChange={(e) => setPassword(e.target.value)} />
       </Field>
       <ErrorText>{error}</ErrorText>
-      <SubmitButton icon={CheckIcon}>Update password</SubmitButton>
+      <SubmitButton icon={CheckIcon} loading={submitting} loadingText="Updating…">
+        Update password
+      </SubmitButton>
     </form>
   );
 }

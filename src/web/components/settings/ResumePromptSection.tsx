@@ -191,8 +191,8 @@ export function ResumePromptSection({ user }: { user: User }) {
             onChange={(e) => setTargetRole(e.target.value)}
             placeholder="e.g. Engineering Manager"
           />
-          <SecondaryButton type="button" onClick={() => void handleSuggestRole()} disabled={suggesting}>
-            <SparkleIcon /> {suggesting ? "Thinking…" : "Suggest from resume"}
+          <SecondaryButton type="button" onClick={() => void handleSuggestRole()} loading={suggesting} loadingText="Thinking…">
+            <SparkleIcon /> Suggest from resume
           </SecondaryButton>
         </div>
       </label>
@@ -245,8 +245,8 @@ export function ResumePromptSection({ user }: { user: User }) {
         />
       </label>
 
-      <PrimaryButton onClick={() => void handleGenerate()} disabled={generating}>
-        <SparkleIcon /> {generating ? "Generating…" : "Generate prompt"}
+      <PrimaryButton onClick={() => void handleGenerate()} loading={generating} loadingText="Generating…">
+        <SparkleIcon /> Generate prompt
       </PrimaryButton>
 
       {prompt ? (

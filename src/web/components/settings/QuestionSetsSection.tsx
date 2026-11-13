@@ -39,6 +39,7 @@ function MySetsList({ refreshKey, onChanged }: { refreshKey: number; onChanged: 
   const toast = useToast();
   const [sets, setSets] = useState<MyQuestionSet[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [submittingId, setSubmittingId] = useState<string | null>(null);
 
   useEffect(() => {
     getMyQuestionSets()
@@ -47,12 +48,15 @@ function MySetsList({ refreshKey, onChanged }: { refreshKey: number; onChanged: 
   }, [refreshKey]);
 
   async function handleSubmitForReview(id: string) {
+    setSubmittingId(id);
     try {
       await submitQuestionSet(id);
       toast.success("Submitted for review.");
       onChanged();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't submit for review.");
+    } finally {
+      setSubmittingId(null);
     }
   }
 
@@ -85,10 +89,11 @@ function MySetsList({ refreshKey, onChanged }: { refreshKey: number; onChanged: 
               {s.visibility === "private" || s.visibility === "rejected" ? (
                 <button
                   type="button"
+                  disabled={submittingId === s.id}
                   onClick={() => void handleSubmitForReview(s.id)}
-                  className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline disabled:opacity-60"
                 >
-                  <SendIcon width={13} height={13} /> Submit for review
+                  <SendIcon width={13} height={13} /> {submittingId === s.id ? "Submitting…" : "Submit for review"}
                 </button>
               ) : null}
             </div>
@@ -114,6 +119,7 @@ function ManualUploadForm({ onDone, onCancel }: { onDone: () => void; onCancel: 
   const [title, setTitle] = useState("");
   const [track, setTrack] = useState("");
   const [sections, setSections] = useState<DraftSection[]>([{ label: "", questions: [{ q: "", a: "" }] }]);
+  const [submitting, setSubmitting] = useState(false);
 
   function updateSection(i: number, patch: Partial<DraftSection>) {
     setSections((prev) => prev.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
@@ -129,11 +135,14 @@ function ManualUploadForm({ onDone, onCancel }: { onDone: () => void; onCancel: 
       label: s.label.trim(),
       questions: s.questions.map((q) => ({ q: q.q.trim(), a: q.a.trim() })).filter((q) => q.q || q.a),
     }));
+    setSubmitting(true);
     try {
       await createQuestionSet({ title: title.trim(), track: track.trim() || null, sections: payloadSections });
       onDone();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't upload that question set.");
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -189,10 +198,10 @@ function ManualUploadForm({ onDone, onCancel }: { onDone: () => void; onCancel: 
       </SecondaryButton>
 
       <div className="mt-3 flex gap-2">
-        <PrimaryButton type="button" onClick={() => void handleSubmit()}>
+        <PrimaryButton type="button" onClick={() => void handleSubmit()} loading={submitting} loadingText="Submitting…">
           <SendIcon /> Submit
         </PrimaryButton>
-        <SecondaryButton type="button" onClick={onCancel}>
+        <SecondaryButton type="button" onClick={onCancel} disabled={submitting}>
           <CloseIcon /> Cancel
         </SecondaryButton>
       </div>
@@ -204,14 +213,18 @@ function CsvImportForm({ fileName, sections, skipped, onDone, onCancel }: { file
   const toast = useToast();
   const [title, setTitle] = useState(fileName.replace(/\.csv$/i, ""));
   const [track, setTrack] = useState("");
+  const [importing, setImporting] = useState(false);
   const questionCount = sections.reduce((n, s) => n + s.questions.length, 0);
 
   async function handleImport() {
+    setImporting(true);
     try {
       await createQuestionSet({ title: title.trim(), track: track.trim() || null, sections });
       onDone();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't import that CSV.");
+    } finally {
+      setImporting(false);
     }
   }
 
@@ -230,10 +243,10 @@ function CsvImportForm({ fileName, sections, skipped, onDone, onCancel }: { file
         <input className="rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground" value={track} onChange={(e) => setTrack(e.target.value)} placeholder="e.g. tech" />
       </label>
       <div className="flex gap-2">
-        <PrimaryButton type="button" onClick={() => void handleImport()}>
+        <PrimaryButton type="button" onClick={() => void handleImport()} loading={importing} loadingText="Importing…">
           <UploadIcon /> Import
         </PrimaryButton>
-        <SecondaryButton type="button" onClick={onCancel}>
+        <SecondaryButton type="button" onClick={onCancel} disabled={importing}>
           <CloseIcon /> Cancel
         </SecondaryButton>
       </div>

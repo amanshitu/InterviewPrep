@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { exportProgress } from "../../api/account";
 import { useToast } from "../../hooks/use-toast";
 import { SecondaryButton, SectionCard } from "./SectionCard";
@@ -17,8 +18,10 @@ function downloadBlob(filename: string, content: string, mimeType: string) {
 
 export function DataExportSection() {
   const toast = useToast();
+  const [exporting, setExporting] = useState(false);
 
   async function handleExport() {
+    setExporting(true);
     try {
       const blob = await exportProgress();
       const text = await blob.text();
@@ -28,12 +31,14 @@ export function DataExportSection() {
       toast.success("Progress exported.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't export your progress.");
+    } finally {
+      setExporting(false);
     }
   }
 
   return (
     <SectionCard title="Export data" subtitle="Download your progress as a JSON file.">
-      <SecondaryButton onClick={() => void handleExport()}>
+      <SecondaryButton onClick={() => void handleExport()} loading={exporting} loadingText="Exporting…">
         <DownloadIcon /> Export my progress (JSON)
       </SecondaryButton>
     </SectionCard>

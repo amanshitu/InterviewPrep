@@ -106,7 +106,7 @@ function PendingSetCard({
           disabled={busy}
           className="inline-flex items-center gap-1.5 rounded-md bg-success px-3 py-1.5 text-sm font-semibold text-background disabled:opacity-60"
         >
-          <CheckIcon width={15} height={15} /> Approve
+          <CheckIcon width={15} height={15} /> {busy ? "Approving…" : "Approve"}
         </button>
         <button
           type="button"
@@ -131,9 +131,9 @@ function PendingSetCard({
             type="button"
             onClick={() => void handleReject()}
             disabled={busy}
-            className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground"
+            className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground disabled:opacity-60"
           >
-            <CloseIcon width={15} height={15} /> Confirm reject
+            <CloseIcon width={15} height={15} /> {busy ? "Rejecting…" : "Confirm reject"}
           </button>
         </div>
       ) : null}

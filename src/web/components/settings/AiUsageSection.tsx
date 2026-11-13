@@ -6,6 +6,7 @@ import { getSelfTestQuota, type SelfTestQuota } from "../../api/selftest";
 import { useToast } from "../../hooks/use-toast";
 import { PrimaryButton, SectionCard, inputClass } from "./SectionCard";
 import { SaveIcon } from "./icons";
+import { PasswordField } from "../layout/PasswordField";
 
 const AI_PROVIDER_LABELS: Record<string, string> = { "workers-ai": "Workers AI (free, default)", openai: "OpenAI", anthropic: "Anthropic" };
 
@@ -29,6 +30,7 @@ function AiProviderCard({ user, onUserChange }: { user: User; onUserChange: (use
   const [model, setModel] = useState(user.workersAiModel);
   const [apiKey, setApiKey] = useState("");
   const [usageLine, setUsageLine] = useState("Checking today's AI usage…");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     getAiUsage()
@@ -47,12 +49,15 @@ function AiProviderCard({ user, onUserChange }: { user: User; onUserChange: (use
     } else if (apiKey.trim()) {
       body.aiApiKey = apiKey.trim();
     }
+    setSaving(true);
     try {
       const { user: updated } = await updateProfile(body);
       onUserChange(updated);
       toast.success("AI provider saved.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't save your AI provider.");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -91,9 +96,8 @@ function AiProviderCard({ user, onUserChange }: { user: User; onUserChange: (use
       ) : (
         <label className="mb-3 flex flex-col gap-1.5 text-sm font-medium text-muted-foreground">
           <span>API key</span>
-          <input
+          <PasswordField
             className={inputClass()}
-            type="password"
             autoComplete="off"
             placeholder={user.hasAiKey ? "Already set — enter a new key to replace it" : "sk-..."}
             value={apiKey}
@@ -102,7 +106,7 @@ function AiProviderCard({ user, onUserChange }: { user: User; onUserChange: (use
         </label>
       )}
 
-      <PrimaryButton onClick={() => void handleSave()}>
+      <PrimaryButton onClick={() => void handleSave()} loading={saving} loadingText="Saving…">
         <SaveIcon /> Save AI provider
       </PrimaryButton>
     </SectionCard>

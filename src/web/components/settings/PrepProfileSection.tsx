@@ -19,6 +19,7 @@ export function PrepProfileSection({ user, onUserChange }: { user: User; onUserC
   const [bio, setBio] = useState(user.bio ?? "");
   const [timezone, setTimezone] = useState(user.timezone || "UTC");
   const [quota, setQuota] = useState(String(user.dailyQuota));
+  const [saving, setSaving] = useState(false);
 
   const tzOptions = timezoneSelectOptions(user.timezone || "UTC");
   const canonicalCurrent = canonicalTz(timezone);
@@ -38,6 +39,7 @@ export function PrepProfileSection({ user, onUserChange }: { user: User; onUserC
       }
       yearsExperience = parsedYears;
     }
+    setSaving(true);
     try {
       const { user: updated } = await updateProfile({
         track: track.trim(),
@@ -51,6 +53,8 @@ export function PrepProfileSection({ user, onUserChange }: { user: User; onUserC
       toast.success("Profile saved.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't save your profile.");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -90,7 +94,7 @@ export function PrepProfileSection({ user, onUserChange }: { user: User; onUserC
         <span>Questions per day</span>
         <input className={inputClass()} type="number" min={5} max={50} value={quota} onChange={(e) => setQuota(e.target.value)} />
       </label>
-      <PrimaryButton onClick={() => void handleSave()}>
+      <PrimaryButton onClick={() => void handleSave()} loading={saving} loadingText="Saving…">
         <SaveIcon /> Save profile
       </PrimaryButton>
     </SectionCard>

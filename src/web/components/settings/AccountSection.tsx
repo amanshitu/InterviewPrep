@@ -18,6 +18,8 @@ export function AccountSection({ user, onUserChange }: { user: User; onUserChang
   const toast = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState(user.name);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [savingName, setSavingName] = useState(false);
 
   async function handleAvatarChange(file: File | undefined) {
     if (!file) return;
@@ -25,6 +27,7 @@ export function AccountSection({ user, onUserChange }: { user: User; onUserChang
       toast.error("That image is too large — please choose one under 8MB.");
       return;
     }
+    setAvatarBusy(true);
     try {
       const avatarData = await resizeImageToDataUrl(file);
       const { user: updated } = await updateAccount({ name: user.name, avatarData });
@@ -32,16 +35,21 @@ export function AccountSection({ user, onUserChange }: { user: User; onUserChang
       toast.success("Profile picture updated.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't update your picture.");
+    } finally {
+      setAvatarBusy(false);
     }
   }
 
   async function handleRemoveAvatar() {
+    setAvatarBusy(true);
     try {
       const { user: updated } = await updateAccount({ name: user.name, avatarData: null });
       onUserChange(updated);
       toast.success("Profile picture removed.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't remove your picture.");
+    } finally {
+      setAvatarBusy(false);
     }
   }
 
@@ -51,12 +59,15 @@ export function AccountSection({ user, onUserChange }: { user: User; onUserChang
       toast.error("Please enter your name.");
       return;
     }
+    setSavingName(true);
     try {
       const { user: updated } = await updateAccount({ name: trimmed });
       onUserChange(updated);
       toast.success("Name saved.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't save your name.");
+    } finally {
+      setSavingName(false);
     }
   }
 
@@ -78,11 +89,11 @@ export function AccountSection({ user, onUserChange }: { user: User; onUserChang
               void handleAvatarChange(file);
             }}
           />
-          <SecondaryButton onClick={() => fileInputRef.current?.click()}>
+          <SecondaryButton onClick={() => fileInputRef.current?.click()} disabled={avatarBusy} loading={avatarBusy} loadingText="Uploading…">
             <CameraIcon /> Change picture
           </SecondaryButton>
           {user.avatarData ? (
-            <SecondaryButton onClick={() => void handleRemoveAvatar()}>
+            <SecondaryButton onClick={() => void handleRemoveAvatar()} disabled={avatarBusy} loading={avatarBusy} loadingText="Removing…">
               <TrashIcon /> Remove
             </SecondaryButton>
           ) : null}
@@ -93,7 +104,7 @@ export function AccountSection({ user, onUserChange }: { user: User; onUserChang
         <span>Display name</span>
         <input className={inputClass()} value={name} onChange={(e) => setName(e.target.value)} />
       </label>
-      <PrimaryButton className="mt-3" onClick={() => void handleSaveName()}>
+      <PrimaryButton className="mt-3" onClick={() => void handleSaveName()} loading={savingName} loadingText="Saving…">
         <SaveIcon /> Save name
       </PrimaryButton>
     </SectionCard>

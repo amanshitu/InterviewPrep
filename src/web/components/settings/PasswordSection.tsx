@@ -3,14 +3,17 @@ import { changePassword, revokeAllSessions } from "../../api/auth";
 import { useToast } from "../../hooks/use-toast";
 import { PrimaryButton, SecondaryButton, SectionCard, inputClass } from "./SectionCard";
 import { KeyIcon, LogoutIcon } from "./icons";
+import { PasswordField } from "../layout/PasswordField";
 
 export function PasswordSection() {
   const toast = useToast();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setSubmitting(true);
     try {
       await changePassword(currentPassword, newPassword);
       toast.success("Password updated.");
@@ -18,6 +21,8 @@ export function PasswordSection() {
       setNewPassword("");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't update your password.");
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -26,14 +31,14 @@ export function PasswordSection() {
       <form onSubmit={(e) => void handleSubmit(e)}>
         <label className="mb-3 flex flex-col gap-1.5 text-sm font-medium text-muted-foreground">
           <span>Current password</span>
-          <input className={inputClass()} type="password" autoComplete="current-password" required value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
+          <PasswordField className={inputClass()} autoComplete="current-password" required value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
         </label>
         <label className="mb-3 flex flex-col gap-1.5 text-sm font-medium text-muted-foreground">
           <span>New password</span>
-          <input className={inputClass()} type="password" autoComplete="new-password" minLength={8} required value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+          <PasswordField className={inputClass()} autoComplete="new-password" minLength={8} required value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
           <small className="font-normal">At least 8 characters.</small>
         </label>
-        <PrimaryButton type="submit">
+        <PrimaryButton type="submit" loading={submitting} loadingText="Updating…">
           <KeyIcon /> Update password
         </PrimaryButton>
       </form>
@@ -42,15 +47,22 @@ export function PasswordSection() {
 }
 
 export function SessionsSection() {
+  const [revoking, setRevoking] = useState(false);
+
   async function handleRevokeAll() {
     if (!confirm("Sign out of all devices, including this one?")) return;
-    await revokeAllSessions();
-    window.location.reload();
+    setRevoking(true);
+    try {
+      await revokeAllSessions();
+      window.location.reload();
+    } catch {
+      setRevoking(false);
+    }
   }
 
   return (
     <SectionCard title="Sessions" subtitle="Sign out everywhere this account is logged in, including this device.">
-      <SecondaryButton onClick={() => void handleRevokeAll()}>
+      <SecondaryButton onClick={() => void handleRevokeAll()} loading={revoking} loadingText="Signing out…">
         <LogoutIcon /> Sign out of all devices
       </SecondaryButton>
     </SectionCard>

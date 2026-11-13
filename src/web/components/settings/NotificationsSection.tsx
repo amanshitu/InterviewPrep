@@ -23,6 +23,7 @@ export function NotificationsSection() {
   const [subscribed, setSubscribed] = useState(false);
   const [blocked, setBlocked] = useState(false);
   const [ready, setReady] = useState(false);
+  const [toggling, setToggling] = useState(false);
 
   async function refresh() {
     if (!supported) return;
@@ -43,6 +44,7 @@ export function NotificationsSection() {
   }, []);
 
   async function handleToggle() {
+    setToggling(true);
     try {
       const reg = await navigator.serviceWorker.ready;
       const existing = await reg.pushManager.getSubscription();
@@ -73,6 +75,7 @@ export function NotificationsSection() {
       toast.error(err instanceof Error ? err.message : "Couldn't update notification settings.");
     }
     await refresh();
+    setToggling(false);
   }
 
   if (!supported) return null;
@@ -83,7 +86,7 @@ export function NotificationsSection() {
   return (
     <SectionCard title="Notifications" subtitle="Get a browser reminder once a day if you still have questions left for today.">
       <p className="mb-3 text-sm text-muted-foreground">{ready ? statusText : "Checking…"}</p>
-      <ButtonComponent onClick={() => void handleToggle()} disabled={!ready}>
+      <ButtonComponent onClick={() => void handleToggle()} disabled={!ready} loading={toggling} loadingText={subscribed ? "Disabling…" : "Enabling…"}>
         <BellIcon /> {subscribed ? "Disable reminders" : "Enable reminders"}
       </ButtonComponent>
     </SectionCard>

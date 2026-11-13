@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { SpinnerIcon } from "../layout/icons";
 
 // Shared card chrome for every settings section — replaces the old
 // `.card` CSS class with Tailwind utilities against the new theme tokens.
@@ -26,24 +27,32 @@ export function inputClass(extra = "") {
   return `rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring ${extra}`;
 }
 
-export function PrimaryButton({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+type LoadingButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & { loading?: boolean; loadingText?: ReactNode };
+
+export function PrimaryButton({ children, loading, loadingText, ...props }: LoadingButtonProps) {
   return (
     <button
       {...props}
+      disabled={props.disabled || loading}
+      aria-busy={loading}
       className={`inline-flex items-center gap-2 rounded-md bg-primary px-3.5 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50 ${props.className ?? ""}`}
     >
-      {children}
+      {loading ? <SpinnerIcon width={15} height={15} /> : null}
+      {loading ? loadingText ?? children : children}
     </button>
   );
 }
 
-export function SecondaryButton({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+export function SecondaryButton({ children, loading, loadingText, ...props }: LoadingButtonProps) {
   return (
     <button
       {...props}
+      disabled={props.disabled || loading}
+      aria-busy={loading}
       className={`inline-flex items-center gap-2 rounded-md border border-border bg-secondary px-3.5 py-2 text-sm font-semibold text-foreground hover:bg-muted disabled:opacity-50 ${props.className ?? ""}`}
     >
-      {children}
+      {loading ? <SpinnerIcon width={15} height={15} /> : null}
+      {loading ? loadingText ?? children : children}
     </button>
   );
 }
