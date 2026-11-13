@@ -130,12 +130,14 @@ export function UsersPanel() {
 function UserStatsPanel({ userId }: { userId: string }) {
   const [data, setData] = useState<AdminUserStatsResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // null = "whichever category is currently active for this user" (the
+  // server's own default); set once the user picks a specific tab below.
+  const [categoryId, setCategoryId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    setData(null);
     setErr(null);
-    getUserStats(userId)
+    getUserStats(userId, categoryId ?? undefined)
       .then((d) => {
         if (!cancelled) setData(d);
       })
@@ -145,7 +147,7 @@ function UserStatsPanel({ userId }: { userId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [userId, categoryId]);
 
   if (err) return <p className="text-sm text-destructive">{err}</p>;
   if (!data) return <p className="text-sm text-muted-foreground">Loading stats…</p>;
@@ -165,6 +167,22 @@ function UserStatsPanel({ userId }: { userId: string }) {
 
   return (
     <div className="rounded-lg border border-border bg-muted/40 p-4">
+      {data.enrolledCategories.length > 1 ? (
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {data.enrolledCategories.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => setCategoryId(c.id)}
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                c.id === data.categoryId ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {c.name}
+            </button>
+          ))}
+        </div>
+      ) : null}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <MiniStat label="Overall completion" value={`${data.progress.overall.completionPct}%`} />
         <MiniStat label="Questions done" value={data.progress.overall.totalCompleted} />

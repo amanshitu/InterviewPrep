@@ -1,6 +1,6 @@
 import { json } from "../lib/http.js";
 import { readJsonBody } from "../lib/request.js";
-import { mapUserRow } from "../lib/user.js";
+import { mapUserRow, getEnrolledCategories } from "../lib/user.js";
 import { handleGetStatsProgress } from "./stats.js";
 import { handleGetActivity } from "./account.js";
 import { handleGetSelfTestHistory } from "./selftest.js";
@@ -82,10 +82,26 @@ export async function handleAdminUsers(request, env, user) {
 // (handleGetStatsProgress/handleGetActivity/handleGetSelfTestHistory) by
 // building a user object for the admin-chosen target id instead of the
 // session user, rather than duplicating any of that SQL.
+//
+// A user can be enrolled in multiple categories, each with its own
+// independent quota/streak/question pool/progress — Today only ever shows
+// the ONE currently-active one. So this takes an optional ?categoryId= to
+// let an admin inspect any category the target user is enrolled in, not
+// just whichever one happens to be active right now; it's validated
+// against that user's own enrolledCategories (never an arbitrary id) and
+// falls back to their current activeCategoryId when omitted or invalid.
 export async function handleAdminUserStats(request, env, admin, targetUserId) {
   const row = await env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(targetUserId).first();
   if (!row) return json({ error: "User not found." }, { status: 404 });
   const targetUser = mapUserRow(row);
+  const enrolledCategories = await getEnrolledCategories(env, targetUserId);
+
+  const url = new URL(request.url);
+  const requestedCategoryId = url.searchParams.get("categoryId");
+  const categoryId = enrolledCategories.some((c) => c.id === requestedCategoryId)
+    ? requestedCategoryId
+    : targetUser.activeCategoryId;
+  targetUser.activeCategoryId = categoryId;
 
   const [progressRes, activityRes, selfTestRes] = await Promise.all([
     handleGetStatsProgress(request, env, targetUser),
@@ -100,6 +116,8 @@ export async function handleAdminUserStats(request, env, admin, targetUserId) {
 
   return json({
     user: { id: row.id, name: row.name, email: row.email, track: row.track, dailyQuota: row.daily_quota },
+    categoryId,
+    enrolledCategories,
     progress,
     activity: activity.events || [],
     selfTestHistory: selfTestHistory.history || [],

@@ -81,11 +81,14 @@ export function getUsers(page = 1, pageSize = 50): Promise<{ users: AdminUserRow
 
 export interface AdminUserStatsResponse {
   user: { id: string; name: string; email: string; track: string | null; dailyQuota: number };
+  categoryId: string | null;
+  enrolledCategories: { id: string; name: string }[];
   progress: StatsProgressResponse;
   activity: (ActivityEvent & { question_text?: string | null })[];
   selfTestHistory: { date: string; score: number }[];
 }
 
-export function getUserStats(userId: string): Promise<AdminUserStatsResponse> {
-  return apiFetch(`/api/admin/users/${encodeURIComponent(userId)}/stats`);
+export function getUserStats(userId: string, categoryId?: string): Promise<AdminUserStatsResponse> {
+  const qs = categoryId ? `?categoryId=${encodeURIComponent(categoryId)}` : "";
+  return apiFetch(`/api/admin/users/${encodeURIComponent(userId)}/stats${qs}`);
 }
