@@ -53,9 +53,12 @@ export function Login() {
       <div className="w-full max-w-md rounded-lg border border-border bg-card p-6 text-card-foreground shadow-sm sm:p-8">
         <div className="mb-1 flex items-center gap-2">
           <LogoMark size={30} />
-          <span className="text-lg font-bold">ExamStreak</span>
+          <div>
+            <span className="block text-lg font-bold leading-tight">ExamStreak</span>
+            <span className="block text-xs font-medium leading-tight text-muted-foreground">Practice. Track. Ace it.</span>
+          </div>
         </div>
-        <p className="mb-5 text-sm text-muted-foreground">
+        <p className="mb-5 mt-2 text-sm text-muted-foreground">
           A daily interview and exam prep tracker: everyone gets the shared HR/behavioral curriculum, plus whatever question
           sets you or others upload — a fresh batch every day sized to your own pace, plus spaced-repetition review
           of everything you've covered.

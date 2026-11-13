@@ -310,6 +310,14 @@ html {
      swap, a brief skeleton state) shifts the whole centered layout
      sideways by its width for a frame, a visible horizontal jitter. */
   scrollbar-gutter: stable;
+  /* No page should ever need to scroll sideways — anything that would
+     (a too-wide table, an unwrapped long string) should clip or scroll
+     within its own container instead (see e.g. ChartCard's own
+     overflow-x: auto for charts/tables). This is a backstop, not the
+     fix for any specific overflow, so a genuinely too-wide element is
+     still a bug to find and contain, just never a visible page-level
+     horizontal scrollbar in the meantime. */
+  overflow-x: hidden;
 }
 
 body {

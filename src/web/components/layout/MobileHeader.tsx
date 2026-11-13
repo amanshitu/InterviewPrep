@@ -15,7 +15,10 @@ export function MobileHeader({ user, onLogout }: { user: User; onLogout: () => v
       <header className="sm:hidden sticky top-0 z-30 flex min-h-14 items-center justify-between border-b border-border bg-background/90 px-4 backdrop-blur pt-[env(safe-area-inset-top,0px)]">
         <Link to="/" className="flex items-center gap-2">
           <LogoMark size={20} />
-          <span className="text-sm font-bold text-foreground">ExamStreak</span>
+          <span className="leading-tight">
+            <span className="block text-sm font-bold text-foreground">ExamStreak</span>
+            <span className="block text-[10px] font-medium text-muted-foreground">Practice. Track. Ace it.</span>
+          </span>
         </Link>
         <button
           type="button"
