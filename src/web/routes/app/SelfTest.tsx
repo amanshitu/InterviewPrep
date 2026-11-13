@@ -164,7 +164,14 @@ function SelfTestBody() {
   async function loadQuestion() {
     const [questionResult, quotaResult] = await Promise.allSettled([getSelfTestQuestion(), getSelfTestQuota()]);
     setCurrent(questionResult.status === "fulfilled" ? questionResult.value.question : null);
-    if (questionResult.status === "rejected") toastError((questionResult.reason as Error).message);
+    // "No questions available…" is shown inline below once `current` is
+    // null — toasting the exact same text on top of it was a redundant
+    // duplicate. Any other failure (network error, server error) has no
+    // inline explanation, so it still needs the toast.
+    if (questionResult.status === "rejected") {
+      const message = (questionResult.reason as Error).message;
+      if (!message.startsWith("No questions available")) toastError(message);
+    }
     setQuota(quotaResult.status === "fulfilled" ? quotaResult.value : null);
   }
 
