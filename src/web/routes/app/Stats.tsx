@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ActivityEvent } from "../../api/account";
 import { getActivity, getStatsInsight, getStatsProgress, type StatsProgressResponse } from "../../api/stats";
 import { getSelfTestHistory } from "../../api/selftest";
@@ -7,6 +7,8 @@ import { TrendBarChart, WeeklyActivityChart, type TrendPoint } from "../../compo
 import type { User } from "../../api/types";
 import { Skeleton, SkeletonCard } from "../../components/layout/Skeleton";
 import { Markdown } from "../../components/layout/Markdown";
+import { PullToRefresh } from "../../components/layout/PullToRefresh";
+import { saveSnapshot, loadSnapshot } from "../../lib/offline-store";
 
 type Activity = ActivityEvent & { question_text?: string | null };
 
@@ -25,19 +27,31 @@ function StatsBody({ user }: { user: User }) {
     text: "Generating your insight…",
   });
 
-  useEffect(() => {
-    let cancelled = false;
-    Promise.allSettled([getActivity(2000), getStatsProgress(), getSelfTestHistory()]).then((results) => {
-      if (cancelled) return;
+  const cancelledRef = useRef(false);
+
+  function load(): Promise<void> {
+    return Promise.allSettled([getActivity(2000), getStatsProgress(), getSelfTestHistory()]).then((results) => {
+      if (cancelledRef.current) return;
       const [activityResult, progressResult, selfTestResult] = results;
       if (activityResult.status === "fulfilled") setEvents(activityResult.value.events);
-      if (progressResult.status === "fulfilled") setProgress(progressResult.value);
+      if (progressResult.status === "fulfilled") {
+        setProgress(progressResult.value);
+        saveSnapshot("stats-progress", user.id, progressResult.value);
+      } else if (!navigator.onLine) {
+        const cached = loadSnapshot<StatsProgressResponse>("stats-progress", user.id);
+        if (cached) setProgress(cached.data);
+      }
       if (selfTestResult.status === "fulfilled") setSelfTestHistory(selfTestResult.value.history);
       setLoading(false);
     });
+  }
+
+  useEffect(() => {
+    cancelledRef.current = false;
+    load();
     getStatsInsight()
       .then((data) => {
-        if (cancelled) return;
+        if (cancelledRef.current) return;
         const d = data as { insight: string | null; generatedBy: string | null; cached: boolean; limited?: boolean; message?: string };
         if (d.limited) {
           setInsight({ status: "limited", text: d.message || "Today's free AI insight allowance is used up." });
@@ -50,10 +64,10 @@ function StatsBody({ user }: { user: User }) {
         }
       })
       .catch((err: Error) => {
-        if (!cancelled) setInsight({ status: "error", text: err.message });
+        if (!cancelledRef.current) setInsight({ status: "error", text: err.message });
       });
     return () => {
-      cancelled = true;
+      cancelledRef.current = true;
     };
   }, []);
 
@@ -159,84 +173,86 @@ function StatsBody({ user }: { user: User }) {
     .slice(0, 8);
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="rounded-xl border border-border bg-card p-5">
-        <h1 className="text-lg font-bold text-card-foreground">Stats</h1>
-        <p className="mt-1.5 text-sm text-muted-foreground">Your progress over time, and where to focus next.</p>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile label="Current streak" value={user.streak.count} icon={<StreakIcon />} />
-        <StatTile label="Longest streak" value={user.streak.longest} icon={<TrophyIcon />} />
-        <StatTile label="Logged actions" value={events.length} icon={<ChecklistIcon />} />
-        <StatTile label="Overall completion" value={progress ? `${progress.overall.completionPct}%` : "—"} icon={<DonutIcon />} />
-      </div>
-
-      <WeeklyActivityChart days={weekDays} counts={weekCounts} />
-
-      <FocusCard focusAreas={progress?.focusAreas ?? null} />
-
-      <div className="rounded-xl border border-border bg-card p-4">
-        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">AI-generated</div>
-        <div className="mt-0.5 flex items-center gap-2 text-base font-semibold text-card-foreground">
-          <SparkleIcon /> Your coaching insight
+    <PullToRefresh onRefresh={load}>
+      <div className="flex flex-col gap-4">
+        <div className="rounded-xl border border-border bg-card p-5">
+          <h1 className="text-lg font-bold text-card-foreground">Stats</h1>
+          <p className="mt-1.5 text-sm text-muted-foreground">Your progress over time, and where to focus next.</p>
         </div>
-        <div className="mt-2.5">
-          {insight.status === "error" ? (
-            <p className="text-sm text-destructive">{insight.text}</p>
+
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <StatTile label="Current streak" value={user.streak.count} icon={<StreakIcon />} />
+          <StatTile label="Longest streak" value={user.streak.longest} icon={<TrophyIcon />} />
+          <StatTile label="Logged actions" value={events.length} icon={<ChecklistIcon />} />
+          <StatTile label="Overall completion" value={progress ? `${progress.overall.completionPct}%` : "—"} icon={<DonutIcon />} />
+        </div>
+
+        <WeeklyActivityChart days={weekDays} counts={weekCounts} />
+
+        <FocusCard focusAreas={progress?.focusAreas ?? null} />
+
+        <div className="rounded-xl border border-border bg-card p-4">
+          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">AI-generated</div>
+          <div className="mt-0.5 flex items-center gap-2 text-base font-semibold text-card-foreground">
+            <SparkleIcon /> Your coaching insight
+          </div>
+          <div className="mt-2.5">
+            {insight.status === "error" ? (
+              <p className="text-sm text-destructive">{insight.text}</p>
+            ) : (
+              <>
+                <Markdown text={insight.text} className="text-sm leading-relaxed text-card-foreground" />
+                {insight.meta ? <p className="mt-2 text-sm text-muted-foreground">{insight.meta}</p> : null}
+              </>
+            )}
+          </div>
+        </div>
+
+        <ChartCard title="Accuracy trend" icon={<BarsIcon />} subtitle={`% marked "got it" on each day you reviewed, last ${accuracyTrend.length} days.`}>
+          {accuracyTrend.length === 0 ? (
+            <EmptyNote text="No review history yet — run a daily review to start building this." />
           ) : (
-            <>
-              <Markdown text={insight.text} className="text-sm leading-relaxed text-card-foreground" />
-              {insight.meta ? <p className="mt-2 text-sm text-muted-foreground">{insight.meta}</p> : null}
-            </>
+            <TrendBarChart data={accuracyTrend} ariaLabel="Accuracy trend chart" />
+          )}
+        </ChartCard>
+
+        <ChartCard title="Self Test score trend" icon={<SparkleIcon />} subtitle={`Average AI-graded score (1-10) per day, last ${scoreTrend.length} days.`}>
+          {scoreTrend.length === 0 ? (
+            <EmptyNote text="No Self Test attempts yet — try it from Today's Self Test card." />
+          ) : (
+            <TrendBarChart data={scoreTrend} ariaLabel="Self Test score trend chart" />
+          )}
+        </ChartCard>
+
+        <ChartCard title="Daily Test accuracy" icon={<BarsIcon />} subtitle={`% answered correctly on each day you took the daily test, last ${testAccuracyTrend.length} days. Each answer locks in once selected.`}>
+          {testAccuracyTrend.length === 0 ? (
+            <EmptyNote text="No Daily Test attempts yet — try it from Today's Daily Test card." />
+          ) : (
+            <TrendBarChart data={testAccuracyTrend} ariaLabel="Daily Test accuracy trend chart" />
+          )}
+        </ChartCard>
+
+        <ProgressByTopicCard topics={progress?.topics ?? null} />
+
+        <div className="rounded-xl border border-border bg-card p-4">
+          <div className="flex items-center gap-2 text-base font-semibold text-card-foreground">
+            <AimIcon /> Weakest questions
+          </div>
+          {weakQuestions.length === 0 ? (
+            <EmptyNote text="Not enough review history yet." />
+          ) : (
+            <div className="mt-2 flex flex-col gap-2">
+              {weakQuestions.map((q) => (
+                <div key={q.qid} className="flex items-center justify-between gap-3 rounded-md bg-muted px-3 py-2 text-sm">
+                  <span className="min-w-0 flex-1 truncate text-card-foreground">{q.text || q.qid}</span>
+                  <span className="shrink-0 text-muted-foreground">{Math.round(q.rate * 100)}% again ({q.total}×)</span>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </div>
-
-      <ChartCard title="Accuracy trend" icon={<BarsIcon />} subtitle={`% marked "got it" on each day you reviewed, last ${accuracyTrend.length} days.`}>
-        {accuracyTrend.length === 0 ? (
-          <EmptyNote text="No review history yet — run a daily review to start building this." />
-        ) : (
-          <TrendBarChart data={accuracyTrend} ariaLabel="Accuracy trend chart" />
-        )}
-      </ChartCard>
-
-      <ChartCard title="Self Test score trend" icon={<SparkleIcon />} subtitle={`Average AI-graded score (1-10) per day, last ${scoreTrend.length} days.`}>
-        {scoreTrend.length === 0 ? (
-          <EmptyNote text="No Self Test attempts yet — try it from Today's Self Test card." />
-        ) : (
-          <TrendBarChart data={scoreTrend} ariaLabel="Self Test score trend chart" />
-        )}
-      </ChartCard>
-
-      <ChartCard title="Daily Test accuracy" icon={<BarsIcon />} subtitle={`% answered correctly on each day you took the daily test, last ${testAccuracyTrend.length} days. Each answer locks in once selected.`}>
-        {testAccuracyTrend.length === 0 ? (
-          <EmptyNote text="No Daily Test attempts yet — try it from Today's Daily Test card." />
-        ) : (
-          <TrendBarChart data={testAccuracyTrend} ariaLabel="Daily Test accuracy trend chart" />
-        )}
-      </ChartCard>
-
-      <ProgressByTopicCard topics={progress?.topics ?? null} />
-
-      <div className="rounded-xl border border-border bg-card p-4">
-        <div className="flex items-center gap-2 text-base font-semibold text-card-foreground">
-          <AimIcon /> Weakest questions
-        </div>
-        {weakQuestions.length === 0 ? (
-          <EmptyNote text="Not enough review history yet." />
-        ) : (
-          <div className="mt-2 flex flex-col gap-2">
-            {weakQuestions.map((q) => (
-              <div key={q.qid} className="flex items-center justify-between gap-3 rounded-md bg-muted px-3 py-2 text-sm">
-                <span className="min-w-0 flex-1 truncate text-card-foreground">{q.text || q.qid}</span>
-                <span className="shrink-0 text-muted-foreground">{Math.round(q.rate * 100)}% again ({q.total}×)</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
+    </PullToRefresh>
   );
 }
 

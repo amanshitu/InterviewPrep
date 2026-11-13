@@ -5,6 +5,7 @@ import { getReview, submitReviewResult } from "../../api/queue";
 import { ApiError } from "../../api/client";
 import type { Question } from "../../api/types";
 import { BackIcon, CheckIcon, EyeIcon, EyeOffIcon, RefreshIcon, ShuffleIcon } from "../../components/layout/icons";
+import { PullToRefresh } from "../../components/layout/PullToRefresh";
 import { Skeleton, SkeletonCard } from "../../components/layout/Skeleton";
 import { Markdown, renderInline } from "../../components/layout/Markdown";
 
@@ -35,7 +36,7 @@ function ReviewContent() {
 
   const load = useCallback((n: number) => {
     setBatch(null);
-    getReview(n)
+    return getReview(n)
       .then((data) => {
         setBatch((data.questions as ReviewItem[]).map((q) => ({ ...q, revealed: false, graded: null })));
       })
@@ -92,7 +93,8 @@ function ReviewContent() {
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <PullToRefresh onRefresh={() => load(batch?.length || count)}>
+      <div className="flex flex-col gap-4">
       <div className="rounded-lg border border-border bg-card p-5">
         <div className="text-lg font-bold text-foreground">Daily review</div>
         <p className="mt-1.5 text-sm text-muted-foreground">
@@ -170,7 +172,8 @@ function ReviewContent() {
           ))}
         </div>
       )}
-    </div>
+      </div>
+    </PullToRefresh>
   );
 }
 

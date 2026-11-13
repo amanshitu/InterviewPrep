@@ -15,6 +15,9 @@ import type { Question, User } from "../../api/types";
 import { CheckIcon, EyeIcon, EyeOffIcon, PlusIcon, RefreshIcon, ShuffleIcon, SparkleIcon, SpeakerIcon, StopIcon } from "../../components/layout/icons";
 import { Skeleton, SkeletonCard } from "../../components/layout/Skeleton";
 import { Markdown, renderInline } from "../../components/layout/Markdown";
+import { PullToRefresh } from "../../components/layout/PullToRefresh";
+import { useOnlineStatus } from "../../hooks/use-online-status";
+import { saveSnapshot, loadSnapshot } from "../../lib/offline-store";
 
 const DEFAULT_REVIEW_COUNT = 15;
 
@@ -61,6 +64,7 @@ function QuestionCard({
   onComplete,
   onFlagReview,
   readAloud,
+  offline,
 }: {
   q: Question;
   idx: number;
@@ -69,6 +73,7 @@ function QuestionCard({
   onComplete: () => void;
   onFlagReview: () => void;
   readAloud: ReturnType<typeof useReadAloud>;
+  offline: boolean;
 }) {
   const needsReview = q.last_result === "again";
   const speaking = readAloud.speakingId === q.id;
@@ -87,8 +92,24 @@ function QuestionCard({
           ) : null}
           <Markdown text={q.a} className="answer-text mt-3 rounded-md bg-muted p-3 text-sm text-foreground" />
           <div className="mt-3 flex flex-wrap gap-2">
-            <button type="button" onClick={onComplete} className="inline-flex items-center gap-1.5 rounded-md bg-success px-3 py-1.5 text-sm font-semibold text-success-foreground"><CheckIcon width={16} height={16} /> Got it</button>
-            <button type="button" onClick={onFlagReview} className="inline-flex items-center gap-1.5 rounded-md bg-warning px-3 py-1.5 text-sm font-semibold text-foreground"><RefreshIcon width={16} height={16} /> Review again soon</button>
+            <button
+              type="button"
+              onClick={onComplete}
+              disabled={offline}
+              title={offline ? "You're offline — this needs a connection." : undefined}
+              className="inline-flex items-center gap-1.5 rounded-md bg-success px-3 py-1.5 text-sm font-semibold text-success-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <CheckIcon width={16} height={16} /> Got it
+            </button>
+            <button
+              type="button"
+              onClick={onFlagReview}
+              disabled={offline}
+              title={offline ? "You're offline — this needs a connection." : undefined}
+              className="inline-flex items-center gap-1.5 rounded-md bg-warning px-3 py-1.5 text-sm font-semibold text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <RefreshIcon width={16} height={16} /> Review again soon
+            </button>
             {readAloud.isSpeechSupported() ? (
               <button
                 type="button"
@@ -126,9 +147,10 @@ function TodayContent({ user }: { user: User }) {
   // /api/me per page load.
   const refreshUser = useRefreshUser();
   const streak = user.streak;
+  const online = useOnlineStatus();
 
-  useEffect(() => {
-    getTodayQueue()
+  function load(): Promise<void> {
+    return getTodayQueue()
       .then((data) => {
         setQueue(data);
         // A question already marked "shown" server-side (revealed in an
@@ -137,11 +159,23 @@ function TodayContent({ user }: { user: User }) {
         // still flip it either way afterward, purely as a local display
         // preference (it was never a permanent server-side lock).
         setRevealed(new Set(data.questions.filter((q) => q.status === "shown").map((q) => q.id)));
+        saveSnapshot("today-queue", user.id, data);
       })
       .catch((err: unknown) => {
+        if (!navigator.onLine) {
+          const cached = loadSnapshot<TodayQueueResponse>("today-queue", user.id);
+          if (cached) {
+            setQueue(cached.data);
+            return;
+          }
+        }
         setQueue({ date: "", target: 0, completed: 0, remaining: 0, questions: [], completedQuestions: [] });
         toast.error(err instanceof ApiError ? err.message : "Failed to load today's queue.");
       });
+  }
+
+  useEffect(() => {
+    load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -257,7 +291,8 @@ function TodayContent({ user }: { user: User }) {
   }
 
   return (
-    <div className="flex flex-col gap-5">
+    <PullToRefresh onRefresh={load}>
+      <div className="flex flex-col gap-5">
       <div className="rounded-lg border border-border bg-card p-5">
         <div className="flex flex-wrap items-center gap-5">
           <div className="min-w-50 flex-1">
@@ -324,11 +359,18 @@ function TodayContent({ user }: { user: User }) {
               onComplete={() => handleComplete(q.id)}
               onFlagReview={() => handleFlagReview(q.id)}
               readAloud={readAloud}
+              offline={!online}
             />
           ))}
         </div>
         {queue.remaining <= 0 ? (
-          <button type="button" onClick={handleRequestMore} className="mt-3.5 inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-semibold text-foreground">
+          <button
+            type="button"
+            onClick={handleRequestMore}
+            disabled={!online}
+            title={!online ? "You're offline — this needs a connection." : undefined}
+            className="mt-3.5 inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-semibold text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+          >
             <PlusIcon width={16} height={16} /> Request 5 more questions
           </button>
         ) : null}
@@ -411,7 +453,8 @@ function TodayContent({ user }: { user: User }) {
           </Link>
         </div>
       </div>
-    </div>
+      </div>
+    </PullToRefresh>
   );
 }
 
