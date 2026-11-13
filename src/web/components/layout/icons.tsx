@@ -85,12 +85,17 @@ export function SettingsIcon(props: SVGProps<SVGSVGElement>) {
 // screen. Fixed cyan/amber regardless of the active accent color, same as
 // the generated favicon/PWA icons (scripts/… was run once to produce
 // those as static PNGs — this is the live, scalable version for in-app
-// use). Matches the "Circuit E" concept from the ExamStreak rename.
+// use). Matches the "Circuit E" concept from the ExamStreak rename. Colors
+// come from --logo-stroke/--logo-dot (globals.css) rather than literal
+// hex: the original neon cyan/amber reads fine on every dark surface but
+// washed out against Light/Ivory's light background, so those two tokens
+// resolve to a darker, legible pair there while staying the original
+// neon on every dark theme.
 export function LogoMark({ size = 24, ...props }: { size?: number } & SVGProps<SVGSVGElement>) {
   return (
     <svg width={size} height={size} viewBox="0 0 64 64" fill="none" aria-hidden="true" {...props}>
-      <path d="M48 10 H16 V30 H40 V34 H16 V54 H48" stroke="#28e0ff" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx="48" cy="10" r="4.2" fill="#ffb02e" />
+      <path d="M48 10 H16 V30 H40 V34 H16 V54 H48" stroke="var(--logo-stroke)" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="48" cy="10" r="4.2" fill="var(--logo-dot)" />
     </svg>
   );
 }

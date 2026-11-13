@@ -46,6 +46,17 @@
   --main-max: 64rem;
 
   --font-sans: "Inter Variable", system-ui, sans-serif;
+
+  /* LogoMark's brand mark (icons.tsx) — a deliberately fixed two-tone
+     mark, not tied to the accent-color system below, so picking an
+     accent never recolors the brand itself. The vibrant neon pair this
+     was designed with reads fine on every dark surface but washes out
+     against a light one, so the two surface families get their own
+     pair: a darker, legible teal/amber here for Light and Ivory, and the
+     original neon cyan/amber restored in .dark for Dark/Futuristic/
+     Midnight/Noir Gold, which all already had good contrast with it. */
+  --logo-stroke: #0b4f5c;
+  --logo-dot: #7a3a0a;
 }
 
 :root[data-sidebar="collapsed"] {
@@ -74,6 +85,9 @@
 
   --sidebar-base: oklch(0.2 0.018 45);
   --sidebar-foreground: oklch(0.95 0.015 75);
+
+  --logo-stroke: #28e0ff;
+  --logo-dot: #ffb02e;
 }
 
 /* "Futuristic" theme (Settings -> Appearance -> Theme) — a 4th, always-dark
