@@ -45,7 +45,7 @@ export function AppShell() {
             <Sidebar user={user} onLogout={() => void handleLogout()} />
             <div className="flex min-w-0 flex-1 flex-col">
               <MobileHeader user={user} onLogout={() => void handleLogout()} />
-              <main className="mx-auto w-full max-w-(--main-max) flex-1 px-4 py-6 sm:px-6">
+              <main className="mx-auto w-full max-w-(--main-max) flex-1 px-4 py-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] sm:px-6">
                 <Outlet context={user} />
               </main>
             </div>

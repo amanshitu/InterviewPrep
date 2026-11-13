@@ -12,7 +12,7 @@ export function MobileHeader({ user, onLogout }: { user: User; onLogout: () => v
 
   return (
     <>
-      <header className="sm:hidden sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-background/90 px-4 backdrop-blur">
+      <header className="sm:hidden sticky top-0 z-30 flex min-h-14 items-center justify-between border-b border-border bg-background/90 px-4 backdrop-blur pt-[env(safe-area-inset-top,0px)]">
         <Link to="/" className="flex items-center gap-2">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="text-primary">
             <path d="M12 2 3 6.5v6C3 17.2 6.9 21.3 12 22.5 17.1 21.3 21 17.2 21 12.5v-6L12 2Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
@@ -35,7 +35,7 @@ export function MobileHeader({ user, onLogout }: { user: User; onLogout: () => v
       {open ? (
         <div className="sm:hidden fixed inset-0 z-40 flex justify-end bg-black/40" onClick={() => setOpen(false)}>
           <div
-            className="flex h-full w-72 flex-col bg-sidebar text-sidebar-foreground p-3"
+            className="flex h-full w-72 flex-col bg-sidebar text-sidebar-foreground p-3 pt-[calc(0.75rem+env(safe-area-inset-top,0px))] pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-3 flex items-center justify-between px-1">

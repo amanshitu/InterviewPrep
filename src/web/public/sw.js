@@ -3,19 +3,19 @@
 // fundamentally data-driven (daily queue, review, test), so there's no
 // meaningful offline experience to build beyond "the shell loads."
 //
-// Rewritten for the true-MPA React build: each page is its own real
-// document with its own hashed JS/CSS bundle (filenames change on every
-// build), so unlike the old single-page app's SHELL_ASSETS list (which
-// named stable, unhashed files like /app.js and /styles.css), this one
-// only pre-caches the few genuinely stable, unhashed paths. The runtime
-// fetch handler below still opportunistically caches whatever hashed
-// assets a visitor's browser actually requests as they navigate, so the
-// "loads once visited" behavior is unchanged — it just isn't blindly
-// pre-cached before first visit, since the exact hashed filenames aren't
-// knowable here without a build-time manifest.
+// Today / Review / Test / Self Test / Mock Interview / Stats / Settings /
+// Admin are all one client-routed SPA served from index.html (React
+// Router — see entries/app.tsx); only Login and About are still separate
+// documents. Vite hashes the JS/CSS bundle filenames on every build, so
+// (same as before) only the few genuinely stable, unhashed paths are
+// pre-cached here — the runtime fetch handler below opportunistically
+// caches whatever hashed assets a visitor's browser actually requests
+// (including a deep link straight to a client-routed path like /stats,
+// which the Workers asset layer serves via the SPA fallback), so repeat
+// loads of anything already visited still work offline.
 //
 // Bump CACHE_NAME whenever static assets change in a way that matters.
-const CACHE_NAME = "interview-prep-shell-v6";
+const CACHE_NAME = "interview-prep-shell-v7";
 const SHELL_ASSETS = ["/", "/manifest.json", "/theme-init.js", "/favicon.ico"];
 
 self.addEventListener("install", (event) => {

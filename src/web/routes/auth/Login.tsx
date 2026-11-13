@@ -35,7 +35,7 @@ export function Login() {
   const [loginSuccessMessage, setLoginSuccessMessage] = useState<string | null>(null);
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-background px-4 py-10">
+    <div className="flex min-h-dvh items-center justify-center bg-background px-4 py-[calc(2.5rem+env(safe-area-inset-top,0px))]">
       <div className="w-full max-w-md rounded-lg border border-border bg-card p-6 text-card-foreground shadow-sm sm:p-8">
         <div className="mb-1 flex items-center gap-2">
           <svg width="30" height="30" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="text-primary">
