@@ -15,13 +15,22 @@
 // loads of anything already visited still work offline.
 //
 // Bump CACHE_NAME whenever static assets change in a way that matters.
-const CACHE_NAME = "interview-prep-shell-v7";
+const CACHE_NAME = "interview-prep-shell-v8";
 const SHELL_ASSETS = ["/", "/manifest.json", "/theme-init.js", "/favicon.ico"];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_ASSETS)).then(() => self.skipWaiting()),
-  );
+  // No self.skipWaiting() here on purpose: a worker updating an
+  // already-controlled page parks in "waiting" until the app's
+  // "Reload to update" prompt (src/web/lib/pwa-update.ts) posts it a
+  // SKIP_WAITING message, so a deploy never swaps code under a session
+  // mid-use. A brand-new install (nothing controlling the page yet) still
+  // activates immediately regardless, since there's no previous worker to
+  // wait on.
+  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_ASSETS)));
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {

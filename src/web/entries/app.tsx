@@ -3,6 +3,8 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes } from "react-router";
 import "../styles/globals.css";
 import { AppShell } from "../components/layout/AppShell";
+import { listenForInstallEvents } from "../lib/pwa-install";
+import { registerPwaUpdateWatcher } from "../lib/pwa-update";
 import { Today } from "../routes/app/Today";
 import { Review } from "../routes/app/Review";
 import { DailyTest } from "../routes/app/DailyTest";
@@ -14,6 +16,13 @@ import { AdminHome } from "../routes/admin/AdminHome";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("#root not found");
+
+// Module scope, before React renders, so an early beforeinstallprompt (or
+// an already-waiting service worker from a deploy that landed while this
+// tab was closed) is never missed — same reasoning as MealSathi's
+// `listenForInstallEvents()` call in its own entry point.
+listenForInstallEvents();
+registerPwaUpdateWatcher();
 
 // Single-page app for the whole authenticated area: one document, one
 // AppShell (sidebar/header mounted once as a layout route — see
