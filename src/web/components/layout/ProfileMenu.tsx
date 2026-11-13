@@ -1,4 +1,4 @@
-import { useEffect, useState, type MouseEvent } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { Link } from "react-router";
 import { listCategories, switchCategory, unenrollCategory } from "../../api/categories";
 import type { Category, User } from "../../api/types";
@@ -22,6 +22,7 @@ export function ProfileMenu({ user, onLogout }: { user: User; onLogout: () => vo
   const [open, setOpen] = useState(false);
   const [categories, setCategories] = useState<Category[] | null>(null);
   const [switchingId, setSwitchingId] = useState<string | null>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (open && !categories) {
@@ -30,6 +31,30 @@ export function ProfileMenu({ user, onLogout }: { user: User; onLogout: () => vo
         .catch(() => setCategories([]));
     }
   }, [open, categories]);
+
+  // The popup sits directly above the trigger (no gap — see the dropdown's
+  // className below) so a straight-up mouse path never leaves the hoverable
+  // area, but a diagonal path still can for an instant. A short grace period
+  // before actually closing (cleared immediately on re-entering either the
+  // trigger or the popup, since they're the same onMouseEnter) absorbs that
+  // without needing the popup to stay open on a stray hover.
+  function handleMouseEnter() {
+    if (closeTimer.current) {
+      clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+    setOpen(true);
+  }
+
+  function handleMouseLeave() {
+    closeTimer.current = setTimeout(() => setOpen(false), 200);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (closeTimer.current) clearTimeout(closeTimer.current);
+    };
+  }, []);
 
   async function handleSwitch(categoryId: string) {
     if (categoryId === user.activeCategoryId) return;
@@ -65,7 +90,7 @@ export function ProfileMenu({ user, onLogout }: { user: User; onLogout: () => vo
   const enrolled = (categories ?? []).filter((c) => c.enrolled);
 
   return (
-    <div className="relative" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+    <div className="relative" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
       <div className="flex items-center gap-2 rounded-md px-2 py-2 hover:bg-sidebar-accent">
         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
           {user.name.slice(0, 1).toUpperCase()}
@@ -84,7 +109,7 @@ export function ProfileMenu({ user, onLogout }: { user: User; onLogout: () => vo
       </div>
 
       {open ? (
-        <div className="absolute bottom-full left-0 z-50 mb-1 w-64 rounded-lg border border-sidebar-border bg-sidebar p-2 text-sidebar-foreground shadow-lg">
+        <div className="absolute bottom-full left-0 z-50 w-64 rounded-lg border border-sidebar-border bg-sidebar p-2 text-sidebar-foreground shadow-lg">
           <div className="truncate px-2 py-1.5 text-xs text-muted-foreground">{user.email}</div>
           <div className="my-1 border-t border-sidebar-border" />
           <div className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Category</div>
