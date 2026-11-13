@@ -1,13 +1,44 @@
 import { useEffect, useRef, useState } from "react";
-import type { User } from "../../api/types";
+import type { Category, User } from "../../api/types";
+import { listCategories } from "../../api/categories";
 import { createQuestionSet, getMyQuestionSets, submitQuestionSet, type MyQuestionSet, type QuestionSetSection } from "../../api/queue";
 import { csvRowsToSections, parseCsv } from "../../lib/csv";
 import { useToast } from "../../hooks/use-toast";
 import { CloseIcon, DownloadIcon, PlusIcon, SendIcon, TrashIcon, UploadIcon } from "./icons";
 import { ErrorText, PrimaryButton, SecondaryButton, SectionCard } from "./SectionCard";
 
-function activeCategoryName(user: User): string {
-  return user.enrolledCategories.find((c) => c.id === user.activeCategoryId)?.name || "your current category";
+// Shared by both upload forms below — lets a set be tagged to ANY active
+// category (new or already populated), not just whichever one the user
+// currently has active.
+function CategoryPicker({ categories, value, onChange }: { categories: Category[] | null; value: string; onChange: (id: string) => void }) {
+  return (
+    <label className="mb-3 flex flex-col gap-1.5 text-sm font-medium text-muted-foreground">
+      <span>Add to category</span>
+      <select
+        className="rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={!categories}
+      >
+        {!categories ? <option value="">Loading…</option> : null}
+        {(categories ?? []).map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.name}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function useAllCategories(): Category[] | null {
+  const [categories, setCategories] = useState<Category[] | null>(null);
+  useEffect(() => {
+    listCategories()
+      .then((data) => setCategories(data.categories))
+      .catch(() => setCategories([]));
+  }, []);
+  return categories;
 }
 
 function downloadCsvTemplate() {
@@ -114,12 +145,18 @@ interface DraftSection {
   questions: DraftQuestion[];
 }
 
-function ManualUploadForm({ onDone, onCancel }: { onDone: () => void; onCancel: () => void }) {
+function ManualUploadForm({ user, onDone, onCancel }: { user: User; onDone: () => void; onCancel: () => void }) {
   const toast = useToast();
+  const categories = useAllCategories();
+  const [categoryId, setCategoryId] = useState(user.activeCategoryId || "");
   const [title, setTitle] = useState("");
   const [track, setTrack] = useState("");
   const [sections, setSections] = useState<DraftSection[]>([{ label: "", questions: [{ q: "", a: "" }] }]);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!categoryId && categories && categories.length > 0) setCategoryId(categories[0].id);
+  }, [categories, categoryId]);
 
   function updateSection(i: number, patch: Partial<DraftSection>) {
     setSections((prev) => prev.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
@@ -135,9 +172,13 @@ function ManualUploadForm({ onDone, onCancel }: { onDone: () => void; onCancel: 
       label: s.label.trim(),
       questions: s.questions.map((q) => ({ q: q.q.trim(), a: q.a.trim() })).filter((q) => q.q || q.a),
     }));
+    if (!categoryId) {
+      toast.warning("Pick a category first.");
+      return;
+    }
     setSubmitting(true);
     try {
-      await createQuestionSet({ title: title.trim(), track: track.trim() || null, sections: payloadSections });
+      await createQuestionSet({ title: title.trim(), track: track.trim() || null, sections: payloadSections, categoryId });
       onDone();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't upload that question set.");
@@ -148,6 +189,7 @@ function ManualUploadForm({ onDone, onCancel }: { onDone: () => void; onCancel: 
 
   return (
     <div className="mt-4 rounded-md border border-border p-4">
+      <CategoryPicker categories={categories} value={categoryId} onChange={setCategoryId} />
       <label className="mb-3 flex flex-col gap-1.5 text-sm font-medium text-muted-foreground">
         <span>Set title</span>
         <input className="rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Cloud Architecture Deep Dive" />
@@ -209,17 +251,41 @@ function ManualUploadForm({ onDone, onCancel }: { onDone: () => void; onCancel: 
   );
 }
 
-function CsvImportForm({ fileName, sections, skipped, onDone, onCancel }: { fileName: string; sections: QuestionSetSection[]; skipped: number; onDone: () => void; onCancel: () => void }) {
+function CsvImportForm({
+  user,
+  fileName,
+  sections,
+  skipped,
+  onDone,
+  onCancel,
+}: {
+  user: User;
+  fileName: string;
+  sections: QuestionSetSection[];
+  skipped: number;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
   const toast = useToast();
+  const categories = useAllCategories();
+  const [categoryId, setCategoryId] = useState(user.activeCategoryId || "");
   const [title, setTitle] = useState(fileName.replace(/\.csv$/i, ""));
   const [track, setTrack] = useState("");
   const [importing, setImporting] = useState(false);
   const questionCount = sections.reduce((n, s) => n + s.questions.length, 0);
 
+  useEffect(() => {
+    if (!categoryId && categories && categories.length > 0) setCategoryId(categories[0].id);
+  }, [categories, categoryId]);
+
   async function handleImport() {
+    if (!categoryId) {
+      toast.warning("Pick a category first.");
+      return;
+    }
     setImporting(true);
     try {
-      await createQuestionSet({ title: title.trim(), track: track.trim() || null, sections });
+      await createQuestionSet({ title: title.trim(), track: track.trim() || null, sections, categoryId });
       onDone();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't import that CSV.");
@@ -234,6 +300,7 @@ function CsvImportForm({ fileName, sections, skipped, onDone, onCancel }: { file
         Found {sections.length} section{sections.length === 1 ? "" : "s"}, {questionCount} question{questionCount === 1 ? "" : "s"}
         {skipped ? ` (${skipped} incomplete row${skipped === 1 ? "" : "s"} skipped)` : ""}.
       </p>
+      <CategoryPicker categories={categories} value={categoryId} onChange={setCategoryId} />
       <label className="mb-3 flex flex-col gap-1.5 text-sm font-medium text-muted-foreground">
         <span>Set title</span>
         <input className="rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground" value={title} onChange={(e) => setTitle(e.target.value)} />
@@ -283,7 +350,7 @@ export function QuestionSetsSection({ user }: { user: User }) {
   return (
     <SectionCard
       title="My question sets"
-      subtitle={`Upload your own set of questions, grouped into sections. New sets start private to you and are added to your current category (${activeCategoryName(user)}) — switch categories first if you want a set to go somewhere else. Sharing them with other users needs admin approval.`}
+      subtitle="Upload your own set of questions, grouped into sections, and tag them to any category — new or already populated. New sets start private to you; admins publish immediately, everyone else needs admin approval to share theirs."
     >
       <MySetsList refreshKey={refreshKey} onChanged={() => setRefreshKey((k) => k + 1)} />
 
@@ -312,9 +379,16 @@ export function QuestionSetsSection({ user }: { user: User }) {
         </div>
       ) : null}
 
-      {mode === "manual" ? <ManualUploadForm onDone={() => handleDone("Question set uploaded.")} onCancel={() => setMode("none")} /> : null}
+      {mode === "manual" ? <ManualUploadForm user={user} onDone={() => handleDone("Question set uploaded.")} onCancel={() => setMode("none")} /> : null}
       {mode === "csv" && csvData ? (
-        <CsvImportForm fileName={csvData.fileName} sections={csvData.sections} skipped={csvData.skipped} onDone={() => handleDone("Question set imported.")} onCancel={() => { setMode("none"); setCsvData(null); }} />
+        <CsvImportForm
+          user={user}
+          fileName={csvData.fileName}
+          sections={csvData.sections}
+          skipped={csvData.skipped}
+          onDone={() => handleDone("Question set imported.")}
+          onCancel={() => { setMode("none"); setCsvData(null); }}
+        />
       ) : null}
     </SectionCard>
   );

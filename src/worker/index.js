@@ -56,6 +56,7 @@ import {
   handleSubmitSet,
   handleSubscribeSet,
   handleListSuggestions,
+  handleGenerateCategoryPrompt,
 } from "./routes/questionsets.js";
 import {
   handleGetSelfTestQuota,
@@ -198,6 +199,9 @@ export default {
         }
         if (url.pathname === "/api/question-sets/suggestions" && request.method === "GET") {
           return applySecurityHeaders(await handleListSuggestions(request, env, user));
+        }
+        if (url.pathname === "/api/question-sets/generate-prompt" && request.method === "POST") {
+          return applySecurityHeaders(await handleGenerateCategoryPrompt(request, env, user));
         }
         if (url.pathname === "/api/self-test/quota" && request.method === "GET") {
           return applySecurityHeaders(await handleGetSelfTestQuota(request, env, user));

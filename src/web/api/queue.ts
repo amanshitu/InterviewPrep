@@ -48,12 +48,24 @@ export interface CreateQuestionSetRequest {
   title: string;
   track?: string | null;
   sections: QuestionSetSection[];
+  /** Which category to tag the new set into — any active category, not just the user's current one. Falls back server-side to the user's active category if omitted. */
+  categoryId?: string;
 }
 
 export function createQuestionSet(
   body: CreateQuestionSetRequest,
 ): Promise<{ set: { id: string; title: string; track: string | null; visibility: string } }> {
   return apiPost("/api/question-sets", body);
+}
+
+export interface GenerateCategoryPromptRequest {
+  categoryId: string;
+  topics?: string;
+  count?: number;
+}
+
+export function generateCategoryPrompt(body: GenerateCategoryPromptRequest): Promise<{ prompt: string }> {
+  return apiPost<{ prompt: string }>("/api/question-sets/generate-prompt", body);
 }
 
 export interface MyQuestionSet {
