@@ -12,7 +12,7 @@ import {
 } from "../../api/queue";
 import { ApiError } from "../../api/client";
 import type { Question, User } from "../../api/types";
-import { CheckIcon, EyeIcon, PlusIcon, RefreshIcon, ShuffleIcon, SparkleIcon, SpeakerIcon, StopIcon } from "../../components/layout/icons";
+import { CheckIcon, EyeIcon, EyeOffIcon, PlusIcon, RefreshIcon, ShuffleIcon, SparkleIcon, SpeakerIcon, StopIcon } from "../../components/layout/icons";
 import { Skeleton, SkeletonCard } from "../../components/layout/Skeleton";
 import { Markdown, renderInline } from "../../components/layout/Markdown";
 
@@ -57,7 +57,7 @@ function QuestionCard({
   q,
   idx,
   revealed,
-  onReveal,
+  onToggleReveal,
   onComplete,
   onFlagReview,
   readAloud,
@@ -65,7 +65,7 @@ function QuestionCard({
   q: Question;
   idx: number;
   revealed: boolean;
-  onReveal: () => void;
+  onToggleReveal: () => void;
   onComplete: () => void;
   onFlagReview: () => void;
   readAloud: ReturnType<typeof useReadAloud>;
@@ -98,10 +98,13 @@ function QuestionCard({
                 {speaking ? <StopIcon width={16} height={16} /> : <SpeakerIcon width={16} height={16} />} {speaking ? "Stop reading" : "Read aloud"}
               </button>
             ) : null}
+            <button type="button" onClick={onToggleReveal} className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-semibold text-foreground">
+              <EyeOffIcon width={16} height={16} /> Hide answer
+            </button>
           </div>
         </>
       ) : (
-        <button type="button" onClick={onReveal} className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-semibold text-foreground">
+        <button type="button" onClick={onToggleReveal} className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-semibold text-foreground">
           <EyeIcon width={16} height={16} /> Show model answer
         </button>
       )}
@@ -126,7 +129,15 @@ function TodayContent({ user }: { user: User }) {
 
   useEffect(() => {
     getTodayQueue()
-      .then(setQueue)
+      .then((data) => {
+        setQueue(data);
+        // A question already marked "shown" server-side (revealed in an
+        // earlier session) starts revealed here too, but — unlike before —
+        // that's just the initial value: the Hide/Show toggle below can
+        // still flip it either way afterward, purely as a local display
+        // preference (it was never a permanent server-side lock).
+        setRevealed(new Set(data.questions.filter((q) => q.status === "shown").map((q) => q.id)));
+      })
       .catch((err: unknown) => {
         setQueue({ date: "", target: 0, completed: 0, remaining: 0, questions: [], completedQuestions: [] });
         toast.error(err instanceof ApiError ? err.message : "Failed to load today's queue.");
@@ -178,6 +189,23 @@ function TodayContent({ user }: { user: User }) {
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Failed to mark complete.");
     }
+  }
+
+  function toggleReveal(qid: string) {
+    setRevealed((prev) => {
+      const next = new Set(prev);
+      if (next.has(qid)) next.delete(qid);
+      else next.add(qid);
+      return next;
+    });
+  }
+
+  function showAll() {
+    setRevealed(new Set(queue!.questions.map((q) => q.id)));
+  }
+
+  function hideAll() {
+    setRevealed(new Set());
   }
 
   async function handleFlagReview(qid: string) {
@@ -254,7 +282,19 @@ function TodayContent({ user }: { user: User }) {
       </div>
 
       <div className="rounded-lg border border-border bg-card p-5">
-        <div className="text-base font-bold text-foreground">Today's questions</div>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="text-base font-bold text-foreground">Today's questions</div>
+          {queue.questions.length > 0 ? (
+            <div className="flex gap-2">
+              <button type="button" onClick={showAll} className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-semibold text-foreground hover:bg-muted">
+                <EyeIcon width={14} height={14} /> Show all
+              </button>
+              <button type="button" onClick={hideAll} className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-semibold text-foreground hover:bg-muted">
+                <EyeOffIcon width={14} height={14} /> Hide all
+              </button>
+            </div>
+          ) : null}
+        </div>
         <p className="mt-1 text-sm text-muted-foreground">
           Unfinished questions from a prior day show up first, up to your daily quota's worth of backlog. Reveal an
           answer, then mark it "Got it" or "Review again soon" — reviewed ones stay right here until you're ready.
@@ -279,8 +319,8 @@ function TodayContent({ user }: { user: User }) {
               key={q.id}
               q={q}
               idx={idx}
-              revealed={revealed.has(q.id) || q.status === "shown"}
-              onReveal={() => setRevealed((prev) => new Set(prev).add(q.id))}
+              revealed={revealed.has(q.id)}
+              onToggleReveal={() => toggleReveal(q.id)}
               onComplete={() => handleComplete(q.id)}
               onFlagReview={() => handleFlagReview(q.id)}
               readAloud={readAloud}

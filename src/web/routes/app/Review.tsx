@@ -4,7 +4,7 @@ import { useToast } from "../../hooks/use-toast";
 import { getReview, submitReviewResult } from "../../api/queue";
 import { ApiError } from "../../api/client";
 import type { Question } from "../../api/types";
-import { BackIcon, CheckIcon, EyeIcon, RefreshIcon, ShuffleIcon } from "../../components/layout/icons";
+import { BackIcon, CheckIcon, EyeIcon, EyeOffIcon, RefreshIcon, ShuffleIcon } from "../../components/layout/icons";
 import { Skeleton, SkeletonCard } from "../../components/layout/Skeleton";
 import { Markdown, renderInline } from "../../components/layout/Markdown";
 
@@ -51,13 +51,21 @@ function ReviewContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlCount]);
 
-  function reveal(idx: number) {
+  function toggleReveal(idx: number) {
     setBatch((prev) => {
       if (!prev) return prev;
       const next = [...prev];
-      next[idx] = { ...next[idx], revealed: true };
+      next[idx] = { ...next[idx], revealed: !next[idx].revealed };
       return next;
     });
+  }
+
+  function showAll() {
+    setBatch((prev) => (prev ? prev.map((item) => ({ ...item, revealed: true })) : prev));
+  }
+
+  function hideAll() {
+    setBatch((prev) => (prev ? prev.map((item) => ({ ...item, revealed: false })) : prev));
   }
 
   async function grade(idx: number, result: "got_it" | "again") {
@@ -94,6 +102,16 @@ function ReviewContent() {
           <button type="button" onClick={reshuffle} className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-semibold text-foreground">
             <ShuffleIcon width={16} height={16} /> New batch
           </button>
+          {batch && batch.length > 0 ? (
+            <>
+              <button type="button" onClick={showAll} className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-semibold text-foreground">
+                <EyeIcon width={16} height={16} /> Show all
+              </button>
+              <button type="button" onClick={hideAll} className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-semibold text-foreground">
+                <EyeOffIcon width={16} height={16} /> Hide all
+              </button>
+            </>
+          ) : null}
           <Link to="/" className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold text-muted-foreground">
             <BackIcon width={14} height={14} /> Back to Today
           </Link>
@@ -124,21 +142,26 @@ function ReviewContent() {
               {item.revealed ? (
                 <>
                   <Markdown text={item.a} className="answer-text mt-3 rounded-md bg-muted p-3 text-sm text-foreground" />
-                  {item.graded ? (
-                    <p className="mt-2 text-sm text-muted-foreground">Graded: {item.graded === "got_it" ? "Got it" : "Review again soon"}</p>
-                  ) : (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <button type="button" onClick={() => grade(idx, "got_it")} className="inline-flex items-center gap-1.5 rounded-md bg-success px-3 py-1.5 text-sm font-semibold text-success-foreground">
-                        <CheckIcon width={16} height={16} /> Got it
-                      </button>
-                      <button type="button" onClick={() => grade(idx, "again")} className="inline-flex items-center gap-1.5 rounded-md bg-warning px-3 py-1.5 text-sm font-semibold text-foreground">
-                        <RefreshIcon width={16} height={16} /> Review again soon
-                      </button>
-                    </div>
-                  )}
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {item.graded ? (
+                      <p className="text-sm text-muted-foreground">Graded: {item.graded === "got_it" ? "Got it" : "Review again soon"}</p>
+                    ) : (
+                      <>
+                        <button type="button" onClick={() => grade(idx, "got_it")} className="inline-flex items-center gap-1.5 rounded-md bg-success px-3 py-1.5 text-sm font-semibold text-success-foreground">
+                          <CheckIcon width={16} height={16} /> Got it
+                        </button>
+                        <button type="button" onClick={() => grade(idx, "again")} className="inline-flex items-center gap-1.5 rounded-md bg-warning px-3 py-1.5 text-sm font-semibold text-foreground">
+                          <RefreshIcon width={16} height={16} /> Review again soon
+                        </button>
+                      </>
+                    )}
+                    <button type="button" onClick={() => toggleReveal(idx)} className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-semibold text-foreground">
+                      <EyeOffIcon width={16} height={16} /> Hide answer
+                    </button>
+                  </div>
                 </>
               ) : (
-                <button type="button" onClick={() => reveal(idx)} className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-semibold text-foreground">
+                <button type="button" onClick={() => toggleReveal(idx)} className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-semibold text-foreground">
                   <EyeIcon width={16} height={16} /> Show model answer
                 </button>
               )}
