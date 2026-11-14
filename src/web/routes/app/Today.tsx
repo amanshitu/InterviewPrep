@@ -175,7 +175,7 @@ function TodayContent({ user }: { user: User }) {
             return;
           }
         }
-        setQueue({ date: "", target: 0, completed: 0, remaining: 0, questions: [], completedQuestions: [] });
+        setQueue({ date: "", target: 0, completed: 0, remaining: 0, questions: [], completedQuestions: [], dueForReview: 0 });
         toast.error(err instanceof ApiError ? err.message : "Failed to load today's queue.");
       });
   }
@@ -426,7 +426,15 @@ function TodayContent({ user }: { user: User }) {
         <div className="rounded-lg border border-border bg-card p-5">
           <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Spaced repetition</div>
           <div className="mt-1 text-base font-bold text-foreground">Daily review</div>
-          <p className="mt-1.5 text-sm text-muted-foreground">Random questions pulled from everything you've completed so far.</p>
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            {queue.dueForReview > 0 ? (
+              <>
+                <strong className="text-foreground">{queue.dueForReview}</strong> question{queue.dueForReview === 1 ? "" : "s"} due for review today — prioritized first, then filled in from everything else you've completed.
+              </>
+            ) : (
+              "Nothing's due yet — pulls from everything you've completed so far."
+            )}
+          </p>
           <div className="mt-3.5 flex items-center gap-3 text-sm text-muted-foreground">
             <span>Count: <strong className="text-foreground">{reviewCount}</strong></span>
             <input type="range" min={10} max={20} step={1} value={reviewCount} onChange={(e) => setReviewCount(Number(e.target.value))} className="flex-1" />

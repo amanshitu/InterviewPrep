@@ -8,6 +8,7 @@ export interface TodayQueueResponse {
   remaining: number;
   questions: Question[];
   completedQuestions: Question[];
+  dueForReview: number;
 }
 
 export function getTodayQueue(): Promise<TodayQueueResponse> {
