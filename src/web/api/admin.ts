@@ -136,3 +136,18 @@ export function searchQuestions(query: string): Promise<{ questions: AdminQuesti
 export function updateQuestion(id: string, body: { q: string; a: string; topic_label?: string }): Promise<{ ok: true }> {
   return apiPatch(`/api/admin/questions/${encodeURIComponent(id)}`, body);
 }
+
+export interface AuditLogEntry {
+  id: string;
+  action: string;
+  target_type: string | null;
+  target_id: string | null;
+  detail: string | null;
+  created_at: string;
+  admin_name: string;
+  admin_email: string;
+}
+
+export function getAuditLog(): Promise<{ entries: AuditLogEntry[] }> {
+  return apiFetch("/api/admin/audit-log");
+}

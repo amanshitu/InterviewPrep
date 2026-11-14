@@ -4,7 +4,7 @@ import { getApprovalHistory, getOverview, getPendingSets, type AdminOverview, ty
 import { listCategories } from "../../api/categories";
 import type { Category } from "../../api/types";
 import { useShellUser } from "../../components/layout/AppShell";
-import { ClockIcon, FlagIcon, FolderIcon, MessageIcon, RefreshIcon, UploadIcon, UsersIcon } from "../../components/layout/icons";
+import { AuditIcon, ClockIcon, FlagIcon, FolderIcon, MessageIcon, RefreshIcon, UploadIcon, UsersIcon } from "../../components/layout/icons";
 import { KpiCard } from "../../components/admin/KpiCard";
 import { Section } from "../../components/admin/Section";
 import { CategoriesPanel } from "../../components/admin/CategoriesPanel";
@@ -13,6 +13,7 @@ import { HistoryPanel } from "../../components/admin/HistoryPanel";
 import { UsersPanel } from "../../components/admin/UsersPanel";
 import { ReportsPanel } from "../../components/admin/ReportsPanel";
 import { FeedbackPanel } from "../../components/admin/FeedbackPanel";
+import { AuditLogPanel } from "../../components/admin/AuditLogPanel";
 import { QuestionSetsSection } from "../../components/settings/QuestionSetsSection";
 import { CategoryAiPromptSection } from "../../components/settings/CategoryAiPromptSection";
 import { ResumePromptSection } from "../../components/settings/ResumePromptSection";
@@ -21,7 +22,7 @@ import { useToast } from "../../hooks/use-toast";
 import type { User } from "../../api/types";
 import { Skeleton, SkeletonCard } from "../../components/layout/Skeleton";
 
-type Tab = "categories" | "pending" | "reports" | "feedback" | "questionsets" | "history" | "users";
+type Tab = "categories" | "pending" | "reports" | "feedback" | "questionsets" | "history" | "users" | "audit";
 
 const DEFAULT_TAB: Tab = "pending";
 
@@ -33,6 +34,7 @@ const TABS: { key: Tab; label: string; icon: ComponentType<SVGProps<SVGSVGElemen
   { key: "categories", label: "Categories", icon: FolderIcon },
   { key: "history", label: "History", icon: RefreshIcon },
   { key: "users", label: "Users", icon: UsersIcon },
+  { key: "audit", label: "Audit Log", icon: AuditIcon },
 ];
 
 const TAB_KEYS = new Set<string>(TABS.map((t) => t.key));
@@ -189,6 +191,11 @@ function AdminDashboard({ user }: { user: User }) {
           {tab === "users" ? (
             <Section title="User directory">
               <UsersPanel />
+            </Section>
+          ) : null}
+          {tab === "audit" ? (
+            <Section title="Admin audit log" subtitle="Who did what admin action, and when.">
+              <AuditLogPanel />
             </Section>
           ) : null}
         </>

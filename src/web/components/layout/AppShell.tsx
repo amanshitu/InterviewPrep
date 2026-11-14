@@ -8,6 +8,7 @@ import { clearAuthedFlag } from "../../lib/auth-flag";
 import { clearAllSnapshots } from "../../lib/offline-store";
 import type { RefreshUser } from "./AuthGate";
 import { AuthGate } from "./AuthGate";
+import { EmailVerificationBanner } from "./EmailVerificationBanner";
 import { MobileHeader } from "./MobileHeader";
 import { OfflineBanner } from "./OfflineBanner";
 import { PwaPrompts } from "./PwaPrompts";
@@ -60,6 +61,7 @@ export function AppShell() {
           {(user, refreshUser) => (
             <div className="flex min-h-dvh flex-col bg-background text-foreground">
               <OfflineBanner />
+              <EmailVerificationBanner user={user} />
               <div className="flex min-h-0 flex-1">
                 <Sidebar user={user} refreshUser={refreshUser} onLogout={() => void handleLogout()} />
                 <div className="flex min-w-0 flex-1 flex-col">

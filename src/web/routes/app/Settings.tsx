@@ -6,6 +6,7 @@ import { AiUsageSection } from "../../components/settings/AiUsageSection";
 import { AppearanceSection } from "../../components/settings/AppearanceSection";
 import { CategorySection } from "../../components/settings/CategorySection";
 import { DataExportSection } from "../../components/settings/DataExportSection";
+import { DeleteAccountSection } from "../../components/settings/DeleteAccountSection";
 import { AccountIcon, BellIcon, ClipboardIcon, DownloadIcon, PaletteIcon, SparkleIcon } from "../../components/settings/icons";
 import { NotificationsSection } from "../../components/settings/NotificationsSection";
 import { PasswordSection, SessionsSection } from "../../components/settings/PasswordSection";
@@ -86,7 +87,12 @@ function SettingsContent({ user }: { user: User }) {
       case "notifications":
         return <NotificationsSection />;
       case "data":
-        return <DataExportSection />;
+        return (
+          <div className="flex flex-col gap-4">
+            <DataExportSection />
+            <DeleteAccountSection user={currentUser} onUserChange={setCurrentUser} />
+          </div>
+        );
       default:
         return null;
     }

@@ -477,3 +477,12 @@ export function HelpCircleIcon(props: SVGProps<SVGSVGElement>) {
     </Icon>
   );
 }
+
+export function AuditIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M7 3h10v18l-5-3-5 3V3Z" strokeLinejoin="round" />
+      <path d="M9.5 9.5l2 2 3-3" />
+    </Icon>
+  );
+}
