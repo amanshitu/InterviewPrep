@@ -13,9 +13,21 @@ export type RefreshUser = () => Promise<void>;
 // load and never again until a hard refresh. Login and About stay separate
 // real documents on purpose and never go through this. AuthGate's job is
 // purely: avoid a pointless network round trip for a visitor who almost
-// certainly isn't signed in (redirect to /login immediately), and show a
-// neutral spinner — never an incorrect screen — while actually-likely-
-// signed-in visitors get confirmed via GET /api/me.
+// certainly isn't signed in (redirect immediately), and show a neutral
+// spinner — never an incorrect screen — while actually-likely-signed-in
+// visitors get confirmed via GET /api/me.
+//
+// Root "/" is special-cased to /home (the marketing page, with its own
+// "Sign in" CTAs) rather than straight to /login — it's the app's default
+// URL (PWA start_url, bare domain), so a logged-out visitor landing there
+// should see what ExamStreak is, not an immediate sign-in form. Every
+// other deep link (e.g. a stale bookmark to /review) still bounces
+// straight to /login, preserving the fast re-auth path for a visitor who
+// already knows what they're signing back into.
+function signedOutDestination(): string {
+  return window.location.pathname === "/" ? "/home" : "/login";
+}
+
 export function AuthGate({ children }: { children: (user: User, refreshUser: RefreshUser) => ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [redirecting, setRedirecting] = useState(false);
@@ -23,7 +35,7 @@ export function AuthGate({ children }: { children: (user: User, refreshUser: Ref
   useEffect(() => {
     if (!likelyAuthed()) {
       setRedirecting(true);
-      window.location.href = "/login";
+      window.location.href = signedOutDestination();
       return;
     }
     let cancelled = false;
@@ -53,7 +65,7 @@ export function AuthGate({ children }: { children: (user: User, refreshUser: Ref
         }
         clearAuthedFlag();
         setRedirecting(true);
-        window.location.href = "/login";
+        window.location.href = signedOutDestination();
       });
     return () => {
       cancelled = true;
