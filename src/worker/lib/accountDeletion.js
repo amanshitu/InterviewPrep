@@ -11,9 +11,13 @@ export function purgeDateFor(requestedAtIso) {
 // is left in place — deleting it out from under every subscriber would be a
 // bigger surprise than keeping an orphaned owner_user_id, same tradeoff
 // MealSathi/CosmoTracker's own account-deletion flows make. Audit-trail
-// rows where this user is the *reporter* (question_reports.reported_by,
-// admin_audit_log) are left too, for the same reason an audit log shouldn't
-// retroactively lose entries.
+// rows where this user is only the *attribution*, not the owner — reports
+// they filed (question_reports.reported_by), admin actions they took
+// (admin_audit_log), items they resolved or a setting they last changed
+// (every resolved_by / app_settings.updated_by) — are left too, for the
+// same reason an audit log shouldn't retroactively lose entries; migration
+// 0060 dropped the `REFERENCES users(id)` FK on those specific columns so
+// this doesn't fail once the row they point at is gone.
 export async function purgeUserCompletely(env, userId) {
   const statements = [
     "DELETE FROM sessions WHERE user_id = ?",
@@ -22,12 +26,15 @@ export async function purgeUserCompletely(env, userId) {
     "DELETE FROM user_question_sets WHERE user_id = ?",
     "DELETE FROM daily_quota_ledger WHERE user_id = ?",
     "DELETE FROM daily_test_results WHERE user_id = ?",
+    "DELETE FROM self_test_results WHERE user_id = ?",
     "DELETE FROM ai_usage WHERE user_id = ?",
     "DELETE FROM ai_stats_insights WHERE user_id = ?",
     "DELETE FROM push_subscriptions WHERE user_id = ?",
     "DELETE FROM activity_log WHERE user_id = ?",
     "DELETE FROM email_verifications WHERE user_id = ?",
     "DELETE FROM password_resets WHERE user_id = ?",
+    "DELETE FROM feedback WHERE user_id = ?",
+    "DELETE FROM ai_reports WHERE user_id = ?",
     "DELETE FROM users WHERE id = ?",
   ].map((sql) => env.DB.prepare(sql).bind(userId));
   await env.DB.batch(statements);
@@ -35,7 +42,10 @@ export async function purgeUserCompletely(env, userId) {
 
 // Called from the existing hourly scheduled() handler (see
 // src/worker/routes/push.js's handleScheduled, which this runs alongside)
-// — no new Cron Trigger needed.
+// — no new Cron Trigger needed. Each user's purge is isolated: one failure
+// (e.g. a future FK this didn't anticipate) logs and moves on instead of
+// throwing and leaving every other pending deletion in this batch stuck
+// for another hour.
 export async function purgeExpiredAccountDeletions(env) {
   const cutoff = new Date(Date.now() - DELETION_GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000).toISOString();
   const { results } = await env.DB.prepare(
@@ -44,6 +54,10 @@ export async function purgeExpiredAccountDeletions(env) {
     .bind(cutoff)
     .all();
   for (const row of results || []) {
-    await purgeUserCompletely(env, row.id);
+    try {
+      await purgeUserCompletely(env, row.id);
+    } catch (err) {
+      console.error(`[account-deletion] failed to purge user=${row.id}: ${err && err.message ? err.message : err}`);
+    }
   }
 }
