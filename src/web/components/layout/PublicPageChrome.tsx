@@ -3,7 +3,7 @@
 // comment in vite.config.ts for why), but they all want the same footer
 // and the same "other pages" cross-links, so that's factored out here
 // instead of copy-pasted five times.
-import { useEffect, useState, type ComponentType, type SVGProps } from "react";
+import { useEffect, useRef, useState, type ComponentType, type SVGProps } from "react";
 import { useLocation } from "react-router";
 import {
   AboutIcon,
@@ -34,41 +34,58 @@ const HEADER_NAV_LINKS = [
 export function PublicHeader() {
   const [compact, setCompact] = useState(false);
   const { pathname } = useLocation();
+  const rootRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const onScroll = () => setCompact(window.scrollY > 24);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+  // Exposed as a CSS var (read by Guide's own sticky section-chip nav,
+  // which sits right below this) rather than a hardcoded pixel offset —
+  // this header's height changes (shrinks once scrolled), so a fixed
+  // number drifts out of sync and leaves a gap the page's own content
+  // shows through.
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const update = () => document.documentElement.style.setProperty("--public-header-h", `${el.offsetHeight}px`);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [compact]);
   return (
-    <div className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur">
+    <div ref={rootRef} className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur">
       <header
         className={`mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 transition-[padding] duration-200 sm:px-6 ${compact ? "py-2.5" : "py-5"}`}
       >
-        <a href="/home" className="flex min-w-0 items-center gap-2">
-          <LogoMark size={26} className="shrink-0" />
-          <span className="flex min-w-0 flex-col leading-tight">
-            <span className="truncate text-lg font-bold leading-tight">ExamStreak</span>
-            <span
-              className={`block overflow-hidden text-xs font-medium text-muted-foreground transition-all duration-200 ${compact ? "max-h-0 opacity-0" : "max-h-4 opacity-100"}`}
-            >
-              Practice. Track. Ace it.
+        <div className="flex min-w-0 items-center gap-1 sm:gap-4">
+          <a href="/home" className="flex min-w-0 shrink-0 items-center gap-2">
+            <LogoMark size={26} className="shrink-0" />
+            <span className="flex min-w-0 flex-col leading-tight">
+              <span className="truncate text-lg font-bold leading-tight">ExamStreak</span>
+              <span
+                className={`block overflow-hidden text-xs font-medium text-muted-foreground transition-all duration-200 ${compact ? "max-h-0 opacity-0" : "max-h-4 opacity-100"}`}
+              >
+                Practice. Track. Ace it.
+              </span>
             </span>
-          </span>
-        </a>
-        <nav aria-label="Primary" className="hidden shrink-0 items-center gap-1 sm:flex">
-          {HEADER_NAV_LINKS.map((link) => (
-            <a
-              key={link.href}
-              href={link.href}
-              className={`rounded-md px-3 py-2 text-sm font-medium transition ${
-                pathname === link.href ? "text-foreground" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {link.label}
-            </a>
-          ))}
-        </nav>
+          </a>
+          <nav aria-label="Primary" className="hidden shrink-0 items-center gap-1 sm:flex">
+            {HEADER_NAV_LINKS.map((link) => (
+              <a
+                key={link.href}
+                href={link.href}
+                className={`rounded-md px-3 py-2 text-sm font-medium transition ${
+                  pathname === link.href ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {link.label}
+              </a>
+            ))}
+          </nav>
+        </div>
         <a
           href="/login"
           className="inline-flex h-9 shrink-0 items-center justify-center whitespace-nowrap rounded-md border border-border px-4 text-sm font-semibold text-foreground transition hover:bg-secondary"
