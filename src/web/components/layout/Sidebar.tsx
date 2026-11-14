@@ -44,15 +44,15 @@ export function Sidebar({ user, refreshUser, onLogout }: { user: User; refreshUs
 
       <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-2 py-2">
         {primaryNav.map((item) => (
-          <SidebarLink key={item.href} item={item} />
+          <SidebarLink key={item.href} item={item} collapsed={collapsed} />
         ))}
         <div className="my-2 border-t border-sidebar-border" />
         {secondaryNav
           .filter((item) => !item.adminOnly || user.role === "admin")
           .map((item) => (
-            <SidebarLink key={item.href} item={item} />
+            <SidebarLink key={item.href} item={item} collapsed={collapsed} />
           ))}
-        <button type="button" onClick={() => setFeedbackOpen(true)} className={linkClass(false)}>
+        <button type="button" onClick={() => setFeedbackOpen(true)} className={linkClass(false)} title={collapsed ? "Feedback" : undefined}>
           <LinkContent Icon={MessageIcon} label="Feedback" active={false} />
         </button>
       </nav>
@@ -87,16 +87,17 @@ function LinkContent({ Icon, label, active }: { Icon: ComponentType<SVGProps<SVG
 // document, not part of this app's router — so they stay a plain <a>;
 // everything else is a NavLink, giving client-side routing + React
 // Router's own active-state detection for free (no manual pathname check).
-function SidebarLink({ item }: { item: NavItem }) {
+function SidebarLink({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
+  const title = collapsed ? item.label : undefined;
   if (item.external) {
     return (
-      <a href={item.href} className={linkClass(false)}>
+      <a href={item.href} className={linkClass(false)} title={title}>
         <LinkContent Icon={item.icon} label={item.label} active={false} />
       </a>
     );
   }
   return (
-    <NavLink to={item.href} end={item.href === "/"} className={({ isActive }) => linkClass(isActive)}>
+    <NavLink to={item.href} end={item.href === "/"} className={({ isActive }) => linkClass(isActive)} title={title}>
       {({ isActive }) => <LinkContent Icon={item.icon} label={item.label} active={isActive} />}
     </NavLink>
   );

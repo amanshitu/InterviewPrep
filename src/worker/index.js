@@ -37,6 +37,8 @@ import {
   handleExportProgress,
   handleRequestAccountDeletion,
   handleCancelAccountDeletion,
+  handleListSessions,
+  handleRevokeSession,
 } from "./routes/account.js";
 import {
   handleListPublicCategories,
@@ -163,6 +165,13 @@ export default {
         }
         if (url.pathname === "/api/account/delete-cancel" && request.method === "POST") {
           return applySecurityHeaders(await handleCancelAccountDeletion(request, env, user));
+        }
+        if (url.pathname === "/api/sessions" && request.method === "GET") {
+          return applySecurityHeaders(await handleListSessions(request, env, user));
+        }
+        const revokeSession = url.pathname.match(/^\/api\/sessions\/([^/]+)\/revoke$/);
+        if (revokeSession && request.method === "POST") {
+          return applySecurityHeaders(await handleRevokeSession(request, env, user, revokeSession[1]));
         }
         if (url.pathname === "/api/export/progress" && request.method === "GET") {
           return applySecurityHeaders(await handleExportProgress(request, env, user));

@@ -6,9 +6,32 @@ import { normalizeTimezone } from "../lib/datetime.js";
 import { AI_PROVIDERS, WORKERS_AI_MODEL_IDS, DEFAULT_WORKERS_AI_MODEL } from "../lib/ai.js";
 import { DELETION_GRACE_PERIOD_DAYS, purgeDateFor } from "../lib/accountDeletion.js";
 import { sendAccountDeletionRequestedEmail } from "../lib/email.js";
+import { listSessions, revokeSessionById, touchSessionLastSeen } from "../lib/session.js";
 
 export async function handleGetMe(request, env, user) {
+  if (user.token) await touchSessionLastSeen(env, user.token);
   return json({ user: await userPayloadWithCategories(env, user) });
+}
+
+// ---------- sessions (Settings → Sessions) ----------
+
+export async function handleListSessions(request, env, user) {
+  const sessions = await listSessions(env, user.id);
+  return json({
+    sessions: sessions.map((s) => ({
+      id: s.id,
+      createdAt: s.created_at,
+      lastSeenAt: s.last_seen_at,
+      ipAddress: s.ip_address,
+      userAgent: s.user_agent,
+      isCurrent: s.id === user.sessionId,
+    })),
+  });
+}
+
+export async function handleRevokeSession(request, env, user, sessionId) {
+  await revokeSessionById(env, user.id, sessionId);
+  return json({ ok: true });
 }
 
 // Client-side canvas resizing (settings.js) keeps real uploads far below

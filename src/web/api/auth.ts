@@ -1,4 +1,4 @@
-import { apiPost } from "./client";
+import { apiFetch, apiPost } from "./client";
 import type { User } from "./types";
 
 export interface SignupRequest {
@@ -53,4 +53,21 @@ export function revokeAllSessions(): Promise<{ ok: true }> {
 
 export function resendVerificationEmail(): Promise<{ ok: true; message: string }> {
   return apiPost("/api/auth/resend-verification");
+}
+
+export interface SessionInfo {
+  id: string;
+  createdAt: string;
+  lastSeenAt: string | null;
+  ipAddress: string | null;
+  userAgent: string | null;
+  isCurrent: boolean;
+}
+
+export function getSessions(): Promise<{ sessions: SessionInfo[] }> {
+  return apiFetch("/api/sessions");
+}
+
+export function revokeSession(id: string): Promise<{ ok: true }> {
+  return apiPost<{ ok: true }>(`/api/sessions/${encodeURIComponent(id)}/revoke`);
 }

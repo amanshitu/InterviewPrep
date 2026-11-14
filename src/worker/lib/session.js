@@ -27,7 +27,7 @@ export async function getUserFromRequest(request, env) {
   const token = cookies[SESSION_COOKIE];
   if (!token) return null;
   const row = await env.DB.prepare(
-    `SELECT s.user_id as user_id, s.expires_at as expires_at, u.id as id, u.email as email, u.name as name,
+    `SELECT s.id as session_id, s.user_id as user_id, s.expires_at as expires_at, u.id as id, u.email as email, u.name as name,
             u.created_at as created_at, u.track as track, u.role as role,
             u.active_category_id as active_category_id,
             COALESCE(uc.daily_quota, u.daily_quota) as daily_quota,
@@ -49,7 +49,7 @@ export async function getUserFromRequest(request, env) {
     await env.DB.prepare("DELETE FROM sessions WHERE token = ?").bind(token).run();
     return null;
   }
-  return { ...mapUserRow(row), token };
+  return { ...mapUserRow(row), token, sessionId: row.session_id };
 }
 
 // `request` is optional so existing callers (if any slip through a refactor)
@@ -66,15 +66,16 @@ export async function touchSessionLastSeen(env, token) {
 
 export async function startSession(env, userId, sessionUser, request) {
   const token = randomHex(32);
+  const id = randomHex(16);
   const now = Date.now();
   const expiresAt = new Date(now + SESSION_TTL_MS).toISOString();
   const ip = request ? request.headers.get("CF-Connecting-IP") : null;
   const userAgent = request ? request.headers.get("User-Agent") : null;
   const nowIso = new Date(now).toISOString();
   await env.DB.prepare(
-    "INSERT INTO sessions (token, user_id, created_at, expires_at, ip_address, user_agent, last_seen_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO sessions (id, token, user_id, created_at, expires_at, ip_address, user_agent, last_seen_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
   )
-    .bind(token, userId, nowIso, expiresAt, ip, userAgent, nowIso)
+    .bind(id, token, userId, nowIso, expiresAt, ip, userAgent, nowIso)
     .run();
 
   return json(
@@ -84,4 +85,22 @@ export async function startSession(env, userId, sessionUser, request) {
       headers: { "Set-Cookie": sessionCookieHeader(token, SESSION_TTL_MS / 1000) },
     },
   );
+}
+
+// ---------- session list / per-device revoke (Settings → Sessions) ----------
+
+export async function listSessions(env, userId) {
+  const { results } = await env.DB.prepare(
+    "SELECT id, created_at, last_seen_at, ip_address, user_agent FROM sessions WHERE user_id = ? ORDER BY COALESCE(last_seen_at, created_at) DESC",
+  )
+    .bind(userId)
+    .all();
+  return results || [];
+}
+
+// Only ever deletes a row that both matches the given id AND belongs to
+// this user — never trust a session id alone, it's just a client-supplied
+// string in the URL.
+export async function revokeSessionById(env, userId, sessionId) {
+  await env.DB.prepare("DELETE FROM sessions WHERE id = ? AND user_id = ?").bind(sessionId, userId).run();
 }
