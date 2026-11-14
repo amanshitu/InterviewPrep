@@ -46,6 +46,7 @@ function InstallPrompt({ suppressed }: { suppressed: boolean }) {
   const install = useInstallState();
   const [ready, setReady] = useState(false);
   const [hidden, setHidden] = useState(false);
+  const [installing, setInstalling] = useState(false);
 
   useEffect(() => {
     const id = window.setTimeout(() => setReady(true), INSTALL_PROMPT_DELAY_MS);
@@ -70,13 +71,19 @@ function InstallPrompt({ suppressed }: { suppressed: boolean }) {
         {install.canPrompt ? (
           <button
             type="button"
+            disabled={installing}
             onClick={async () => {
-              const outcome = await promptInstall();
-              if (outcome !== "unavailable") setHidden(true);
+              setInstalling(true);
+              try {
+                const outcome = await promptInstall();
+                if (outcome !== "unavailable") setHidden(true);
+              } finally {
+                setInstalling(false);
+              }
             }}
-            className="mt-3 inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground hover:opacity-90"
+            className="mt-3 inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <DownloadIcon width={14} height={14} /> Install
+            <DownloadIcon width={14} height={14} /> {installing ? "Installing…" : "Install"}
           </button>
         ) : null}
       </div>

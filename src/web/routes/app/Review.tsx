@@ -101,7 +101,12 @@ function ReviewContent() {
           {batch ? batch.length : "…"} random questions pulled from your completed questions.
         </p>
         <div className="mt-3.5 flex flex-wrap gap-2">
-          <button type="button" onClick={reshuffle} className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-semibold text-foreground">
+          <button
+            type="button"
+            onClick={reshuffle}
+            disabled={batch === null}
+            className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-semibold text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+          >
             <ShuffleIcon width={16} height={16} /> New batch
           </button>
           {batch && batch.length > 0 ? (

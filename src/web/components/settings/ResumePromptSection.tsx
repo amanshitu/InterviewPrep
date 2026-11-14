@@ -37,6 +37,7 @@ section,question,answer
 Rules:
 - "section" must be exactly one of: ${categoryList}.
 - Each answer must be a detailed, senior-level model answer (3-6 sentences) that references relevant, specific aspects of the resume and target role — not generic advice.
+- Write each answer in Markdown and **bold** the specific key terms, numbers, or conclusions most worth remembering at a glance — not whole sentences. A bolded or multi-line answer still counts as one CSV field, so quote it per the rule below.
 - If a field contains a comma, wrap the whole field in double quotes. If a field contains a double quote, escape it by doubling it ("").
 - Do not add row numbers, extra columns, or blank lines.`;
 }

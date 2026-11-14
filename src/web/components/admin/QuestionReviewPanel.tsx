@@ -42,10 +42,11 @@ export function QuestionReviewPanel({ setId }: { setId: string }) {
       <button
         type="button"
         onClick={() => void toggle()}
-        className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-muted"
+        disabled={loading}
+        className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {open ? <CloseIcon width={15} height={15} /> : <EyeIcon width={15} height={15} />}
-        {open ? "Hide questions" : "Review questions"}
+        {open ? "Hide questions" : loading ? "Loading…" : "Review questions"}
       </button>
       {open ? (
         <div className="mt-3 space-y-3">

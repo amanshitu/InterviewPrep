@@ -87,8 +87,19 @@ export function WeeklyActivityChart({ days, counts }: { days: string[]; counts: 
                     setSelected(i);
                   }
                 }}
-                style={{ cursor: "pointer" }}
+                style={{ cursor: "pointer", outline: "none" }}
               >
+                <rect
+                  x={x - 4}
+                  y={2}
+                  width={barWidth + 8}
+                  height={height - 2}
+                  rx={6}
+                  fill="transparent"
+                  stroke="var(--color-primary)"
+                  strokeWidth={selected === i ? 1.5 : 0}
+                  opacity={0.5}
+                />
                 <rect x={x} y={y} width={barWidth} height={barHeight} rx={4} fill="var(--color-primary)" opacity={selected === i ? 1 : 0.5} />
                 <text x={x + barWidth / 2} y={height - 6} fontSize={10} textAnchor="middle" fill="var(--color-muted-foreground)">
                   {dayLabel}

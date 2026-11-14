@@ -148,7 +148,7 @@ function MockInterviewBody() {
               <div key={i} className="flex flex-col gap-2">
                 <ChatBubble from="ai">
                   <div className="inline-block rounded-full bg-card px-2.5 py-0.5 text-xs font-medium">{r.topic_label}</div>
-                  <div className="mt-1 text-sm">{r.q}</div>
+                  <div className="mt-1 text-sm">{renderInline(r.q, `res-q-${i}`)}</div>
                 </ChatBubble>
                 <ChatBubble from="user">Score: {r.score !== null && r.score !== undefined ? `${r.score}/10` : "—"}</ChatBubble>
               </div>

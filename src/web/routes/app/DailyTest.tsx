@@ -16,6 +16,7 @@ export function DailyTest() {
 function DailyTestBody() {
   const { error: toastError } = useToast();
   const [batch, setBatch] = useState<DailyTestQuestion[] | null>(null);
+  const [answeringIdx, setAnsweringIdx] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -37,7 +38,8 @@ function DailyTestBody() {
   async function answer(idx: number, optIdx: number) {
     if (!batch) return;
     const item = batch[idx];
-    if (!item || item.answered) return;
+    if (!item || item.answered || answeringIdx === idx) return;
+    setAnsweringIdx(idx);
     try {
       const data = await answerTestQuestion(item.id, optIdx);
       setBatch((prev) => {
@@ -48,6 +50,8 @@ function DailyTestBody() {
       });
     } catch (err) {
       toastError((err as Error).message);
+    } finally {
+      setAnsweringIdx(null);
     }
   }
 
@@ -114,13 +118,14 @@ function DailyTestBody() {
                     else cls += " text-muted-foreground";
                   } else {
                     cls += " text-foreground hover:bg-secondary";
+                    if (answeringIdx === idx) cls += " opacity-50 cursor-not-allowed";
                   }
                   return (
                     <button
                       key={optIdx}
                       type="button"
                       className={`${cls} flex items-center gap-2`}
-                      disabled={item.answered}
+                      disabled={item.answered || answeringIdx === idx}
                       onClick={() => void answer(idx, optIdx)}
                     >
                       {item.answered && optIdx === item.correctIndex ? (

@@ -14,6 +14,7 @@ export function SuggestedSetsSection({ activeCategoryId }: { activeCategoryId: s
   const [sets, setSets] = useState<SuggestedQuestionSet[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [subscribingId, setSubscribingId] = useState<string | null>(null);
 
   useEffect(() => {
     getSuggestedSets()
@@ -22,12 +23,15 @@ export function SuggestedSetsSection({ activeCategoryId }: { activeCategoryId: s
   }, [refreshKey, activeCategoryId]);
 
   async function handleSubscribe(id: string) {
+    setSubscribingId(id);
     try {
       await subscribeToSet(id);
       toast.success("Subscribed — it'll start showing up in your daily queue.");
       setRefreshKey((k) => k + 1);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't subscribe to that set.");
+    } finally {
+      setSubscribingId(null);
     }
   }
 
@@ -47,10 +51,11 @@ export function SuggestedSetsSection({ activeCategoryId }: { activeCategoryId: s
               <span className="text-sm text-muted-foreground">by {s.owner_name || "someone"}</span>
               <button
                 type="button"
+                disabled={subscribingId === s.id}
                 onClick={() => void handleSubscribe(s.id)}
-                className="ml-auto inline-flex items-center gap-1 rounded-md border border-border bg-secondary px-2.5 py-1 text-xs font-semibold text-foreground hover:bg-muted"
+                className="ml-auto inline-flex items-center gap-1 rounded-md border border-border bg-secondary px-2.5 py-1 text-xs font-semibold text-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <PlusIcon width={13} height={13} /> Subscribe
+                <PlusIcon width={13} height={13} /> {subscribingId === s.id ? "Subscribing…" : "Subscribe"}
               </button>
             </div>
           ))}

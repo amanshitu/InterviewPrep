@@ -65,6 +65,7 @@ function QuestionCard({
   onFlagReview,
   readAloud,
   offline,
+  flagging,
 }: {
   q: Question;
   idx: number;
@@ -74,6 +75,7 @@ function QuestionCard({
   onFlagReview: () => void;
   readAloud: ReturnType<typeof useReadAloud>;
   offline: boolean;
+  flagging: boolean;
 }) {
   const needsReview = q.last_result === "again";
   const speaking = readAloud.speakingId === q.id;
@@ -104,11 +106,11 @@ function QuestionCard({
             <button
               type="button"
               onClick={onFlagReview}
-              disabled={offline}
+              disabled={offline || flagging}
               title={offline ? "You're offline — this needs a connection." : undefined}
               className="inline-flex items-center gap-1.5 rounded-md bg-warning px-3 py-1.5 text-sm font-semibold text-foreground disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <RefreshIcon width={16} height={16} /> Review again soon
+              <RefreshIcon width={16} height={16} /> {flagging ? "Saving…" : "Review again soon"}
             </button>
             {readAloud.isSpeechSupported() ? (
               <button
@@ -141,6 +143,8 @@ function TodayContent({ user }: { user: User }) {
   const [completedExpanded, setCompletedExpanded] = useState(false);
   const [reviewCount, setReviewCount] = useState(DEFAULT_REVIEW_COUNT);
   const [mockCount, setMockCount] = useState(5);
+  const [pendingFlagId, setPendingFlagId] = useState<string | null>(null);
+  const [requestingMore, setRequestingMore] = useState(false);
   // Completing a question can bump the streak; refreshing the shell's user
   // (rather than a private getMe() copy here) keeps Stats' streak tiles in
   // step too — they read the same user object and no longer get a fresh
@@ -243,6 +247,7 @@ function TodayContent({ user }: { user: User }) {
   }
 
   async function handleFlagReview(qid: string) {
+    if (pendingFlagId === qid) return;
     const q = queue!;
     const item = q.questions.find((x) => x.id === qid);
     if (!item) return;
@@ -250,11 +255,14 @@ function TodayContent({ user }: { user: User }) {
     item.last_result = "again";
     setRevealed((prev) => new Set(prev).add(qid));
     setQueue({ ...q });
+    setPendingFlagId(qid);
     try {
       await flagForReview(qid);
       toast.success("Kept for review — it'll stay in today's list.");
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Failed to flag for review.");
+    } finally {
+      setPendingFlagId(null);
     }
   }
 
@@ -279,6 +287,8 @@ function TodayContent({ user }: { user: User }) {
   }
 
   async function handleRequestMore() {
+    if (requestingMore) return;
+    setRequestingMore(true);
     try {
       const data = await requestMoreQuestions();
       const q = queue!;
@@ -287,6 +297,8 @@ function TodayContent({ user }: { user: User }) {
       setQueue({ ...q, questions: [...q.questions, ...added], target: q.target + 5, remaining: Math.max(0, q.target + 5 - q.completed) });
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Failed to request more questions.");
+    } finally {
+      setRequestingMore(false);
     }
   }
 
@@ -360,6 +372,7 @@ function TodayContent({ user }: { user: User }) {
               onFlagReview={() => handleFlagReview(q.id)}
               readAloud={readAloud}
               offline={!online}
+              flagging={pendingFlagId === q.id}
             />
           ))}
         </div>
@@ -367,11 +380,11 @@ function TodayContent({ user }: { user: User }) {
           <button
             type="button"
             onClick={handleRequestMore}
-            disabled={!online}
+            disabled={!online || requestingMore}
             title={!online ? "You're offline — this needs a connection." : undefined}
             className="mt-3.5 inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-semibold text-foreground disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <PlusIcon width={16} height={16} /> Request 5 more questions
+            <PlusIcon width={16} height={16} /> {requestingMore ? "Requesting…" : "Request 5 more questions"}
           </button>
         ) : null}
       </div>

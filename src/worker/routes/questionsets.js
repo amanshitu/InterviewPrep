@@ -127,6 +127,7 @@ Rules:
 - Each section object has exactly two keys: "label" (a short string) and "questions" (an array).
 - Each question object has exactly two keys, "q" and "a", both strings.
 - Every answer must be accurate, specific, and exam/interview-appropriate for this category — not generic filler. Where a question has a worked solution (e.g. a calculation), write the answer as a numbered list of short steps ending in the final answer in bold Markdown (e.g. "1. First step.\\n2. Second step, so the answer is **42**."), and put any formula or computed expression in Markdown inline code (backticks), e.g. \`n(n+1)/2\`.
+- In every answer (not just worked solutions), **bold** the specific key terms, numbers, formulas, or conclusions most worth remembering at a glance — not whole sentences — and use blank-line-separated paragraphs or a "- "/"1. " list where that makes a multi-part answer easier to scan.
 - Escape every double quote, backslash, and newline inside a JSON string correctly (a literal newline inside a step-by-step answer must be written as \\n) so the result is valid, parseable JSON — this is parsed by a program, not read by a person.
 - Do not add any keys beyond "sections", "label", "questions", "q", and "a". Do not add comments, trailing commas, or any text outside the single JSON object.`;
 }

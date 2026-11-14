@@ -40,10 +40,18 @@ export async function handleGetTodayTest(request, env, user) {
     }
   }
 
-  const questions = [];
-  for (const row of testRows) {
-    const variant = await getOrCreateMcqVariant(env, user, { id: row.id, q: row.q, a: row.a });
-    questions.push({
+  // Generating a never-before-tested question's MCQ variant means an AI
+  // call; running those one at a time for up to TEST_SIZE questions could
+  // take tens of seconds end-to-end (and risk the request timing out)
+  // before any response reaches the client. Run them concurrently instead
+  // — each question's cache lookup/insert is independent (keyed by its own
+  // question_id), so there's no cross-question race to worry about.
+  const variants = await Promise.all(
+    testRows.map((row) => getOrCreateMcqVariant(env, user, { id: row.id, q: row.q, a: row.a })),
+  );
+  const questions = testRows.map((row, i) => {
+    const variant = variants[i];
+    return {
       id: row.id,
       q: row.q,
       topic_label: row.topic_label,
@@ -52,8 +60,8 @@ export async function handleGetTodayTest(request, env, user) {
       selectedIndex: row.selected_index,
       correct: row.selected_index !== null ? !!row.correct : null,
       correctIndex: row.selected_index !== null ? variant.correctIndex : null,
-    });
-  }
+    };
+  });
 
   return json({ date: today, questions });
 }

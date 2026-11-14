@@ -158,6 +158,7 @@ function SelfTestBody() {
   const [modelAnswer, setModelAnswer] = useState("");
   const [submittedAnswer, setSubmittedAnswer] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
+  const [skipping, setSkipping] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const dictation = useDictation(textareaRef);
 
@@ -181,7 +182,9 @@ function SelfTestBody() {
   }, []);
 
   async function skipQuestion() {
+    if (skipping) return;
     dictation.stop();
+    setSkipping(true);
     try {
       const data = await getSelfTestQuestion();
       setCurrent(data.question);
@@ -190,6 +193,8 @@ function SelfTestBody() {
       setSubmittedAnswer("");
     } catch (err) {
       toastError((err as Error).message);
+    } finally {
+      setSkipping(false);
     }
   }
 
@@ -281,7 +286,12 @@ function SelfTestBody() {
                     <MicIcon width={14} height={14} /> {dictation.listening ? "Stop" : "Speak answer"}
                   </button>
                 ) : null}
-                <button type="button" onClick={() => void skipQuestion()} className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-secondary">
+                <button
+                  type="button"
+                  disabled={skipping}
+                  onClick={() => void skipQuestion()}
+                  className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
+                >
                   <ShuffleIcon width={14} height={14} /> New question
                 </button>
               </div>
@@ -296,7 +306,12 @@ function SelfTestBody() {
             </div>
           ) : (
             <div className="rounded-lg border border-border bg-card p-4">
-              <button type="button" onClick={() => void skipQuestion()} className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-secondary">
+              <button
+                type="button"
+                disabled={skipping}
+                onClick={() => void skipQuestion()}
+                className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
+              >
                 <ShuffleIcon width={14} height={14} /> Try another question
               </button>
             </div>
