@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Outlet, useLocation, useOutletContext } from "react-router";
 import type { User } from "../../api/types";
 import { logout } from "../../api/auth";
@@ -34,6 +35,24 @@ interface ShellContext {
 // not here — so an early event is never missed.
 export function AppShell() {
   const { pathname } = useLocation();
+
+  // Suppress the browser's native pull-to-refresh (a full document reload)
+  // for the whole authenticated app, not just the few pages that implement
+  // the custom <PullToRefresh> gesture — every page under this shell is a
+  // client-routed Outlet swap, so a native reload here is always the "full
+  // page fluctuation" regression, never the intended behavior. Centralizing
+  // it here (this layout route mounts once per session, never remounting on
+  // navigation) means a page needs zero wiring to be protected; <PullToRefresh>
+  // itself no longer toggles this — see its own comment.
+  useEffect(() => {
+    const html = document.documentElement;
+    const previous = html.style.overscrollBehaviorY;
+    html.style.overscrollBehaviorY = "contain";
+    return () => {
+      html.style.overscrollBehaviorY = previous;
+    };
+  }, []);
+
   return (
     <ToastProvider>
       <ConfirmProvider>

@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { BackIcon, MicIcon, ShuffleIcon, SparkleIcon } from "../../components/layout/icons";
 import { Skeleton, SkeletonCard } from "../../components/layout/Skeleton";
 import { Markdown, renderInline } from "../../components/layout/Markdown";
+import { PullToRefresh } from "../../components/layout/PullToRefresh";
 import { useToast } from "../../hooks/use-toast";
 import {
   analyzeSelfTestAnswer,
@@ -237,7 +238,8 @@ function SelfTestBody() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <PullToRefresh onRefresh={skipQuestion} disabled={analyzing}>
+      <div className="flex flex-col gap-4">
       <div className="rounded-lg border border-border bg-card p-6">
         <h1 className="text-xl font-bold text-foreground">Self Test</h1>
         <p className="mt-1.5 text-sm text-muted-foreground">
@@ -318,6 +320,7 @@ function SelfTestBody() {
           )}
         </>
       )}
-    </div>
+      </div>
+    </PullToRefresh>
   );
 }

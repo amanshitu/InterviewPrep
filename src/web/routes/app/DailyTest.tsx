@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { BackIcon, CheckIcon, CloseIcon } from "../../components/layout/icons";
 import { Skeleton, SkeletonCard } from "../../components/layout/Skeleton";
 import { renderInline } from "../../components/layout/Markdown";
+import { PullToRefresh } from "../../components/layout/PullToRefresh";
 import { useToast } from "../../hooks/use-toast";
 import { answerTestQuestion, getTodaysTest, type DailyTestQuestion } from "../../api/dailytest";
 
@@ -18,20 +19,19 @@ function DailyTestBody() {
   const [batch, setBatch] = useState<DailyTestQuestion[] | null>(null);
   const [answeringIdx, setAnsweringIdx] = useState<number | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    getTodaysTest()
+  function load(): Promise<void> {
+    return getTodaysTest()
       .then((data) => {
-        if (!cancelled) setBatch(data.questions);
+        setBatch(data.questions);
       })
       .catch((err: Error) => {
-        if (cancelled) return;
-        setBatch([]);
+        setBatch((prev) => prev ?? []);
         toastError(err.message);
       });
-    return () => {
-      cancelled = true;
-    };
+  }
+
+  useEffect(() => {
+    void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -81,7 +81,8 @@ function DailyTestBody() {
   const correctCount = batch.filter((q) => q.correct).length;
 
   return (
-    <div className="flex flex-col gap-4">
+    <PullToRefresh onRefresh={load}>
+      <div className="flex flex-col gap-4">
       <div className="rounded-lg border border-border bg-card p-6">
         <h1 className="text-xl font-bold text-foreground">Daily test</h1>
         <p className="mt-1.5 text-sm text-muted-foreground">
@@ -142,6 +143,7 @@ function DailyTestBody() {
           ))}
         </div>
       )}
-    </div>
+      </div>
+    </PullToRefresh>
   );
 }

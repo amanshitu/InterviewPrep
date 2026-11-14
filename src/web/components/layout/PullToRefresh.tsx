@@ -1,4 +1,5 @@
-// Pull-to-refresh for Today, Review, and Stats. A light custom
+// Pull-to-refresh for pages with one clear "refetch everything" action
+// (Today, Review, Stats, Daily Test, Self Test). A light custom
 // implementation (no library): touch only, only when the page is
 // scrolled to the very top, only for a mostly-downward drag; never while
 // a dialog is open. A rubber-band indicator follows the finger (transform
@@ -10,10 +11,18 @@
 // same gesture math (pull-model.ts), same core mechanism, re-themed to
 // this app's icons/Tailwind tokens and with no i18n (plain strings).
 //
-// The page itself is the scroller, so while one of these screens is
-// mounted the root gets `overscroll-behavior-y: contain`: the browser's
-// own native pull-to-refresh (a full document reload — the actual bug
-// report this replaces) never fights ours.
+// The page itself is the scroller. The browser's own native pull-to-refresh
+// (a full document reload — the "full page fluctuation" bug this replaces)
+// is suppressed once, app-wide, by AppShell (`overscroll-behavior-y:
+// contain` for the whole authenticated session) rather than per-instance
+// here: toggling it per-mount/unmount on every page that happens to render
+// this component would race with sibling pages that don't (navigating away
+// from one unmounts its instance and clears the style, silently
+// un-suppressing native PTR on whatever page you land on next, even one
+// this component was never meant to protect). Pages that have no single
+// "refetch everything" action (Mock Interview's linear session flow,
+// Settings' many independently-fetched sections) stay protected by that
+// shell-level suppression without mounting this component at all.
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowDownIcon, RefreshIcon } from "./icons";
 import { lockPull, PULL, pullDistance, pullProgress, shouldRefresh, type PullAxis } from "./pull-model";
@@ -25,8 +34,6 @@ import { lockPull, PULL, pullDistance, pullProgress, shouldRefresh, type PullAxi
 // not blocking modals, and must not suppress the pull gesture.
 const dialogOpen = () => !!document.querySelector('[aria-modal="true"]');
 const reducedMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-let containCount = 0;
 
 export function PullToRefresh({
   onRefresh,
@@ -51,15 +58,6 @@ export function PullToRefresh({
     refreshRef.current = onRefresh;
     disabledRef.current = disabled;
   });
-
-  // Keep the browser's native pull-to-refresh / glow out of the way while mounted.
-  useEffect(() => {
-    const html = document.documentElement;
-    if (containCount++ === 0) html.style.overscrollBehaviorY = "contain";
-    return () => {
-      if (--containCount === 0) html.style.overscrollBehaviorY = "";
-    };
-  }, []);
 
   useEffect(() => {
     const el = root.current;
