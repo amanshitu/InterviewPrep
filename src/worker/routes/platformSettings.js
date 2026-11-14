@@ -60,7 +60,11 @@ export async function handleAdminSetBrevoConfig(request, env, user) {
   if (!isValidEmail(senderEmail)) return json({ error: "Enter a valid sender email address." }, { status: 400 });
   const existing = await getBrevoStatus(env);
   if (!apiKey && !existing.configured) return json({ error: "An API key is required the first time Brevo is configured." }, { status: 400 });
-  await setBrevoConfig(env, { apiKey: apiKey || undefined, senderEmail, senderName }, user.id);
+  try {
+    await setBrevoConfig(env, { apiKey: apiKey || undefined, senderEmail, senderName }, user.id);
+  } catch (err) {
+    return json({ error: err && err.message ? err.message : "Couldn't save Brevo settings." }, { status: 500 });
+  }
   await logAdminAction(env, user, "brevo_config_updated", "app_settings", "brevo", apiKey ? "sender + key updated" : "sender updated");
   const updated = await getBrevoStatus(env);
   return json({ ok: true, brevoConfigured: updated.configured, brevoSenderEmail: updated.senderEmail, brevoSenderName: updated.senderName });
@@ -77,7 +81,11 @@ export async function handleAdminSetTurnstileConfig(request, env, user) {
   if (!siteKey) return json({ error: "Enter a site key." }, { status: 400 });
   const existing = await getTurnstileStatus(env);
   if (!secret && !existing.configured) return json({ error: "A secret key is required the first time Turnstile is configured." }, { status: 400 });
-  await setTurnstileConfig(env, { siteKey, secret: secret || undefined }, user.id);
+  try {
+    await setTurnstileConfig(env, { siteKey, secret: secret || undefined }, user.id);
+  } catch (err) {
+    return json({ error: err && err.message ? err.message : "Couldn't save Turnstile settings." }, { status: 500 });
+  }
   await logAdminAction(env, user, "turnstile_config_updated", "app_settings", "turnstile", secret ? "site key + secret updated" : "site key updated");
   const updated = await getTurnstileStatus(env);
   return json({ ok: true, turnstileConfigured: updated.configured, turnstileSiteKey: updated.siteKey });

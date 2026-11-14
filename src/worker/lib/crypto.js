@@ -46,6 +46,13 @@ export async function hashPassword(password, saltHex) {
 // keys only ever exist in memory for the duration of the request that
 // needs them.
 async function getMasterKey(env) {
+  if (!env.AI_KEY_ENCRYPTION_SECRET) {
+    // Without this check, hexToBytes(undefined) throws a generic
+    // "Cannot read properties of undefined" that gives an admin trying to
+    // save a BYOK/Brevo/Turnstile secret nothing to go on — this is the
+    // one specific, fixable cause worth naming.
+    throw new Error("AI_KEY_ENCRYPTION_SECRET is not set on this deployment — run `wrangler secret put AI_KEY_ENCRYPTION_SECRET` and redeploy.");
+  }
   const raw = hexToBytes(env.AI_KEY_ENCRYPTION_SECRET);
   return crypto.subtle.importKey("raw", raw, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
 }
