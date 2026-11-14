@@ -1,4 +1,6 @@
 import React from "react";
+import { PublicFooter, RelatedPages } from "../../components/layout/PublicPageChrome";
+import { Card, SectionTitle } from "../../components/layout/PublicPageParts";
 
 interface FlowStep {
   title: string;
@@ -73,20 +75,6 @@ function BackIcon() {
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path d="M19 12H5M11 18l-6-6 6-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
-  );
-}
-
-function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return (
-    <div className={`rounded-(--radius) border border-border bg-card p-6 text-card-foreground shadow-sm ${className}`}>
-      {children}
-    </div>
-  );
-}
-
-function SectionTitle({ children, size = "base" }: { children: React.ReactNode; size?: "base" | "lg" }) {
-  return (
-    <div className={size === "lg" ? "text-xl font-bold" : "text-[17px] font-bold"}>{children}</div>
   );
 }
 
@@ -200,6 +188,8 @@ export function About() {
           </p>
         </Card>
 
+        <RelatedPages exclude="about" />
+
         <a
           className="inline-flex items-center justify-center gap-1.5 self-center rounded-(--radius-md) px-3 py-2 text-sm font-medium text-muted-foreground transition hover:bg-secondary hover:text-foreground"
           href="/login"
@@ -207,13 +197,7 @@ export function About() {
           <BackIcon /> Back to sign in
         </a>
 
-        <footer className="pt-4 text-center text-xs text-muted-foreground">
-          <p>
-            &copy; {new Date().getFullYear()} Xynora. All rights reserved. Designed and developed by{" "}
-            <a className="underline underline-offset-2 hover:text-foreground" href="https://www.xynora.in" target="_blank" rel="noopener noreferrer">Xynora</a> &middot;{" "}
-            <a className="underline underline-offset-2 hover:text-foreground" href="https://www.xynoramedia.com" target="_blank" rel="noopener noreferrer">Xynora Media</a>
-          </p>
-        </footer>
+        <PublicFooter />
       </div>
     </div>
   );

@@ -431,3 +431,49 @@ export function MessageIcon(props: SVGProps<SVGSVGElement>) {
     </Icon>
   );
 }
+
+export function ShieldIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M12 3l7 3v5c0 5-3 8.5-7 10-4-1.5-7-5-7-10V6l7-3Z" strokeLinejoin="round" />
+      <path d="M9 12l2 2 4-4" />
+    </Icon>
+  );
+}
+
+export function FileTextIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M7 3h7l4 4v14H7z" strokeLinejoin="round" />
+      <path d="M14 3v4h4M9.5 12.5h5M9.5 16h5" />
+    </Icon>
+  );
+}
+
+export function BookOpenIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M4 5.5c2-1 5-1 8 .5 3-1.5 6-1.5 8-.5v13c-2-1-5-1-8 .5-3-1.5-6-1.5-8-.5Z" strokeLinejoin="round" />
+      <path d="M12 6v13" />
+    </Icon>
+  );
+}
+
+export function MegaphoneIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M3 10v4a1 1 0 0 0 1 1h2l10 4V5L6 9H4a1 1 0 0 0-1 1Z" strokeLinejoin="round" />
+      <path d="M16 9a5 5 0 0 1 0 6" />
+    </Icon>
+  );
+}
+
+export function HelpCircleIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9.5 9.2a2.5 2.5 0 0 1 4.8 1c0 1.6-2.3 1.9-2.3 3.3" />
+      <path d="M12 17.2v.1" />
+    </Icon>
+  );
+}

@@ -6,6 +6,7 @@ import type { PublicCategory } from "../../api/types";
 import { likelyAuthed, markAuthed } from "../../lib/auth-flag";
 import { BackIcon, CheckIcon, KeyIcon, LogoMark, PlusIcon, SendIcon, SpinnerIcon } from "../../components/layout/icons";
 import { PasswordField } from "../../components/layout/PasswordField";
+import { PublicFooter } from "../../components/layout/PublicPageChrome";
 
 type FormKind = "login" | "signup" | "forgot" | "reset";
 
@@ -49,7 +50,7 @@ export function Login() {
   }, [resetToken]);
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-background px-4 py-[calc(2.5rem+env(safe-area-inset-top,0px))]">
+    <div className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-background px-4 py-[calc(2.5rem+env(safe-area-inset-top,0px))]">
       <div className="w-full max-w-md rounded-lg border border-border bg-card p-6 text-card-foreground shadow-sm sm:p-8">
         <div className="mb-1 flex items-center gap-2">
           <LogoMark size={30} />
@@ -112,6 +113,9 @@ export function Login() {
             }}
           />
         ) : null}
+      </div>
+      <div className="w-full max-w-md">
+        <PublicFooter />
       </div>
     </div>
   );
