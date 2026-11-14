@@ -4,6 +4,7 @@ import { BackIcon, CheckIcon, CloseIcon } from "../../components/layout/icons";
 import { Skeleton, SkeletonCard } from "../../components/layout/Skeleton";
 import { renderInline } from "../../components/layout/Markdown";
 import { PullToRefresh } from "../../components/layout/PullToRefresh";
+import { ReportQuestionButton } from "../../components/layout/ReportQuestionButton";
 import { useToast } from "../../hooks/use-toast";
 import { answerTestQuestion, getTodaysTest, type DailyTestQuestion } from "../../api/dailytest";
 
@@ -138,6 +139,9 @@ function DailyTestBody() {
                     </button>
                   );
                 })}
+              </div>
+              <div className="mt-3">
+                <ReportQuestionButton questionId={item.id} />
               </div>
             </div>
           ))}

@@ -4,6 +4,7 @@ import { BackIcon, MicIcon, ShuffleIcon, SparkleIcon } from "../../components/la
 import { Skeleton, SkeletonCard } from "../../components/layout/Skeleton";
 import { Markdown, renderInline } from "../../components/layout/Markdown";
 import { PullToRefresh } from "../../components/layout/PullToRefresh";
+import { ReportQuestionButton } from "../../components/layout/ReportQuestionButton";
 import { useToast } from "../../hooks/use-toast";
 import {
   analyzeSelfTestAnswer,
@@ -268,6 +269,9 @@ function SelfTestBody() {
             </ChatBubble>
             {submittedAnswer ? <ChatBubble from="user">{submittedAnswer}</ChatBubble> : null}
             {feedback ? <FeedbackBubble feedback={feedback} modelAnswer={modelAnswer} /> : null}
+            <div>
+              <ReportQuestionButton questionId={current.id} />
+            </div>
           </div>
 
           {!feedback ? (

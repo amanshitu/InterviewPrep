@@ -1,4 +1,4 @@
-import { apiFetch, apiPost } from "./client";
+import { apiFetch, apiPatch, apiPost } from "./client";
 import type { StatsProgressResponse } from "./stats";
 import type { ActivityEvent } from "./account";
 
@@ -60,6 +60,7 @@ export interface AdminOverview {
   totalCategories: number;
   totalQuestionSets: number;
   pendingApprovalCount: number;
+  openReportCount: number;
 }
 
 export function getOverview(): Promise<AdminOverview> {
@@ -91,4 +92,46 @@ export interface AdminUserStatsResponse {
 export function getUserStats(userId: string, categoryId?: string): Promise<AdminUserStatsResponse> {
   const qs = categoryId ? `?categoryId=${encodeURIComponent(categoryId)}` : "";
   return apiFetch(`/api/admin/users/${encodeURIComponent(userId)}/stats${qs}`);
+}
+
+export interface QuestionReport {
+  id: string;
+  question_id: string;
+  reason: string;
+  status: "open" | "resolved" | "dismissed";
+  created_at: string;
+  resolved_at: string | null;
+  reporter_name: string;
+  reporter_email: string;
+  resolver_name: string | null;
+  q: string | null;
+  a: string | null;
+  topic_label: string | null;
+  set_id: string | null;
+  set_title: string | null;
+}
+
+export function getQuestionReports(): Promise<{ reports: QuestionReport[] }> {
+  return apiFetch("/api/admin/question-reports");
+}
+
+export function resolveQuestionReport(reportId: string, action: "resolved" | "dismissed"): Promise<{ ok: true }> {
+  return apiPost(`/api/admin/question-reports/${encodeURIComponent(reportId)}/resolve`, { action });
+}
+
+export interface AdminQuestionSearchResult {
+  id: string;
+  q: string;
+  a: string;
+  topic_label: string;
+  set_id: string;
+  set_title: string | null;
+}
+
+export function searchQuestions(query: string): Promise<{ questions: AdminQuestionSearchResult[] }> {
+  return apiFetch(`/api/admin/questions/search?q=${encodeURIComponent(query)}`);
+}
+
+export function updateQuestion(id: string, body: { q: string; a: string; topic_label?: string }): Promise<{ ok: true }> {
+  return apiPatch(`/api/admin/questions/${encodeURIComponent(id)}`, body);
 }

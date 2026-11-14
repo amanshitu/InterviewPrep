@@ -4,23 +4,25 @@ import { getApprovalHistory, getOverview, getPendingSets, type AdminOverview, ty
 import { listCategories } from "../../api/categories";
 import type { Category } from "../../api/types";
 import { useShellUser } from "../../components/layout/AppShell";
-import { ClockIcon, FolderIcon, RefreshIcon, UsersIcon } from "../../components/layout/icons";
+import { ClockIcon, FlagIcon, FolderIcon, RefreshIcon, UsersIcon } from "../../components/layout/icons";
 import { KpiCard } from "../../components/admin/KpiCard";
 import { Section } from "../../components/admin/Section";
 import { CategoriesPanel } from "../../components/admin/CategoriesPanel";
 import { PendingSetsPanel } from "../../components/admin/PendingSetsPanel";
 import { HistoryPanel } from "../../components/admin/HistoryPanel";
 import { UsersPanel } from "../../components/admin/UsersPanel";
+import { ReportsPanel } from "../../components/admin/ReportsPanel";
 import { useToast } from "../../hooks/use-toast";
 import type { User } from "../../api/types";
 import { Skeleton, SkeletonCard } from "../../components/layout/Skeleton";
 
-type Tab = "categories" | "pending" | "history" | "users";
+type Tab = "categories" | "pending" | "reports" | "history" | "users";
 
 const DEFAULT_TAB: Tab = "pending";
 
 const TABS: { key: Tab; label: string; icon: ComponentType<SVGProps<SVGSVGElement>> }[] = [
   { key: "pending", label: "Pending Approvals", icon: ClockIcon },
+  { key: "reports", label: "Reports", icon: FlagIcon },
   { key: "categories", label: "Categories", icon: FolderIcon },
   { key: "history", label: "History", icon: RefreshIcon },
   { key: "users", label: "Users", icon: UsersIcon },
@@ -99,15 +101,16 @@ function AdminDashboard() {
       <h1 className="text-xl font-bold text-foreground">Admin</h1>
 
       {overview ? (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
           <KpiCard label="Users" value={overview.totalUsers} />
           <KpiCard label="Categories" value={overview.totalCategories} />
           <KpiCard label="Question sets" value={overview.totalQuestionSets} />
           <KpiCard label="Pending approvals" value={overview.pendingApprovalCount} />
+          <KpiCard label="Open reports" value={overview.openReportCount} />
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          {Array.from({ length: 5 }).map((_, i) => (
             <SkeletonCard key={i}>
               <Skeleton className="h-4 w-20" />
               <Skeleton className="mt-2 h-6 w-10" />
@@ -128,6 +131,7 @@ function AdminDashboard() {
           >
             <t.icon width={15} height={15} /> {t.label}
             {t.key === "pending" && sets.length > 0 ? ` (${sets.length})` : ""}
+            {t.key === "reports" && overview && overview.openReportCount > 0 ? ` (${overview.openReportCount})` : ""}
           </button>
         ))}
       </div>
@@ -148,6 +152,11 @@ function AdminDashboard() {
           {tab === "pending" ? (
             <Section title="Pending question sets" subtitle="Review sets submitted for sharing. Approved sets become suggestions for every user.">
               <PendingSetsPanel sets={sets} categories={categories} onChanged={() => void load()} />
+            </Section>
+          ) : null}
+          {tab === "reports" ? (
+            <Section title="Reported questions" subtitle="Users can flag a question or answer as wrong or confusing — fix it directly from here, or search for any question even if nobody's reported it yet.">
+              <ReportsPanel onChanged={() => void load()} />
             </Section>
           ) : null}
           {tab === "history" ? (

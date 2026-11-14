@@ -11,17 +11,19 @@ import { handleGetSelfTestHistory } from "./selftest.js";
 // query combines all four cleanly (different tables, different filters),
 // and at this app's scale there's no need to — four COUNTs is still trivial.
 export async function handleAdminOverview(request, env, user) {
-  const [totalUsers, totalCategories, totalQuestionSets, pendingApprovalCount] = await Promise.all([
+  const [totalUsers, totalCategories, totalQuestionSets, pendingApprovalCount, openReportCount] = await Promise.all([
     env.DB.prepare("SELECT COUNT(*) as n FROM users").first(),
     env.DB.prepare("SELECT COUNT(*) as n FROM categories WHERE is_active = 1").first(),
     env.DB.prepare("SELECT COUNT(*) as n FROM question_sets").first(),
     env.DB.prepare("SELECT COUNT(*) as n FROM question_sets WHERE visibility = 'pending'").first(),
+    env.DB.prepare("SELECT COUNT(*) as n FROM question_reports WHERE status = 'open'").first(),
   ]);
   return json({
     totalUsers: totalUsers?.n || 0,
     totalCategories: totalCategories?.n || 0,
     totalQuestionSets: totalQuestionSets?.n || 0,
     pendingApprovalCount: pendingApprovalCount?.n || 0,
+    openReportCount: openReportCount?.n || 0,
   });
 }
 
@@ -194,6 +196,57 @@ export async function handleAdminGetSetQuestions(request, env, user, setId) {
     .bind(setId)
     .all();
   return json({ questions: rows.results || [] });
+}
+
+// ---------- admin: direct question editing ----------
+
+// Free-text search across every question's own text (not scoped to one
+// set/category) so an admin can find and fix a question even without a
+// report pointing at it — e.g. spotting a typo while browsing, or a
+// follow-up search after fixing a reported question to check for the same
+// mistake elsewhere. Capped at 50 results; this is a lookup tool, not a
+// paginated browse.
+export async function handleAdminSearchQuestions(request, env, user) {
+  const url = new URL(request.url);
+  const q = (url.searchParams.get("q") || "").trim().slice(0, 200);
+  if (!q) return json({ questions: [] });
+  const like = `%${q.replace(/[%_]/g, "\\$&")}%`;
+  const rows = await env.DB.prepare(
+    `SELECT q.id as id, q.q as q, q.a as a, q.topic_label as topic_label, q.set_id as set_id, qs.title as set_title
+     FROM questions q LEFT JOIN question_sets qs ON qs.id = q.set_id
+     WHERE q.q LIKE ? ESCAPE '\\' OR q.a LIKE ? ESCAPE '\\'
+     ORDER BY q.set_id, q.topic_order, q.sort_order
+     LIMIT 50`,
+  )
+    .bind(like, like)
+    .all();
+  return json({ questions: rows.results || [] });
+}
+
+// Edits a question's text in place — same row, same id, so every user's
+// existing progress/history against it (user_question_progress,
+// activity_log, daily_test_results, mcq_variants) stays attached rather
+// than orphaned the way a delete-and-recreate would leave it. A cached
+// mcq_variants row for this question is intentionally left untouched here:
+// if the edit changes the correct answer's substance, a stale MCQ variant
+// becomes a separate, smaller problem than this endpoint is meant to fix,
+// and regenerating it would cost an AI call on every plain text edit.
+export async function handleAdminUpdateQuestion(request, env, user, questionId) {
+  const parsed = await readJsonBody(request, 20000);
+  if (!parsed.ok) return json({ error: parsed.error }, { status: parsed.status });
+  const q = (parsed.body.q || "").toString().trim();
+  const a = (parsed.body.a || "").toString().trim();
+  const topicLabel = (parsed.body.topic_label || "").toString().trim();
+  if (!q || !a) return json({ error: "Question and answer can't be empty." }, { status: 400 });
+
+  const existing = await env.DB.prepare("SELECT id, topic_label FROM questions WHERE id = ?").bind(questionId).first();
+  if (!existing) return json({ error: "Question not found." }, { status: 404 });
+
+  await env.DB.prepare("UPDATE questions SET q = ?, a = ?, topic_label = ? WHERE id = ?")
+    .bind(q, a, topicLabel || existing.topic_label, questionId)
+    .run();
+
+  return json({ ok: true });
 }
 
 // Audit trail: every set that's been decided one way or the other, who

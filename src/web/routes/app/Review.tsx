@@ -8,6 +8,7 @@ import { BackIcon, CheckIcon, EyeIcon, EyeOffIcon, RefreshIcon, ShuffleIcon } fr
 import { PullToRefresh } from "../../components/layout/PullToRefresh";
 import { Skeleton, SkeletonCard } from "../../components/layout/Skeleton";
 import { Markdown, renderInline } from "../../components/layout/Markdown";
+import { ReportQuestionButton } from "../../components/layout/ReportQuestionButton";
 
 const DEFAULT_REVIEW_COUNT = 15;
 
@@ -165,6 +166,7 @@ function ReviewContent() {
                     <button type="button" onClick={() => toggleReveal(idx)} className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-semibold text-foreground">
                       <EyeOffIcon width={16} height={16} /> Hide Answer
                     </button>
+                    <ReportQuestionButton questionId={item.id} />
                   </div>
                 </>
               ) : (

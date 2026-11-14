@@ -76,7 +76,10 @@ import {
   handleAdminOverview,
   handleAdminUsers,
   handleAdminUserStats,
+  handleAdminSearchQuestions,
+  handleAdminUpdateQuestion,
 } from "./routes/admin.js";
+import { handleReportQuestion, handleAdminListReports, handleAdminResolveReport } from "./routes/reports.js";
 import { handlePushSubscribe, handlePushUnsubscribe, handleScheduled } from "./routes/push.js";
 
 export default {
@@ -259,6 +262,29 @@ export default {
         if (adminUserStats && request.method === "GET") {
           if (user.role !== "admin") return applySecurityHeaders(json({ error: "Forbidden." }, { status: 403 }));
           return applySecurityHeaders(await handleAdminUserStats(request, env, user, adminUserStats[1]));
+        }
+
+        const reportAction = url.pathname.match(/^\/api\/questions\/([^/]+)\/report$/);
+        if (reportAction && request.method === "POST") {
+          return applySecurityHeaders(await handleReportQuestion(request, env, user, reportAction[1]));
+        }
+        if (url.pathname === "/api/admin/question-reports" && request.method === "GET") {
+          if (user.role !== "admin") return applySecurityHeaders(json({ error: "Forbidden." }, { status: 403 }));
+          return applySecurityHeaders(await handleAdminListReports(request, env, user));
+        }
+        const resolveReport = url.pathname.match(/^\/api\/admin\/question-reports\/([^/]+)\/resolve$/);
+        if (resolveReport && request.method === "POST") {
+          if (user.role !== "admin") return applySecurityHeaders(json({ error: "Forbidden." }, { status: 403 }));
+          return applySecurityHeaders(await handleAdminResolveReport(request, env, user, resolveReport[1]));
+        }
+        if (url.pathname === "/api/admin/questions/search" && request.method === "GET") {
+          if (user.role !== "admin") return applySecurityHeaders(json({ error: "Forbidden." }, { status: 403 }));
+          return applySecurityHeaders(await handleAdminSearchQuestions(request, env, user));
+        }
+        const adminUpdateQuestion = url.pathname.match(/^\/api\/admin\/questions\/([^/]+)$/);
+        if (adminUpdateQuestion && request.method === "PATCH") {
+          if (user.role !== "admin") return applySecurityHeaders(json({ error: "Forbidden." }, { status: 403 }));
+          return applySecurityHeaders(await handleAdminUpdateQuestion(request, env, user, adminUpdateQuestion[1]));
         }
 
         if (url.pathname === "/api/test/today" && request.method === "GET") {

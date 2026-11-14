@@ -16,6 +16,7 @@ import { CheckIcon, EyeIcon, EyeOffIcon, PlusIcon, RefreshIcon, ShuffleIcon, Spa
 import { Skeleton, SkeletonCard } from "../../components/layout/Skeleton";
 import { Markdown, renderInline } from "../../components/layout/Markdown";
 import { PullToRefresh } from "../../components/layout/PullToRefresh";
+import { ReportQuestionButton } from "../../components/layout/ReportQuestionButton";
 import { useOnlineStatus } from "../../hooks/use-online-status";
 import { saveSnapshot, loadSnapshot } from "../../lib/offline-store";
 
@@ -124,6 +125,7 @@ function QuestionCard({
             <button type="button" onClick={onToggleReveal} className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-semibold text-foreground">
               <EyeOffIcon width={16} height={16} /> Hide Answer
             </button>
+            <ReportQuestionButton questionId={q.id} />
           </div>
         </>
       ) : (

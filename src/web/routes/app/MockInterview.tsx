@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router";
 import { ArrowRightIcon, BackIcon, MicIcon, SparkleIcon } from "../../components/layout/icons";
 import { Skeleton, SkeletonCard } from "../../components/layout/Skeleton";
 import { renderInline } from "../../components/layout/Markdown";
+import { ReportQuestionButton } from "../../components/layout/ReportQuestionButton";
 import { useToast } from "../../hooks/use-toast";
 import {
   analyzeSelfTestAnswer,
@@ -213,6 +214,9 @@ function MockInterviewBody() {
             </ChatBubble>
             {submittedAnswer ? <ChatBubble from="user">{submittedAnswer}</ChatBubble> : null}
             {feedback ? <FeedbackBubble feedback={feedback} modelAnswer={modelAnswer} /> : null}
+            <div>
+              <ReportQuestionButton questionId={current.id} />
+            </div>
           </div>
 
           {!feedback ? (
