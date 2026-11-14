@@ -26,9 +26,11 @@ import {
  * as a visual break; every other public page's content starts on the same flat
  * background as the header, so this gets a border to separate the two instead. */
 const HEADER_NAV_LINKS = [
+  { href: "/home", label: "Home" },
   { href: "/about", label: "About" },
   { href: "/guide", label: "Guide" },
   { href: "/faq", label: "FAQ" },
+  { href: "/press", label: "Press" },
 ];
 
 export function PublicHeader() {
