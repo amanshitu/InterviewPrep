@@ -384,12 +384,17 @@ function ForgotForm({ onCancel, getTurnstileToken }: { onCancel: () => void; get
 
 function ResetForm({ token, onDone }: { token: string; onDone: () => void }) {
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    if (password !== confirmPassword) {
+      setError("Passwords don't match.");
+      return;
+    }
     setSubmitting(true);
     try {
       await resetPassword(token, password);
@@ -406,6 +411,9 @@ function ResetForm({ token, onDone }: { token: string; onDone: () => void }) {
       <p className="mb-4 text-sm text-muted-foreground">Choose a new password for your account.</p>
       <Field label="New password" hint="At least 8 characters.">
         <PasswordField required minLength={8} autoComplete="new-password" className={inputClass} value={password} onChange={(e) => setPassword(e.target.value)} />
+      </Field>
+      <Field label="Confirm password">
+        <PasswordField required minLength={8} autoComplete="new-password" className={inputClass} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
       </Field>
       <ErrorText>{error}</ErrorText>
       <SubmitButton icon={CheckIcon} loading={submitting} loadingText="Updating…">
