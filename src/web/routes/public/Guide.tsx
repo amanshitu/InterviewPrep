@@ -252,7 +252,7 @@ export function Guide() {
       </header>
 
       {/* Section chips */}
-      <nav aria-label="Guide sections" className="sticky top-[79px] z-20 -mx-4 overflow-x-auto border-b border-border bg-background/90 px-4 py-2.5 backdrop-blur sm:mx-0 sm:rounded-xl sm:border">
+      <nav aria-label="Guide sections" className="sticky top-19.75 z-20 -mx-4 overflow-x-auto border-b border-border bg-background/90 px-4 py-2.5 backdrop-blur sm:mx-0 sm:rounded-xl sm:border">
         <div className="flex gap-2">
           {GROUPS.map((g) => (
             <a
