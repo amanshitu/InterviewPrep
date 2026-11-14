@@ -11,10 +11,32 @@ import {
   FileTextIcon,
   FlagIcon,
   HelpCircleIcon,
+  LogoMark,
   MegaphoneIcon,
   ShieldIcon,
   TodayIcon,
 } from "./icons";
+
+/** Shared top bar: logo + name + tagline, and a Sign in button — same header Home uses. */
+export function PublicHeader() {
+  return (
+    <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-5 sm:px-6">
+      <a href="/home" className="flex items-center gap-2">
+        <LogoMark size={26} />
+        <span className="flex flex-col leading-tight">
+          <span className="text-lg font-bold leading-tight">ExamStreak</span>
+          <span className="text-xs font-medium text-muted-foreground">Practice. Track. Ace it.</span>
+        </span>
+      </a>
+      <a
+        href="/login"
+        className="inline-flex h-9 items-center justify-center rounded-md border border-border px-4 text-sm font-semibold text-foreground transition hover:bg-secondary"
+      >
+        Sign in
+      </a>
+    </header>
+  );
+}
 
 export interface PublicPage {
   id: string;

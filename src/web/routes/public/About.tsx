@@ -1,6 +1,6 @@
 import React from "react";
 import { PublicFooter, RelatedPages } from "../../components/layout/PublicPageChrome";
-import { Card, SectionTitle } from "../../components/layout/PublicPageParts";
+import { Card, PublicPage, SectionTitle } from "../../components/layout/PublicPageParts";
 import { usePageTitle } from "../../hooks/use-page-title";
 
 interface FlowStep {
@@ -140,9 +140,8 @@ function TrendGraphic() {
 export function About() {
   usePageTitle("About");
   return (
-    <div className="min-h-screen bg-background">
-      <div className="mx-auto flex max-w-2xl flex-col gap-5 px-4 py-10">
-        <Card className="bg-linear-to-br from-primary/10 to-transparent">
+    <PublicPage>
+      <Card className="bg-linear-to-br from-primary/10 to-transparent">
           <SectionTitle size="lg">What is ExamStreak?</SectionTitle>
           <p className="mt-2 text-sm text-muted-foreground">
             A daily interview and exam prep companion. Every day you get a personalized batch of questions sized to
@@ -200,7 +199,6 @@ export function About() {
         </a>
 
         <PublicFooter />
-      </div>
-    </div>
+    </PublicPage>
   );
 }
