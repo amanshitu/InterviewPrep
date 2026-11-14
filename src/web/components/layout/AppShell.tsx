@@ -6,6 +6,8 @@ import { ConfirmProvider } from "../../hooks/use-confirm";
 import { ToastProvider } from "../../hooks/use-toast";
 import { clearAuthedFlag } from "../../lib/auth-flag";
 import { clearAllSnapshots } from "../../lib/offline-store";
+import { setAccent } from "../settings/appearance-prefs";
+import { setTheme } from "../settings/theme-prefs";
 import type { RefreshUser } from "./AuthGate";
 import { AuthGate } from "./AuthGate";
 import { EmailVerificationBanner } from "./EmailVerificationBanner";
@@ -143,6 +145,13 @@ export function useRefreshUser(): RefreshUser {
 async function handleLogout() {
   clearAuthedFlag();
   clearAllSnapshots();
+  // Theme/accent are an account preference, not just a device one — carrying
+  // the signed-in look (and its own accent) onto the signed-out marketing
+  // pages after logout reads as "whose account is this, actually?" rather
+  // than a convenience. Reset to the system/default look on the way out;
+  // signing back in and revisiting Settings restores a personal choice.
+  setTheme("system");
+  setAccent("terracotta");
   try {
     await logout();
   } finally {

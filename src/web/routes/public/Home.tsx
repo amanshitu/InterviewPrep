@@ -147,13 +147,19 @@ export function Home() {
   }, []);
 
   return (
-    <div className="flex min-h-dvh flex-col overflow-x-clip bg-background pb-24 md:pb-0">
+    <div className="flex min-h-dvh flex-col overflow-x-clip bg-background pb-24 md:pb-10">
       <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-5 sm:px-6">
         <a href="/home" className="flex items-center gap-2">
           <LogoMark size={26} />
-          <span className="text-lg font-bold leading-tight">ExamStreak</span>
+          <span className="flex flex-col leading-tight">
+            <span className="text-lg font-bold leading-tight">ExamStreak</span>
+            <span className="text-xs font-medium text-muted-foreground">Practice. Track. Ace it.</span>
+          </span>
         </a>
-        <a href="/login" className="text-sm font-semibold text-foreground hover:underline">
+        <a
+          href="/login"
+          className="inline-flex h-9 items-center justify-center rounded-md border border-border px-4 text-sm font-semibold text-foreground transition hover:bg-secondary"
+        >
           Sign in
         </a>
       </header>
