@@ -1,6 +1,7 @@
 import React from "react";
 import { PublicFooter, RelatedPages } from "../../components/layout/PublicPageChrome";
 import { Card, SectionTitle } from "../../components/layout/PublicPageParts";
+import { usePageTitle } from "../../hooks/use-page-title";
 
 interface FlowStep {
   title: string;
@@ -86,7 +87,7 @@ function FlowSection() {
       <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start">
         {FLOW_STEPS.map((step, idx) => (
           <React.Fragment key={step.title}>
-            <div className="flex min-w-35 flex-1 flex-col gap-1.5 rounded-(--radius-md) bg-secondary p-4">
+            <div className="flex min-w-35 flex-1 flex-col gap-1.5 rounded-md bg-secondary p-4">
               <div className="flex size-9 items-center justify-center rounded-full bg-background text-primary">{step.icon}</div>
               <div className="text-sm font-semibold">{step.title}</div>
               <div className="text-xs text-muted-foreground">{step.desc}</div>
@@ -137,6 +138,7 @@ function TrendGraphic() {
 // in the phase that added src/web/styles/globals.css. The authenticated,
 // shell-wrapped variant of this same content is added once AppShell exists.
 export function About() {
+  usePageTitle("About");
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto flex max-w-2xl flex-col gap-5 px-4 py-10">
@@ -191,7 +193,7 @@ export function About() {
         <RelatedPages exclude="about" />
 
         <a
-          className="inline-flex items-center justify-center gap-1.5 self-center rounded-(--radius-md) px-3 py-2 text-sm font-medium text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+          className="inline-flex items-center justify-center gap-1.5 self-center rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition hover:bg-secondary hover:text-foreground"
           href="/login"
         >
           <BackIcon /> Back to sign in

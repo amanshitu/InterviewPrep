@@ -14,6 +14,7 @@ import { UsersPanel } from "../../components/admin/UsersPanel";
 import { ReportsPanel } from "../../components/admin/ReportsPanel";
 import { FeedbackPanel } from "../../components/admin/FeedbackPanel";
 import { AuditLogPanel } from "../../components/admin/AuditLogPanel";
+import { PageHeader } from "../../components/layout/PageHeader";
 import { QuestionSetsSection } from "../../components/settings/QuestionSetsSection";
 import { CategoryAiPromptSection } from "../../components/settings/CategoryAiPromptSection";
 import { ResumePromptSection } from "../../components/settings/ResumePromptSection";
@@ -107,7 +108,7 @@ function AdminDashboard({ user }: { user: User }) {
 
   return (
     <div className="space-y-5">
-      <h1 className="text-xl font-bold text-foreground">Admin</h1>
+      <PageHeader title="Admin" />
 
       {overview ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">

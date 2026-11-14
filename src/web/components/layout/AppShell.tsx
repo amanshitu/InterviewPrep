@@ -70,7 +70,7 @@ export function AppShell() {
                 <Sidebar user={user} refreshUser={refreshUser} onLogout={() => void handleLogout()} />
                 <div className="flex min-w-0 flex-1 flex-col">
                   <MobileHeader user={user} onLogout={() => void handleLogout()} />
-                  <main className="mx-auto w-full max-w-(--main-max) flex-1 px-4 py-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] sm:px-6">
+                  <main id="main" className="mx-auto w-full max-w-(--main-max) flex-1 px-4 py-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] sm:px-6">
                     {/* Keyed on activeCategoryId: switching/enrolling/unenrolling a
                         category (CategorySection, ProfileMenu) calls refreshUser()
                         rather than reloading the document — that fixed the sidebar's

@@ -13,12 +13,10 @@ command = "npm run build:web"
 
 [assets]
 # Built by `npm run build:web` (Vite — see vite.config.ts) from src/web/.
-# index.html is a single-page app covering every authenticated route via
-# client-side routing (React Router), so an unmatched path (/review, /test,
-# /stats, etc. — they have no file of their own anymore) must fall back to
-# index.html for the router to handle, not 404. login.html/about.html are
-# still real, separate documents matched directly before this fallback
-# applies.
+# index.html is the single document for the whole app — every route
+# (/review, /settings, /login, /about, /privacy, etc.) is handled by
+# React Router client-side, not a file of its own, so any unmatched path
+# must fall back to index.html rather than 404.
 directory = "./dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"

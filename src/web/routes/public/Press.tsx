@@ -3,6 +3,7 @@ import { listPublicCategories } from "../../api/categories";
 import { PublicFooter, RelatedPages } from "../../components/layout/PublicPageChrome";
 import { Card, PublicPage, SectionTitle } from "../../components/layout/PublicPageParts";
 import { BackIcon } from "../../components/layout/icons";
+import { usePageTitle } from "../../hooks/use-page-title";
 
 const CONTACT_EMAIL = "support@xynora.in";
 
@@ -19,6 +20,7 @@ interface Stats {
 }
 
 export function Press() {
+  usePageTitle("Press");
   const [stats, setStats] = useState<Stats | null>(null);
 
   useEffect(() => {
@@ -81,7 +83,7 @@ export function Press() {
       <RelatedPages exclude="press" />
 
       <a
-        className="inline-flex items-center justify-center gap-1.5 self-center rounded-(--radius-md) px-3 py-2 text-sm font-medium text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+        className="inline-flex items-center justify-center gap-1.5 self-center rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition hover:bg-secondary hover:text-foreground"
         href="/login"
       >
         <BackIcon /> Back to sign in
@@ -94,7 +96,7 @@ export function Press() {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-(--radius-md) bg-secondary p-3 text-center">
+    <div className="rounded-md bg-secondary p-3 text-center">
       <div className="text-xl font-bold tabular-nums text-foreground">{value}</div>
       <div className="text-xs text-muted-foreground">{label}</div>
     </div>

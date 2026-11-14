@@ -10,12 +10,15 @@ export type RefreshUser = () => Promise<void>;
 // Mounted once per app visit, not once per page — AppShell (the layout
 // route wrapping every page under src/web/routes/app|admin/*) renders this
 // around a client-routed <Outlet/>, so this check runs on the very first
-// load and never again until a hard refresh. Login and About stay separate
-// real documents on purpose and never go through this. AuthGate's job is
-// purely: avoid a pointless network round trip for a visitor who almost
-// certainly isn't signed in (redirect immediately), and show a neutral
-// spinner — never an incorrect screen — while actually-likely-signed-in
-// visitors get confirmed via GET /api/me.
+// load and never again until a hard refresh. Login/Home/About/etc. are
+// sibling top-level routes (see entries/app.tsx) outside AppShell and never
+// go through this — every link to one of them is a plain <a href>, not a
+// client-routed <Link>, so visiting one is still a full navigation (same
+// single document, but a fresh mount), preserving that "runs once" premise.
+// AuthGate's job is purely: avoid a pointless network round trip for a
+// visitor who almost certainly isn't signed in (redirect immediately), and
+// show a neutral spinner — never an incorrect screen — while actually-
+// likely-signed-in visitors get confirmed via GET /api/me.
 //
 // Root "/" is special-cased to /home (the marketing page, with its own
 // "Sign in" CTAs) rather than straight to /login — it's the app's default

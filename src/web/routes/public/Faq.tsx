@@ -1,6 +1,7 @@
 import { PublicFooter, RelatedPages } from "../../components/layout/PublicPageChrome";
 import { Card, PublicPage, SectionTitle } from "../../components/layout/PublicPageParts";
 import { BackIcon } from "../../components/layout/icons";
+import { usePageTitle } from "../../hooks/use-page-title";
 
 interface Faq {
   q: string;
@@ -55,6 +56,7 @@ const FAQS: Faq[] = [
 ];
 
 export function Faq() {
+  usePageTitle("FAQ");
   return (
     <PublicPage>
       <Card className="bg-linear-to-br from-primary/10 to-transparent">
@@ -80,7 +82,7 @@ export function Faq() {
       <RelatedPages exclude="faq" />
 
       <a
-        className="inline-flex items-center justify-center gap-1.5 self-center rounded-(--radius-md) px-3 py-2 text-sm font-medium text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+        className="inline-flex items-center justify-center gap-1.5 self-center rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition hover:bg-secondary hover:text-foreground"
         href="/login"
       >
         <BackIcon /> Back to sign in

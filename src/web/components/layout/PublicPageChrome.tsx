@@ -39,14 +39,14 @@ export const PUBLIC_PAGES: PublicPage[] = [
 export function RelatedPages({ exclude }: { exclude: string }) {
   const pages = PUBLIC_PAGES.filter((p) => p.id !== exclude);
   return (
-    <nav aria-label="Other pages" className="rounded-(--radius) border border-border bg-card p-6 text-card-foreground shadow-sm">
+    <nav aria-label="Other pages" className="rounded-lg border border-border bg-card p-6 text-card-foreground shadow-sm">
       <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">More</div>
       <ul className="mt-3 grid gap-2 sm:grid-cols-2">
         {pages.map((p) => (
           <li key={p.id}>
             <a
               href={p.href}
-              className="group flex min-h-13 items-center gap-3 rounded-(--radius-md) border border-border px-3 py-2.5 transition-colors hover:border-primary/40 hover:bg-secondary"
+              className="group flex min-h-13 items-center gap-3 rounded-md border border-border px-3 py-2.5 transition-colors hover:border-primary/40 hover:bg-secondary"
             >
               <span aria-hidden className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/12 text-primary">
                 <p.icon width={16} height={16} />

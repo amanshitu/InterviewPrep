@@ -8,6 +8,7 @@ import { BackIcon, CheckIcon, KeyIcon, LogoMark, PlusIcon, SendIcon, SpinnerIcon
 import { PasswordField } from "../../components/layout/PasswordField";
 import { PublicFooter } from "../../components/layout/PublicPageChrome";
 import { useTurnstileToken } from "../../lib/turnstile";
+import { usePageTitle } from "../../hooks/use-page-title";
 
 type FormKind = "login" | "signup" | "forgot" | "reset";
 
@@ -34,6 +35,7 @@ function detectTimezone(): string {
 // bounce the freshly-signed-in user back here before /api/me gets a
 // chance to confirm the new session cookie.
 export function Login() {
+  usePageTitle("Sign in");
   const searchParams = new URLSearchParams(window.location.search);
   const resetToken = searchParams.get("reset");
   // ?form=signup lets the Home page's "Create free account" CTAs land

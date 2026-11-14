@@ -88,6 +88,7 @@ import {
   handleAdminAuditLog,
 } from "./routes/admin.js";
 import { handleReportQuestion, handleAdminListReports, handleAdminResolveReport } from "./routes/reports.js";
+import { handleReportAiContent, handleAdminListAiReports, handleAdminResolveAiReport } from "./routes/aiReports.js";
 import { handleSubmitFeedback, handleAdminListFeedback, handleAdminResolveFeedback } from "./routes/feedback.js";
 import { handlePushSubscribe, handlePushUnsubscribe, handleScheduled } from "./routes/push.js";
 
@@ -306,6 +307,18 @@ export default {
         if (resolveReport && request.method === "POST") {
           if (user.role !== "admin") return applySecurityHeaders(json({ error: "Forbidden." }, { status: 403 }));
           return applySecurityHeaders(await handleAdminResolveReport(request, env, user, resolveReport[1]));
+        }
+        if (url.pathname === "/api/ai-content/report" && request.method === "POST") {
+          return applySecurityHeaders(await handleReportAiContent(request, env, user));
+        }
+        if (url.pathname === "/api/admin/ai-reports" && request.method === "GET") {
+          if (user.role !== "admin") return applySecurityHeaders(json({ error: "Forbidden." }, { status: 403 }));
+          return applySecurityHeaders(await handleAdminListAiReports(request, env, user));
+        }
+        const resolveAiReport = url.pathname.match(/^\/api\/admin\/ai-reports\/([^/]+)\/resolve$/);
+        if (resolveAiReport && request.method === "POST") {
+          if (user.role !== "admin") return applySecurityHeaders(json({ error: "Forbidden." }, { status: 403 }));
+          return applySecurityHeaders(await handleAdminResolveAiReport(request, env, user, resolveAiReport[1]));
         }
         if (url.pathname === "/api/admin/questions/search" && request.method === "GET") {
           if (user.role !== "admin") return applySecurityHeaders(json({ error: "Forbidden." }, { status: 403 }));

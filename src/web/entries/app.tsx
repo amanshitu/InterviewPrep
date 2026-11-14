@@ -1,18 +1,41 @@
-import { StrictMode } from "react";
+import { lazy, StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes } from "react-router";
 import "../styles/globals.css";
 import { AppShell } from "../components/layout/AppShell";
 import { listenForInstallEvents } from "../lib/pwa-install";
 import { registerPwaUpdateWatcher } from "../lib/pwa-update";
-import { Today } from "../routes/app/Today";
-import { Review } from "../routes/app/Review";
-import { DailyTest } from "../routes/app/DailyTest";
-import { SelfTest } from "../routes/app/SelfTest";
-import { MockInterview } from "../routes/app/MockInterview";
-import { Stats } from "../routes/app/Stats";
-import { Settings } from "../routes/app/Settings";
-import { AdminHome } from "../routes/admin/AdminHome";
+
+// Lazy, not static, imports for every route — one document now covers
+// every page (see the architecture note below), so without this the whole
+// bundle (every app page, every public/legal page, Admin, everything)
+// would load up front even for a visitor who only ever opens /privacy.
+// Each entry becomes its own chunk, fetched only when that route is hit.
+const Today = lazy(() => import("../routes/app/Today").then((m) => ({ default: m.Today })));
+const Review = lazy(() => import("../routes/app/Review").then((m) => ({ default: m.Review })));
+const DailyTest = lazy(() => import("../routes/app/DailyTest").then((m) => ({ default: m.DailyTest })));
+const SelfTest = lazy(() => import("../routes/app/SelfTest").then((m) => ({ default: m.SelfTest })));
+const MockInterview = lazy(() => import("../routes/app/MockInterview").then((m) => ({ default: m.MockInterview })));
+const Stats = lazy(() => import("../routes/app/Stats").then((m) => ({ default: m.Stats })));
+const Settings = lazy(() => import("../routes/app/Settings").then((m) => ({ default: m.Settings })));
+const AdminHome = lazy(() => import("../routes/admin/AdminHome").then((m) => ({ default: m.AdminHome })));
+const Login = lazy(() => import("../routes/auth/Login").then((m) => ({ default: m.Login })));
+const Home = lazy(() => import("../routes/public/Home").then((m) => ({ default: m.Home })));
+const About = lazy(() => import("../routes/public/About").then((m) => ({ default: m.About })));
+const Guide = lazy(() => import("../routes/public/Guide").then((m) => ({ default: m.Guide })));
+const Faq = lazy(() => import("../routes/public/Faq").then((m) => ({ default: m.Faq })));
+const Privacy = lazy(() => import("../routes/public/Privacy").then((m) => ({ default: m.Privacy })));
+const Terms = lazy(() => import("../routes/public/Terms").then((m) => ({ default: m.Terms })));
+const Press = lazy(() => import("../routes/public/Press").then((m) => ({ default: m.Press })));
+const Grievance = lazy(() => import("../routes/public/Grievance").then((m) => ({ default: m.Grievance })));
+
+function RouteFallback() {
+  return (
+    <div className="flex min-h-dvh items-center justify-center bg-background">
+      <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-border border-t-primary" />
+    </div>
+  );
+}
 
 const root = document.getElementById("root");
 if (!root) throw new Error("#root not found");
@@ -24,29 +47,46 @@ if (!root) throw new Error("#root not found");
 listenForInstallEvents();
 registerPwaUpdateWatcher();
 
-// Single-page app for the whole authenticated area: one document, one
-// AppShell (sidebar/header mounted once as a layout route — see
-// AppShell.tsx), React Router swaps only the <Outlet/> content between
-// these routes. Matches MealSathi's own persistent-shell architecture.
-// Login and About stay separate documents on purpose (real navigation
-// boundaries: signed-out <-> signed-in, and a rarely-visited info page),
-// not something a user clicks between constantly the way these 8 pages
-// are, so the "every click reloads" complaint doesn't apply to them.
+// Single document, single bundle for the whole app — authenticated pages
+// under the AppShell layout route (sidebar/header mounted once, React
+// Router swaps only the <Outlet/> content), and every public/auth page as
+// sibling top-level routes that render on their own, bypassing AppShell
+// and AuthGate entirely (they don't need a session). Previously these
+// public pages were each their own separate HTML document/entry/build
+// target (about.html, login.html, etc.) — consolidated here so there's
+// exactly one document, matching MealSathi's own persistent-shell
+// architecture, and so Cloudflare's assets `not_found_handling:
+// "single-page-application"` fallback (see wrangler.toml) is the only
+// routing path that ever needs to exist. Every route is lazy-loaded (see
+// above) specifically so this consolidation doesn't turn into "every
+// visitor downloads the entire app" — each page's own chunk is fetched
+// only once its route actually matches.
 createRoot(root).render(
   <StrictMode>
     <BrowserRouter>
-      <Routes>
-        <Route element={<AppShell />}>
-          <Route path="/" element={<Today />} />
-          <Route path="/review" element={<Review />} />
-          <Route path="/test" element={<DailyTest />} />
-          <Route path="/self-test" element={<SelfTest />} />
-          <Route path="/mock-interview" element={<MockInterview />} />
-          <Route path="/stats" element={<Stats />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/admin" element={<AdminHome />} />
-        </Route>
-      </Routes>
+      <Suspense fallback={<RouteFallback />}>
+        <Routes>
+          <Route element={<AppShell />}>
+            <Route path="/" element={<Today />} />
+            <Route path="/review" element={<Review />} />
+            <Route path="/test" element={<DailyTest />} />
+            <Route path="/self-test" element={<SelfTest />} />
+            <Route path="/mock-interview" element={<MockInterview />} />
+            <Route path="/stats" element={<Stats />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/admin" element={<AdminHome />} />
+          </Route>
+          <Route path="/login" element={<Login />} />
+          <Route path="/home" element={<Home />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/guide" element={<Guide />} />
+          <Route path="/faq" element={<Faq />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/press" element={<Press />} />
+          <Route path="/grievance" element={<Grievance />} />
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   </StrictMode>,
 );

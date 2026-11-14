@@ -7,7 +7,9 @@ import { LogOutIcon, LogoMark, MessageIcon } from "./icons";
 
 // Mobile-only sticky header (sidebar is desktop-only, hidden below the
 // `sm:` breakpoint — see Sidebar.tsx) — brand on the left, a drawer menu
-// trigger on the right, matching MealSathi's mobile chrome pattern.
+// trigger on the right, matching MealSathi's mobile chrome pattern. Stays
+// put on scroll — the per-page collapsing title (see PageHeader.tsx) is
+// what reacts to scroll position, pinned right under this bar.
 export function MobileHeader({ user, onLogout }: { user: User; onLogout: () => void }) {
   const [open, setOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);

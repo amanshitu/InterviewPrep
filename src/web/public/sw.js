@@ -3,10 +3,10 @@
 // fundamentally data-driven (daily queue, review, test), so there's no
 // meaningful offline experience to build beyond "the shell loads."
 //
-// Today / Review / Test / Self Test / Mock Interview / Stats / Settings /
-// Admin are all one client-routed SPA served from index.html (React
-// Router — see entries/app.tsx); only Login and About are still separate
-// documents. Vite hashes the JS/CSS bundle filenames on every build, so
+// Every route — Today through Admin, plus Login/Home/About/Guide/FAQ/
+// Privacy/Terms/Press/Grievance — is one client-routed SPA served from
+// index.html (React Router — see entries/app.tsx), one document total.
+// Vite hashes the JS/CSS bundle filenames on every build, so
 // (same as before) only the few genuinely stable, unhashed paths are
 // pre-cached here — the runtime fetch handler below opportunistically
 // caches whatever hashed assets a visitor's browser actually requests
@@ -15,7 +15,7 @@
 // loads of anything already visited still work offline.
 //
 // Bump CACHE_NAME whenever static assets change in a way that matters.
-const CACHE_NAME = "interview-prep-shell-v8";
+const CACHE_NAME = "interview-prep-shell-v9";
 const SHELL_ASSETS = ["/", "/manifest.json", "/theme-init.js", "/favicon.ico"];
 
 self.addEventListener("install", (event) => {

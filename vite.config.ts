@@ -3,14 +3,19 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { resolve } from "node:path";
 
-// index.html is now the single-page app covering every authenticated route
-// (Today through Admin) via React Router + a persistent AppShell layout
-// (see entries/app.tsx) — matching MealSathi's own client-routed shell,
-// after an earlier true-MPA attempt (separate document per route) turned
-// out to feel like a full reload on every sidebar click. login.html and
-// about.html stay separate documents on purpose: real navigation
-// boundaries (signed-out/in, and a rarely-visited info page), not part of
-// the core click-between-constantly workflow the SPA conversion was for.
+// index.html is the single document for the entire app — authenticated
+// routes (Today through Admin) via React Router + a persistent AppShell
+// layout, and every public/auth page (Login, Home, About, Guide, FAQ,
+// Privacy, Terms, Press, Grievance) as sibling top-level routes that
+// render without AppShell/AuthGate (see entries/app.tsx). An earlier
+// true-MPA attempt (separate document per route) turned out to feel like
+// a full reload on every sidebar click; a later phase kept the public
+// pages as their own separate documents on the theory that they were rare
+// "real navigation boundaries" — consolidated into this one document too,
+// since a visitor clicking from Home -> About -> Privacy -> Login still
+// benefits from not reloading the whole JS bundle each time, and Cloudflare's
+// assets `not_found_handling: "single-page-application"` fallback (see
+// wrangler.toml) already treats every path as belonging to this one document.
 export default defineConfig({
   root: "src/web",
   plugins: [react(), tailwindcss()],
@@ -42,15 +47,6 @@ export default defineConfig({
     rollupOptions: {
       input: {
         index: resolve(__dirname, "src/web/index.html"),
-        home: resolve(__dirname, "src/web/home.html"),
-        about: resolve(__dirname, "src/web/about.html"),
-        login: resolve(__dirname, "src/web/login.html"),
-        guide: resolve(__dirname, "src/web/guide.html"),
-        faq: resolve(__dirname, "src/web/faq.html"),
-        privacy: resolve(__dirname, "src/web/privacy.html"),
-        terms: resolve(__dirname, "src/web/terms.html"),
-        grievance: resolve(__dirname, "src/web/grievance.html"),
-        press: resolve(__dirname, "src/web/press.html"),
       },
     },
   },

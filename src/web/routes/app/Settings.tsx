@@ -9,6 +9,7 @@ import { DataExportSection } from "../../components/settings/DataExportSection";
 import { DeleteAccountSection } from "../../components/settings/DeleteAccountSection";
 import { AccountIcon, BellIcon, ClipboardIcon, DownloadIcon, PaletteIcon, SparkleIcon } from "../../components/settings/icons";
 import { NotificationsSection } from "../../components/settings/NotificationsSection";
+import { PageHeader } from "../../components/layout/PageHeader";
 import { PasswordSection, SessionsSection } from "../../components/settings/PasswordSection";
 import { PrepProfileSection } from "../../components/settings/PrepProfileSection";
 import { useIsMobile } from "../../hooks/use-is-mobile";
@@ -100,7 +101,7 @@ function SettingsContent({ user }: { user: User }) {
 
   return (
     <div>
-      <h1 className="mb-5 text-xl font-bold text-foreground">Settings</h1>
+      <PageHeader title="Settings" />
       {isMobile ? (
         <div className="mb-4 flex gap-1 overflow-x-auto border-b border-border pb-px">
           {TABS.map((t) => (

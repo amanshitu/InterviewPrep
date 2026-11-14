@@ -9,6 +9,7 @@
 import { useEffect, useState } from "react";
 import { listPublicCategories } from "../../api/categories";
 import { PublicFooter } from "../../components/layout/PublicPageChrome";
+import { useRawPageTitle } from "../../hooks/use-page-title";
 import {
   ArrowRightIcon,
   CheckIcon,
@@ -41,13 +42,13 @@ function PrimaryCtas({ className = "" }: { className?: string }) {
     <div className={`flex flex-col gap-3 sm:flex-row ${className}`}>
       <a
         href="/login?form=signup"
-        className="inline-flex h-12 items-center justify-center gap-2 rounded-(--radius-md) bg-primary px-6 text-base font-semibold text-primary-foreground shadow-sm transition hover:opacity-90"
+        className="inline-flex h-12 items-center justify-center gap-2 rounded-md bg-primary px-6 text-base font-semibold text-primary-foreground shadow-sm transition hover:opacity-90"
       >
         <PlusIcon width={16} height={16} /> Create free account <ArrowRightIcon width={16} height={16} />
       </a>
       <a
         href="/login"
-        className="inline-flex h-12 items-center justify-center gap-2 rounded-(--radius-md) border border-border px-6 text-base font-semibold text-foreground transition hover:bg-secondary"
+        className="inline-flex h-12 items-center justify-center gap-2 rounded-md border border-border px-6 text-base font-semibold text-foreground transition hover:bg-secondary"
       >
         <SendIcon width={15} height={15} /> Sign in
       </a>
@@ -59,7 +60,7 @@ function PrimaryCtas({ className = "" }: { className?: string }) {
 function HeroPreview() {
   return (
     <div className="relative mx-auto w-full max-w-sm">
-      <figure className="relative rounded-(--radius-lg) border border-border bg-card p-5 shadow-xl shadow-primary/10">
+      <figure className="relative rounded-lg border border-border bg-card p-5 shadow-xl shadow-primary/10">
         <figcaption className="flex items-center justify-between">
           <div>
             <p className="text-xs font-medium text-muted-foreground">Today</p>
@@ -69,7 +70,7 @@ function HeroPreview() {
             🔥 6-day streak
           </span>
         </figcaption>
-        <div className="mt-4 rounded-(--radius-md) border border-primary/30 bg-primary/5 p-3.5">
+        <div className="mt-4 rounded-md border border-primary/30 bg-primary/5 p-3.5">
           <p className="text-xs font-medium text-primary">Technical Architecture · Q5</p>
           <p className="mt-1 text-sm font-medium">What's the difference between horizontal and vertical scaling?</p>
           <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -80,7 +81,7 @@ function HeroPreview() {
             <span className="inline-flex flex-1 items-center justify-center rounded-md border border-border px-2 py-1.5 text-xs font-medium text-muted-foreground">Review again soon</span>
           </div>
         </div>
-        <div className="mt-3 rounded-(--radius-md) bg-secondary/70 p-3 text-sm text-muted-foreground">
+        <div className="mt-3 rounded-md bg-secondary/70 p-3 text-sm text-muted-foreground">
           <ReviewIcon width={13} height={13} className="mr-1.5 inline-block text-primary" />
           3 questions due for review today, prioritized first.
         </div>
@@ -128,6 +129,10 @@ interface CategoryStats {
 }
 
 export function Home() {
+  // The marketing homepage's title leads with the brand name itself
+  // ("ExamStreak — ...") rather than the usual "<Page> — ExamStreak"
+  // pattern every other page uses, so it bypasses usePageTitle's template.
+  useRawPageTitle("ExamStreak — Daily interview & exam prep");
   const [stats, setStats] = useState<CategoryStats | null>(null);
 
   useEffect(() => {
@@ -210,7 +215,7 @@ export function Home() {
           <SectionHeading eyebrow="How it works" title="One loop, repeated daily" center />
           <ol className="mt-10 grid gap-4 md:grid-cols-3 md:gap-6">
             {STEPS.map((s, i) => (
-              <li key={s.title} className="relative rounded-(--radius-lg) border border-border bg-card p-6 shadow-sm">
+              <li key={s.title} className="relative rounded-lg border border-border bg-card p-6 shadow-sm">
                 <span className="absolute right-5 top-5 inline-flex size-8 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
                   {i + 1}
                 </span>
@@ -233,7 +238,7 @@ export function Home() {
               body="Not just a question bank — a schedule that brings the right question back at the right time, plus three ways to practice."
             />
             <div className="mt-10 grid gap-6 lg:grid-cols-2">
-              <article className="rounded-(--radius-lg) border border-border bg-card p-6 shadow-sm sm:p-8">
+              <article className="rounded-lg border border-border bg-card p-6 shadow-sm sm:p-8">
                 <span className="inline-flex size-11 items-center justify-center rounded-xl bg-primary/12 text-primary">
                   <ReviewIcon width={20} height={20} />
                 </span>
@@ -245,7 +250,7 @@ export function Home() {
                 <ol className="mt-5 space-y-2 border-l-2 border-dashed border-primary/30 pl-4">
                   {REVIEW_TIMELINE.map((t) => (
                     <li key={t.day} className="relative flex items-center gap-3 rounded-xl bg-secondary/60 p-3">
-                      <span className="absolute -left-[1.4rem] top-1/2 size-2.5 -translate-y-1/2 rounded-full bg-primary" />
+                      <span className="absolute left-[-1.4rem] top-1/2 size-2.5 -translate-y-1/2 rounded-full bg-primary" />
                       <span className="w-14 shrink-0 text-xs font-semibold uppercase text-muted-foreground">{t.day}</span>
                       <div className="min-w-0 flex-1">
                         <p className="font-medium">{t.label}</p>
@@ -256,7 +261,7 @@ export function Home() {
                 </ol>
               </article>
 
-              <article className="rounded-(--radius-lg) border border-border bg-card p-6 shadow-sm sm:p-8">
+              <article className="rounded-lg border border-border bg-card p-6 shadow-sm sm:p-8">
                 <span className="inline-flex size-11 items-center justify-center rounded-xl bg-primary/12 text-primary">
                   <SparkleIcon width={20} height={20} />
                 </span>
@@ -280,7 +285,7 @@ export function Home() {
 
             <ul className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {EXTRAS.map((e) => (
-                <li key={e.title} className="rounded-(--radius-lg) border border-border bg-card p-5">
+                <li key={e.title} className="rounded-lg border border-border bg-card p-5">
                   <span className="inline-flex size-10 items-center justify-center rounded-xl bg-primary/12 text-primary">
                     <e.icon width={17} height={17} />
                   </span>
@@ -294,7 +299,7 @@ export function Home() {
 
         {/* PWA + privacy */}
         <section className="mx-auto grid max-w-6xl gap-6 px-4 py-16 sm:px-6 md:py-24 lg:grid-cols-2">
-          <article className="flex flex-col rounded-(--radius-lg) border border-border bg-linear-to-br from-secondary to-card p-6 sm:p-8">
+          <article className="flex flex-col rounded-lg border border-border bg-linear-to-br from-secondary to-card p-6 sm:p-8">
             <div className="flex items-center gap-3">
               <span className="inline-flex size-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
                 <DownloadIcon width={22} height={22} />
@@ -310,7 +315,7 @@ export function Home() {
             </p>
           </article>
 
-          <article className="flex flex-col rounded-(--radius-lg) border border-border bg-card p-6 sm:p-8">
+          <article className="flex flex-col rounded-lg border border-border bg-card p-6 sm:p-8">
             <div className="flex items-center gap-3">
               <span className="inline-flex size-12 items-center justify-center rounded-2xl bg-secondary text-foreground">
                 <ShieldIcon width={22} height={22} />
@@ -333,7 +338,7 @@ export function Home() {
 
         {/* Final CTA */}
         <section className="px-4 pb-16 sm:px-6 md:pb-24">
-          <div className="mx-auto max-w-4xl rounded-(--radius-lg) bg-primary px-6 py-12 text-center text-primary-foreground shadow-lg sm:px-12">
+          <div className="mx-auto max-w-4xl rounded-lg bg-primary px-6 py-12 text-center text-primary-foreground shadow-lg sm:px-12">
             <h2 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">Start your streak today</h2>
             <p className="mx-auto mt-2 max-w-xl opacity-90">
               Free to use, with your own AI key for unlimited practice whenever you want it.
@@ -341,13 +346,13 @@ export function Home() {
             <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
               <a
                 href="/login?form=signup"
-                className="inline-flex h-12 items-center justify-center gap-2 rounded-(--radius-md) bg-primary-foreground px-6 text-base font-semibold text-primary transition hover:opacity-90"
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-md bg-primary-foreground px-6 text-base font-semibold text-primary transition hover:opacity-90"
               >
                 Create free account <ArrowRightIcon width={16} height={16} />
               </a>
               <a
                 href="/login"
-                className="inline-flex h-12 items-center justify-center gap-2 rounded-(--radius-md) border border-primary-foreground/40 px-6 text-base font-semibold text-primary-foreground transition hover:bg-primary-foreground/10"
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-md border border-primary-foreground/40 px-6 text-base font-semibold text-primary-foreground transition hover:bg-primary-foreground/10"
               >
                 <SendIcon width={15} height={15} /> Sign in
               </a>
@@ -363,13 +368,13 @@ export function Home() {
         <div className="flex gap-2 px-4">
           <a
             href="/login?form=signup"
-            className="inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-(--radius-md) bg-primary text-sm font-semibold text-primary-foreground"
+            className="inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-md bg-primary text-sm font-semibold text-primary-foreground"
           >
             Create free account
           </a>
           <a
             href="/login"
-            className="inline-flex h-11 items-center justify-center gap-1.5 rounded-(--radius-md) border border-border px-4 text-sm font-semibold text-foreground"
+            className="inline-flex h-11 items-center justify-center gap-1.5 rounded-md border border-border px-4 text-sm font-semibold text-foreground"
           >
             Sign in
           </a>
