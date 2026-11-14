@@ -11,12 +11,13 @@ import { handleGetSelfTestHistory } from "./selftest.js";
 // query combines all four cleanly (different tables, different filters),
 // and at this app's scale there's no need to — four COUNTs is still trivial.
 export async function handleAdminOverview(request, env, user) {
-  const [totalUsers, totalCategories, totalQuestionSets, pendingApprovalCount, openReportCount] = await Promise.all([
+  const [totalUsers, totalCategories, totalQuestionSets, pendingApprovalCount, openReportCount, openFeedbackCount] = await Promise.all([
     env.DB.prepare("SELECT COUNT(*) as n FROM users").first(),
     env.DB.prepare("SELECT COUNT(*) as n FROM categories WHERE is_active = 1").first(),
     env.DB.prepare("SELECT COUNT(*) as n FROM question_sets").first(),
     env.DB.prepare("SELECT COUNT(*) as n FROM question_sets WHERE visibility = 'pending'").first(),
     env.DB.prepare("SELECT COUNT(*) as n FROM question_reports WHERE status = 'open'").first(),
+    env.DB.prepare("SELECT COUNT(*) as n FROM feedback WHERE status = 'open'").first(),
   ]);
   return json({
     totalUsers: totalUsers?.n || 0,
@@ -24,6 +25,7 @@ export async function handleAdminOverview(request, env, user) {
     totalQuestionSets: totalQuestionSets?.n || 0,
     pendingApprovalCount: pendingApprovalCount?.n || 0,
     openReportCount: openReportCount?.n || 0,
+    openFeedbackCount: openFeedbackCount?.n || 0,
   });
 }
 

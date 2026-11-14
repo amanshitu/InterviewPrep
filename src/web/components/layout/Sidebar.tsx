@@ -1,10 +1,11 @@
-import type { ComponentType, SVGProps } from "react";
+import { useState, type ComponentType, type SVGProps } from "react";
 import { Link, NavLink } from "react-router";
 import type { User } from "../../api/types";
 import { useSidebar } from "../../hooks/use-sidebar";
 import { primaryNav, secondaryNav, type NavItem } from "../../lib/nav";
 import type { RefreshUser } from "./AuthGate";
-import { LogoMark, PanelLeftCloseIcon, PanelLeftOpenIcon } from "./icons";
+import { FeedbackModal } from "./FeedbackModal";
+import { LogoMark, MessageIcon, PanelLeftCloseIcon, PanelLeftOpenIcon } from "./icons";
 import { ProfileMenu } from "./ProfileMenu";
 
 // Desktop-only collapsible left sidebar, matching MealSathi's app-shell
@@ -16,6 +17,7 @@ import { ProfileMenu } from "./ProfileMenu";
 export function Sidebar({ user, refreshUser, onLogout }: { user: User; refreshUser: RefreshUser; onLogout: () => void }) {
   const { state, toggle } = useSidebar();
   const collapsed = state === "collapsed";
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   return (
     <aside
@@ -50,11 +52,16 @@ export function Sidebar({ user, refreshUser, onLogout }: { user: User; refreshUs
           .map((item) => (
             <SidebarLink key={item.href} item={item} />
           ))}
+        <button type="button" onClick={() => setFeedbackOpen(true)} className={linkClass(false)}>
+          <LinkContent Icon={MessageIcon} label="Feedback" active={false} />
+        </button>
       </nav>
 
       <div className="border-t border-sidebar-border p-2">
         <ProfileMenu user={user} refreshUser={refreshUser} onLogout={onLogout} />
       </div>
+
+      {feedbackOpen ? <FeedbackModal onClose={() => setFeedbackOpen(false)} /> : null}
     </aside>
   );
 }

@@ -80,6 +80,7 @@ import {
   handleAdminUpdateQuestion,
 } from "./routes/admin.js";
 import { handleReportQuestion, handleAdminListReports, handleAdminResolveReport } from "./routes/reports.js";
+import { handleSubmitFeedback, handleAdminListFeedback, handleAdminResolveFeedback } from "./routes/feedback.js";
 import { handlePushSubscribe, handlePushUnsubscribe, handleScheduled } from "./routes/push.js";
 
 export default {
@@ -285,6 +286,19 @@ export default {
         if (adminUpdateQuestion && request.method === "PATCH") {
           if (user.role !== "admin") return applySecurityHeaders(json({ error: "Forbidden." }, { status: 403 }));
           return applySecurityHeaders(await handleAdminUpdateQuestion(request, env, user, adminUpdateQuestion[1]));
+        }
+
+        if (url.pathname === "/api/feedback" && request.method === "POST") {
+          return applySecurityHeaders(await handleSubmitFeedback(request, env, user));
+        }
+        if (url.pathname === "/api/admin/feedback" && request.method === "GET") {
+          if (user.role !== "admin") return applySecurityHeaders(json({ error: "Forbidden." }, { status: 403 }));
+          return applySecurityHeaders(await handleAdminListFeedback(request, env, user));
+        }
+        const resolveFeedback = url.pathname.match(/^\/api\/admin\/feedback\/([^/]+)\/resolve$/);
+        if (resolveFeedback && request.method === "POST") {
+          if (user.role !== "admin") return applySecurityHeaders(json({ error: "Forbidden." }, { status: 403 }));
+          return applySecurityHeaders(await handleAdminResolveFeedback(request, env, user, resolveFeedback[1]));
         }
 
         if (url.pathname === "/api/test/today" && request.method === "GET") {

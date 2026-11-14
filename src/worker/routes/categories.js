@@ -54,16 +54,18 @@ export async function handleEnrollCategory(request, env, user) {
     .bind(user.id, categoryId)
     .run();
 
-  // Signup subscribes a new account to every official (owner_user_id IS
-  // NULL) set unconditionally, which is how a user's signup-time category
-  // already has questions. Enrolling in an ADDITIONAL category afterward
-  // hit the same "no questions in my selected category" class of bug
-  // 0022's commit message describes — this set's queue join requires a
-  // user_question_sets row (see queue.js's ensureTodayQueueFilled), and
-  // nothing wrote one for a category joined post-signup. Subscribe now to
-  // every official set tagged into this specific category, same as signup.
+  // Signup subscribes a new account to every shared set unconditionally,
+  // which is how a user's signup-time category already has questions.
+  // Enrolling in an ADDITIONAL category afterward hit the same "no
+  // questions in my selected category" class of bug 0022's commit message
+  // describes — this set's queue join requires a user_question_sets row
+  // (see queue.js's ensureTodayQueueFilled), and nothing wrote one for a
+  // category joined post-signup. Subscribe now to every shared set tagged
+  // into this specific category, same as signup (see auth.js's own comment
+  // on why "shared" alone is the right filter now that set creation is
+  // admin-only).
   const officialSets = await env.DB.prepare(
-    "SELECT qsc.set_id as id FROM question_set_categories qsc JOIN question_sets qs ON qs.id = qsc.set_id WHERE qsc.category_id = ? AND qs.owner_user_id IS NULL",
+    "SELECT qsc.set_id as id FROM question_set_categories qsc JOIN question_sets qs ON qs.id = qsc.set_id WHERE qsc.category_id = ? AND qs.visibility = 'shared'",
   )
     .bind(categoryId)
     .all();

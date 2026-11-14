@@ -2,13 +2,15 @@ import { useState } from "react";
 import { Link, NavLink } from "react-router";
 import type { User } from "../../api/types";
 import { primaryNav, secondaryNav, type NavItem } from "../../lib/nav";
-import { LogOutIcon, LogoMark } from "./icons";
+import { FeedbackModal } from "./FeedbackModal";
+import { LogOutIcon, LogoMark, MessageIcon } from "./icons";
 
 // Mobile-only sticky header (sidebar is desktop-only, hidden below the
 // `sm:` breakpoint — see Sidebar.tsx) — brand on the left, a drawer menu
 // trigger on the right, matching MealSathi's mobile chrome pattern.
 export function MobileHeader({ user, onLogout }: { user: User; onLogout: () => void }) {
   const [open, setOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   return (
     <>
@@ -54,6 +56,13 @@ export function MobileHeader({ user, onLogout }: { user: User; onLogout: () => v
                 .map((item) => (
                   <MobileNavLink key={item.href} item={item} onNavigate={() => setOpen(false)} />
                 ))}
+              <button
+                type="button"
+                onClick={() => { setOpen(false); setFeedbackOpen(true); }}
+                className={mobileLinkClass}
+              >
+                <MessageIcon /> Feedback
+              </button>
             </nav>
             <button
               type="button"
@@ -65,6 +74,8 @@ export function MobileHeader({ user, onLogout }: { user: User; onLogout: () => v
           </div>
         </div>
       ) : null}
+
+      {feedbackOpen ? <FeedbackModal onClose={() => setFeedbackOpen(false)} /> : null}
     </>
   );
 }

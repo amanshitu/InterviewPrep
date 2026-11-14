@@ -4,7 +4,7 @@ import { getApprovalHistory, getOverview, getPendingSets, type AdminOverview, ty
 import { listCategories } from "../../api/categories";
 import type { Category } from "../../api/types";
 import { useShellUser } from "../../components/layout/AppShell";
-import { ClockIcon, FlagIcon, FolderIcon, RefreshIcon, UsersIcon } from "../../components/layout/icons";
+import { ClockIcon, FlagIcon, FolderIcon, MessageIcon, RefreshIcon, UploadIcon, UsersIcon } from "../../components/layout/icons";
 import { KpiCard } from "../../components/admin/KpiCard";
 import { Section } from "../../components/admin/Section";
 import { CategoriesPanel } from "../../components/admin/CategoriesPanel";
@@ -12,17 +12,24 @@ import { PendingSetsPanel } from "../../components/admin/PendingSetsPanel";
 import { HistoryPanel } from "../../components/admin/HistoryPanel";
 import { UsersPanel } from "../../components/admin/UsersPanel";
 import { ReportsPanel } from "../../components/admin/ReportsPanel";
+import { FeedbackPanel } from "../../components/admin/FeedbackPanel";
+import { QuestionSetsSection } from "../../components/settings/QuestionSetsSection";
+import { CategoryAiPromptSection } from "../../components/settings/CategoryAiPromptSection";
+import { ResumePromptSection } from "../../components/settings/ResumePromptSection";
+import { SuggestedSetsSection } from "../../components/settings/SuggestedSetsSection";
 import { useToast } from "../../hooks/use-toast";
 import type { User } from "../../api/types";
 import { Skeleton, SkeletonCard } from "../../components/layout/Skeleton";
 
-type Tab = "categories" | "pending" | "reports" | "history" | "users";
+type Tab = "categories" | "pending" | "reports" | "feedback" | "questionsets" | "history" | "users";
 
 const DEFAULT_TAB: Tab = "pending";
 
 const TABS: { key: Tab; label: string; icon: ComponentType<SVGProps<SVGSVGElement>> }[] = [
   { key: "pending", label: "Pending Approvals", icon: ClockIcon },
   { key: "reports", label: "Reports", icon: FlagIcon },
+  { key: "feedback", label: "Feedback", icon: MessageIcon },
+  { key: "questionsets", label: "Question Sets", icon: UploadIcon },
   { key: "categories", label: "Categories", icon: FolderIcon },
   { key: "history", label: "History", icon: RefreshIcon },
   { key: "users", label: "Users", icon: UsersIcon },
@@ -32,7 +39,7 @@ const TAB_KEYS = new Set<string>(TABS.map((t) => t.key));
 
 export function AdminHome() {
   const user = useShellUser();
-  return user.role === "admin" ? <AdminDashboard /> : <Forbidden user={user} />;
+  return user.role === "admin" ? <AdminDashboard user={user} /> : <Forbidden user={user} />;
 }
 
 function Forbidden({ user }: { user: User }) {
@@ -51,7 +58,7 @@ function Forbidden({ user }: { user: User }) {
 // "open Admin, then click Users") instead of always landing on Pending
 // Approvals. Falls back to DEFAULT_TAB for a missing or unrecognized
 // value.
-function AdminDashboard() {
+function AdminDashboard({ user }: { user: User }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get("tab");
   const tab: Tab = requestedTab && TAB_KEYS.has(requestedTab) ? (requestedTab as Tab) : DEFAULT_TAB;
@@ -101,16 +108,17 @@ function AdminDashboard() {
       <h1 className="text-xl font-bold text-foreground">Admin</h1>
 
       {overview ? (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
           <KpiCard label="Users" value={overview.totalUsers} />
           <KpiCard label="Categories" value={overview.totalCategories} />
           <KpiCard label="Question sets" value={overview.totalQuestionSets} />
           <KpiCard label="Pending approvals" value={overview.pendingApprovalCount} />
           <KpiCard label="Open reports" value={overview.openReportCount} />
+          <KpiCard label="Open feedback" value={overview.openFeedbackCount} />
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-          {Array.from({ length: 5 }).map((_, i) => (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
+          {Array.from({ length: 6 }).map((_, i) => (
             <SkeletonCard key={i}>
               <Skeleton className="h-4 w-20" />
               <Skeleton className="mt-2 h-6 w-10" />
@@ -132,6 +140,7 @@ function AdminDashboard() {
             <t.icon width={15} height={15} /> {t.label}
             {t.key === "pending" && sets.length > 0 ? ` (${sets.length})` : ""}
             {t.key === "reports" && overview && overview.openReportCount > 0 ? ` (${overview.openReportCount})` : ""}
+            {t.key === "feedback" && overview && overview.openFeedbackCount > 0 ? ` (${overview.openFeedbackCount})` : ""}
           </button>
         ))}
       </div>
@@ -158,6 +167,19 @@ function AdminDashboard() {
             <Section title="Reported questions" subtitle="Users can flag a question or answer as wrong or confusing — fix it directly from here, or search for any question even if nobody's reported it yet.">
               <ReportsPanel onChanged={() => void load()} />
             </Section>
+          ) : null}
+          {tab === "feedback" ? (
+            <Section title="User feedback" subtitle="General app feedback — bugs, feature ideas, or anything else. Question-specific reports live under Reports instead.">
+              <FeedbackPanel onChanged={() => void load()} />
+            </Section>
+          ) : null}
+          {tab === "questionsets" ? (
+            <div className="flex flex-col gap-4">
+              <QuestionSetsSection user={user} />
+              <CategoryAiPromptSection user={user} />
+              <ResumePromptSection user={user} />
+              <SuggestedSetsSection activeCategoryId={user.activeCategoryId} />
+            </div>
           ) : null}
           {tab === "history" ? (
             <Section title="Review history" subtitle="Past decisions — who approved or rejected each set, and how many questions it had.">

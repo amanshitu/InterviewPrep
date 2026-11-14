@@ -60,9 +60,14 @@ export async function handleSignup(request, env) {
     .bind(id, JSON.stringify(defaultState()), now)
     .run();
 
-  // Every account starts subscribed to all official (non-user-owned) sets —
-  // that's the shared HR/behavioral etc. curriculum everyone gets by default.
-  const officialSets = await env.DB.prepare("SELECT id FROM question_sets WHERE owner_user_id IS NULL").all();
+  // Every account starts subscribed to every shared set — originally just
+  // owner_user_id IS NULL (the official HR/behavioral curriculum), broadened
+  // to all visibility='shared' once question-set creation became admin-only:
+  // an admin-created set still has owner_user_id set to the admin's own id,
+  // and with no more self-service community submission flow, "shared" now
+  // means "admin-published," so the distinction this filter used to make no
+  // longer carries meaning — everything shared should reach everyone.
+  const officialSets = await env.DB.prepare("SELECT id FROM question_sets WHERE visibility = 'shared'").all();
   const subs = (officialSets.results || []).map((s) =>
     env.DB.prepare(
       "INSERT INTO user_question_sets (user_id, set_id, subscribed_at) VALUES (?, ?, ?) ON CONFLICT(user_id, set_id) DO NOTHING",

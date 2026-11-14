@@ -61,6 +61,7 @@ export interface AdminOverview {
   totalQuestionSets: number;
   pendingApprovalCount: number;
   openReportCount: number;
+  openFeedbackCount: number;
 }
 
 export function getOverview(): Promise<AdminOverview> {

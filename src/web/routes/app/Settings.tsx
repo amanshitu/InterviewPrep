@@ -4,20 +4,16 @@ import { useRefreshUser, useShellUser } from "../../components/layout/AppShell";
 import { AccountSection } from "../../components/settings/AccountSection";
 import { AiUsageSection } from "../../components/settings/AiUsageSection";
 import { AppearanceSection } from "../../components/settings/AppearanceSection";
-import { CategoryAiPromptSection } from "../../components/settings/CategoryAiPromptSection";
 import { CategorySection } from "../../components/settings/CategorySection";
 import { DataExportSection } from "../../components/settings/DataExportSection";
-import { AccountIcon, BellIcon, ClipboardIcon, DownloadIcon, FolderIcon, PaletteIcon, SparkleIcon } from "../../components/settings/icons";
+import { AccountIcon, BellIcon, ClipboardIcon, DownloadIcon, PaletteIcon, SparkleIcon } from "../../components/settings/icons";
 import { NotificationsSection } from "../../components/settings/NotificationsSection";
 import { PasswordSection, SessionsSection } from "../../components/settings/PasswordSection";
 import { PrepProfileSection } from "../../components/settings/PrepProfileSection";
-import { QuestionSetsSection } from "../../components/settings/QuestionSetsSection";
-import { ResumePromptSection } from "../../components/settings/ResumePromptSection";
-import { SuggestedSetsSection } from "../../components/settings/SuggestedSetsSection";
 import { useIsMobile } from "../../hooks/use-is-mobile";
 import type { User } from "../../api/types";
 
-type TabId = "account" | "profile" | "appearance" | "ai" | "notifications" | "questionsets" | "data";
+type TabId = "account" | "profile" | "appearance" | "ai" | "notifications" | "data";
 
 const DEFAULT_TAB: TabId = "account";
 
@@ -27,7 +23,6 @@ const TABS: { id: TabId; label: string; icon: ComponentType<SVGProps<SVGSVGEleme
   { id: "appearance", label: "Appearance & Accessibility", icon: PaletteIcon },
   { id: "ai", label: "AI & Usage", icon: SparkleIcon },
   { id: "notifications", label: "Notifications", icon: BellIcon },
-  { id: "questionsets", label: "Question Sets", icon: FolderIcon },
   { id: "data", label: "Data", icon: DownloadIcon },
 ];
 
@@ -90,15 +85,6 @@ function SettingsContent({ user }: { user: User }) {
         return <AiUsageSection user={currentUser} onUserChange={setCurrentUser} />;
       case "notifications":
         return <NotificationsSection />;
-      case "questionsets":
-        return (
-          <div className="flex flex-col gap-4">
-            <QuestionSetsSection user={currentUser} />
-            <CategoryAiPromptSection user={currentUser} />
-            <ResumePromptSection user={currentUser} />
-            <SuggestedSetsSection activeCategoryId={currentUser.activeCategoryId} />
-          </div>
-        );
       case "data":
         return <DataExportSection />;
       default:
