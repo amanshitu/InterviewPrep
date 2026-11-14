@@ -1,8 +1,9 @@
 import { lazy, StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter, Route, Routes } from "react-router";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router";
 import "../styles/globals.css";
 import { AppShell } from "../components/layout/AppShell";
+import { likelyAuthed } from "../lib/auth-flag";
 import { listenForInstallEvents } from "../lib/pwa-install";
 import { registerPwaUpdateWatcher } from "../lib/pwa-update";
 
@@ -35,6 +36,18 @@ function RouteFallback() {
       <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-border border-t-primary" />
     </div>
   );
+}
+
+// Catch-all for a path that matches nothing below (a typo'd URL, an old
+// bookmark, someone guessing at a route that doesn't exist like
+// "/today") — without this, React Router renders nothing at all for an
+// unmatched path, a blank page with no indication of what went wrong.
+// Same signed-in guess AuthGate itself uses: likely signed in -> "/",
+// where AuthGate's real GET /api/me check still runs and will bounce to
+// /login anyway if that guess was wrong; not likely signed in -> straight
+// to /login, per the same "fast-path, no wasted round trip" reasoning.
+function NotFoundRedirect() {
+  return <Navigate to={likelyAuthed() ? "/" : "/login"} replace />;
 }
 
 const root = document.getElementById("root");
@@ -85,6 +98,7 @@ createRoot(root).render(
           <Route path="/terms" element={<Terms />} />
           <Route path="/press" element={<Press />} />
           <Route path="/grievance" element={<Grievance />} />
+          <Route path="*" element={<NotFoundRedirect />} />
         </Routes>
       </Suspense>
     </BrowserRouter>
