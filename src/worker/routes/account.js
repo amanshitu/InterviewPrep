@@ -1,9 +1,11 @@
 import { json } from "../lib/http.js";
 import { readJsonBody } from "../lib/request.js";
-import { encryptSecret } from "../lib/crypto.js";
+import { encryptSecret, hashPassword } from "../lib/crypto.js";
 import { clampQuota, userPayloadWithCategories, defaultState } from "../lib/user.js";
 import { normalizeTimezone } from "../lib/datetime.js";
 import { AI_PROVIDERS, WORKERS_AI_MODEL_IDS, DEFAULT_WORKERS_AI_MODEL } from "../lib/ai.js";
+import { DELETION_GRACE_PERIOD_DAYS, purgeDateFor } from "../lib/accountDeletion.js";
+import { sendAccountDeletionRequestedEmail } from "../lib/email.js";
 
 export async function handleGetMe(request, env, user) {
   return json({ user: await userPayloadWithCategories(env, user) });
@@ -170,6 +172,39 @@ export async function handleGetActivity(request, env, user) {
     .bind(user.id, user.activeCategoryId, limit)
     .all();
   return json({ events: rows.results || [] });
+}
+
+// ---------- account deletion (self-serve, with a grace period) ----------
+
+export async function handleRequestAccountDeletion(request, env, user) {
+  const parsed = await readJsonBody(request);
+  if (!parsed.ok) return json({ error: parsed.error }, { status: parsed.status });
+  const password = (parsed.body.password || "").toString();
+
+  const row = await env.DB.prepare("SELECT password_hash, salt FROM users WHERE id = ?").bind(user.id).first();
+  const computed = await hashPassword(password, row.salt);
+  if (computed !== row.password_hash) {
+    return json({ error: "Incorrect password." }, { status: 401 });
+  }
+
+  const now = new Date();
+  const nowIso = now.toISOString();
+  await env.DB.prepare("UPDATE users SET deletion_requested_at = ? WHERE id = ?").bind(nowIso, user.id).run();
+
+  const purgeDate = purgeDateFor(nowIso);
+  const origin = new URL(request.url).origin;
+  await sendAccountDeletionRequestedEmail(env, {
+    to: user.email,
+    cancelLink: `${origin}/login`,
+    purgeDate: purgeDate.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }),
+  });
+
+  return json({ ok: true, deletionRequestedAt: nowIso, purgeDate: purgeDate.toISOString(), gracePeriodDays: DELETION_GRACE_PERIOD_DAYS });
+}
+
+export async function handleCancelAccountDeletion(request, env, user) {
+  await env.DB.prepare("UPDATE users SET deletion_requested_at = NULL WHERE id = ?").bind(user.id).run();
+  return json({ user: await userPayloadWithCategories(env, { ...user, deletionRequestedAt: null }) });
 }
 
 export async function handleExportProgress(request, env, user) {

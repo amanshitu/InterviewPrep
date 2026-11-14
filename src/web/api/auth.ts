@@ -10,11 +10,13 @@ export interface SignupRequest {
   headline?: string;
   timezone?: string;
   categoryId?: string;
+  turnstileToken?: string;
 }
 
 export interface LoginRequest {
   email: string;
   password: string;
+  turnstileToken?: string;
 }
 
 export interface UserResponse {
@@ -33,8 +35,8 @@ export function logout(): Promise<{ ok: true }> {
   return apiPost<{ ok: true }>("/api/logout");
 }
 
-export function forgotPassword(email: string): Promise<{ ok: true; message: string }> {
-  return apiPost("/api/password/forgot", { email });
+export function forgotPassword(email: string, turnstileToken?: string): Promise<{ ok: true; message: string }> {
+  return apiPost("/api/password/forgot", { email, turnstileToken });
 }
 
 export function resetPassword(token: string, password: string): Promise<{ ok: true; message: string }> {
@@ -47,4 +49,8 @@ export function changePassword(currentPassword: string, newPassword: string): Pr
 
 export function revokeAllSessions(): Promise<{ ok: true }> {
   return apiPost<{ ok: true }>("/api/sessions/revoke-all");
+}
+
+export function resendVerificationEmail(): Promise<{ ok: true; message: string }> {
+  return apiPost("/api/auth/resend-verification");
 }

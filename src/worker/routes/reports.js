@@ -1,5 +1,6 @@
 import { json } from "../lib/http.js";
 import { readJsonBody } from "../lib/request.js";
+import { logAdminAction } from "../lib/audit.js";
 
 // ---------- question reports (user-reported + admin review/fix) ----------
 
@@ -64,5 +65,6 @@ export async function handleAdminResolveReport(request, env, user, reportId) {
     .bind(action, new Date().toISOString(), user.id, reportId)
     .run();
 
+  await logAdminAction(env, user, `question_report_${action}`, "question_report", reportId);
   return json({ ok: true });
 }

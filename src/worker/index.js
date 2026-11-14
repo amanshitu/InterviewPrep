@@ -14,6 +14,7 @@
 import { json, applySecurityHeaders } from "./lib/http.js";
 import { checkRateLimit } from "./lib/ratelimit.js";
 import { getUserFromRequest } from "./lib/session.js";
+import { purgeExpiredAccountDeletions } from "./lib/accountDeletion.js";
 
 import {
   handleSignup,
@@ -23,6 +24,8 @@ import {
   handleResetPassword,
   handleChangePassword,
   handleRevokeAllSessions,
+  handleVerifyEmail,
+  handleResendVerification,
 } from "./routes/auth.js";
 import {
   handleGetMe,
@@ -32,6 +35,8 @@ import {
   handlePutState,
   handleGetActivity,
   handleExportProgress,
+  handleRequestAccountDeletion,
+  handleCancelAccountDeletion,
 } from "./routes/account.js";
 import {
   handleListPublicCategories,
@@ -78,6 +83,7 @@ import {
   handleAdminUserStats,
   handleAdminSearchQuestions,
   handleAdminUpdateQuestion,
+  handleAdminAuditLog,
 } from "./routes/admin.js";
 import { handleReportQuestion, handleAdminListReports, handleAdminResolveReport } from "./routes/reports.js";
 import { handleSubmitFeedback, handleAdminListFeedback, handleAdminResolveFeedback } from "./routes/feedback.js";
@@ -115,6 +121,11 @@ export default {
         if (url.pathname === "/api/categories/public" && request.method === "GET") {
           return applySecurityHeaders(await handleListPublicCategories(request, env));
         }
+        // Opened directly from an email client, so it's a plain GET with no
+        // auth — the random 32-byte token itself is the proof.
+        if (url.pathname === "/api/auth/verify-email" && request.method === "GET") {
+          return applySecurityHeaders(await handleVerifyEmail(request, env));
+        }
 
         // Everything below requires an authenticated session.
         const user = await getUserFromRequest(request, env);
@@ -143,6 +154,15 @@ export default {
         }
         if (url.pathname === "/api/activity" && request.method === "GET") {
           return applySecurityHeaders(await handleGetActivity(request, env, user));
+        }
+        if (url.pathname === "/api/auth/resend-verification" && request.method === "POST") {
+          return applySecurityHeaders(await handleResendVerification(request, env, user));
+        }
+        if (url.pathname === "/api/account/delete-request" && request.method === "POST") {
+          return applySecurityHeaders(await handleRequestAccountDeletion(request, env, user));
+        }
+        if (url.pathname === "/api/account/delete-cancel" && request.method === "POST") {
+          return applySecurityHeaders(await handleCancelAccountDeletion(request, env, user));
         }
         if (url.pathname === "/api/export/progress" && request.method === "GET") {
           return applySecurityHeaders(await handleExportProgress(request, env, user));
@@ -287,6 +307,10 @@ export default {
           if (user.role !== "admin") return applySecurityHeaders(json({ error: "Forbidden." }, { status: 403 }));
           return applySecurityHeaders(await handleAdminUpdateQuestion(request, env, user, adminUpdateQuestion[1]));
         }
+        if (url.pathname === "/api/admin/audit-log" && request.method === "GET") {
+          if (user.role !== "admin") return applySecurityHeaders(json({ error: "Forbidden." }, { status: 403 }));
+          return applySecurityHeaders(await handleAdminAuditLog(request, env, user));
+        }
 
         if (url.pathname === "/api/feedback" && request.method === "POST") {
           return applySecurityHeaders(await handleSubmitFeedback(request, env, user));
@@ -333,5 +357,6 @@ export default {
 
   async scheduled(event, env) {
     await handleScheduled(env);
+    await purgeExpiredAccountDeletions(env);
   },
 };

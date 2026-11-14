@@ -4,6 +4,7 @@ import { mapUserRow, getEnrolledCategories } from "../lib/user.js";
 import { handleGetStatsProgress } from "./stats.js";
 import { handleGetActivity } from "./account.js";
 import { handleGetSelfTestHistory } from "./selftest.js";
+import { logAdminAction } from "../lib/audit.js";
 
 // ---------- admin: dashboard overview + user directory ----------
 
@@ -98,6 +99,9 @@ export async function handleAdminUserStats(request, env, admin, targetUserId) {
   const row = await env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(targetUserId).first();
   if (!row) return json({ error: "User not found." }, { status: 404 });
   const targetUser = mapUserRow(row);
+  // Viewing another user's activity is itself privacy-sensitive — logged the
+  // same as any other admin action, not just the mutations.
+  await logAdminAction(env, admin, "user_stats_viewed", "user", targetUserId);
   const enrolledCategories = await getEnrolledCategories(env, targetUserId);
 
   const url = new URL(request.url);
@@ -171,6 +175,7 @@ export async function handleApproveSet(request, env, user, setId) {
     await env.DB.batch(stmts);
   }
 
+  await logAdminAction(env, user, "question_set_approved", "question_set", setId, categoryIds.length ? `categories: ${categoryIds.join(",")}` : null);
   return json({ ok: true });
 }
 
@@ -185,6 +190,7 @@ export async function handleRejectSet(request, env, user, setId) {
   )
     .bind(reason, new Date().toISOString(), user.id, setId)
     .run();
+  await logAdminAction(env, user, "question_set_rejected", "question_set", setId, reason);
   return json({ ok: true });
 }
 
@@ -248,6 +254,7 @@ export async function handleAdminUpdateQuestion(request, env, user, questionId) 
     .bind(q, a, topicLabel || existing.topic_label, questionId)
     .run();
 
+  await logAdminAction(env, user, "question_edited", "question", questionId);
   return json({ ok: true });
 }
 
@@ -269,4 +276,19 @@ export async function handleAdminApprovalHistory(request, env, user) {
      LIMIT 200`,
   ).all();
   return json({ history: rows.results || [] });
+}
+
+// Who-did-what-when across every admin action this app records (see
+// src/worker/lib/audit.js's logAdminAction, called from every admin
+// mutation handler). Previously nothing tracked this at all.
+export async function handleAdminAuditLog(request, env, user) {
+  const rows = await env.DB.prepare(
+    `SELECT l.id as id, l.action as action, l.target_type as target_type, l.target_id as target_id,
+            l.detail as detail, l.created_at as created_at, a.name as admin_name, a.email as admin_email
+     FROM admin_audit_log l
+     JOIN users a ON a.id = l.admin_user_id
+     ORDER BY l.created_at DESC
+     LIMIT 500`,
+  ).all();
+  return json({ entries: rows.results || [] });
 }

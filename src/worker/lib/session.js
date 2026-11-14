@@ -36,7 +36,8 @@ export async function getUserFromRequest(request, env) {
             COALESCE(uc.streak_last_active, u.streak_last_active) as streak_last_active,
             u.ai_provider as ai_provider, u.ai_key_ciphertext as ai_key_ciphertext, u.ai_key_iv as ai_key_iv,
             u.headline as headline, u.years_experience as years_experience, u.bio as bio, u.timezone as timezone,
-            u.workers_ai_model as workers_ai_model, u.avatar_data as avatar_data
+            u.workers_ai_model as workers_ai_model, u.avatar_data as avatar_data,
+            u.email_verified as email_verified, u.deletion_requested_at as deletion_requested_at
      FROM sessions s JOIN users u ON u.id = s.user_id
      LEFT JOIN user_categories uc ON uc.user_id = u.id AND uc.category_id = u.active_category_id
      WHERE s.token = ?`,
@@ -51,14 +52,29 @@ export async function getUserFromRequest(request, env) {
   return { ...mapUserRow(row), token };
 }
 
-export async function startSession(env, userId, sessionUser) {
+// `request` is optional so existing callers (if any slip through a refactor)
+// still work — a session row just won't get device info for that login.
+// Called from GET /api/me (once per app load, not per API call — the hot
+// getUserFromRequest path intentionally never writes) so the "Where you're
+// signed in" list has a reasonably fresh last-active time without adding a
+// write to every authenticated request.
+export async function touchSessionLastSeen(env, token) {
+  await env.DB.prepare("UPDATE sessions SET last_seen_at = ? WHERE token = ?")
+    .bind(new Date().toISOString(), token)
+    .run();
+}
+
+export async function startSession(env, userId, sessionUser, request) {
   const token = randomHex(32);
   const now = Date.now();
   const expiresAt = new Date(now + SESSION_TTL_MS).toISOString();
+  const ip = request ? request.headers.get("CF-Connecting-IP") : null;
+  const userAgent = request ? request.headers.get("User-Agent") : null;
+  const nowIso = new Date(now).toISOString();
   await env.DB.prepare(
-    "INSERT INTO sessions (token, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)",
+    "INSERT INTO sessions (token, user_id, created_at, expires_at, ip_address, user_agent, last_seen_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
   )
-    .bind(token, userId, new Date(now).toISOString(), expiresAt)
+    .bind(token, userId, nowIso, expiresAt, ip, userAgent, nowIso)
     .run();
 
   return json(

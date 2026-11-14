@@ -1,5 +1,6 @@
 import { json } from "../lib/http.js";
 import { readJsonBody } from "../lib/request.js";
+import { logAdminAction } from "../lib/audit.js";
 
 // ---------- general app feedback (bugs, feature requests, praise) ----------
 
@@ -47,5 +48,6 @@ export async function handleAdminResolveFeedback(request, env, user, feedbackId)
     .bind(new Date().toISOString(), user.id, feedbackId)
     .run();
 
+  await logAdminAction(env, user, "feedback_resolved", "feedback", feedbackId);
   return json({ ok: true });
 }

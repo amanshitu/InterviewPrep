@@ -27,6 +27,8 @@ export function mapUserRow(row) {
     timezone: row.timezone,
     workersAiModel: row.workers_ai_model,
     avatarData: row.avatar_data,
+    emailVerified: !!row.email_verified,
+    deletionRequestedAt: row.deletion_requested_at,
   };
 }
 
@@ -49,6 +51,8 @@ export function userPayload(user) {
     timezone: user.timezone || "UTC",
     workersAiModel: WORKERS_AI_MODEL_IDS.includes(user.workersAiModel) ? user.workersAiModel : DEFAULT_WORKERS_AI_MODEL,
     avatarData: user.avatarData || null,
+    emailVerified: !!user.emailVerified,
+    deletionRequestedAt: user.deletionRequestedAt || null,
   };
 }
 

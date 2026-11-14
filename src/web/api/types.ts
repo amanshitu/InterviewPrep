@@ -29,6 +29,8 @@ export interface User {
   workersAiModel: string;
   avatarData: string | null;
   enrolledCategories: EnrolledCategory[];
+  emailVerified: boolean;
+  deletionRequestedAt: string | null;
 }
 
 export interface Category {

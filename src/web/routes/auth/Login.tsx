@@ -7,6 +7,7 @@ import { likelyAuthed, markAuthed } from "../../lib/auth-flag";
 import { BackIcon, CheckIcon, KeyIcon, LogoMark, PlusIcon, SendIcon, SpinnerIcon } from "../../components/layout/icons";
 import { PasswordField } from "../../components/layout/PasswordField";
 import { PublicFooter } from "../../components/layout/PublicPageChrome";
+import { useTurnstileToken } from "../../lib/turnstile";
 
 type FormKind = "login" | "signup" | "forgot" | "reset";
 
@@ -40,6 +41,7 @@ export function Login() {
   const initialForm: FormKind = resetToken ? "reset" : searchParams.get("form") === "signup" ? "signup" : "login";
   const [form, setForm] = useState<FormKind>(initialForm);
   const [loginSuccessMessage, setLoginSuccessMessage] = useState<string | null>(null);
+  const { containerRef: turnstileRef, getToken: getTurnstileToken } = useTurnstileToken();
 
   // A signed-in visitor landing here (e.g. "Back to sign in" from the About
   // page, or a bookmark) otherwise just sees the sign-in form again with no
@@ -99,14 +101,17 @@ export function Login() {
         {form === "login" ? (
           <LoginForm
             successMessage={loginSuccessMessage}
+            getTurnstileToken={getTurnstileToken}
             onForgot={() => {
               setLoginSuccessMessage(null);
               setForm("forgot");
             }}
           />
         ) : null}
-        {form === "signup" ? <SignupForm /> : null}
-        {form === "forgot" ? <ForgotForm onCancel={() => setForm("login")} /> : null}
+        {form === "signup" ? <SignupForm getTurnstileToken={getTurnstileToken} /> : null}
+        {form === "forgot" ? <ForgotForm getTurnstileToken={getTurnstileToken} onCancel={() => setForm("login")} /> : null}
+        {/* Invisible — renders nothing visible, just hosts the Turnstile widget instance shared by the three forms above. */}
+        <div ref={turnstileRef} />
         {form === "reset" ? (
           <ResetForm
             token={resetToken ?? ""}
@@ -172,7 +177,15 @@ function SubmitButton({
   );
 }
 
-function LoginForm({ successMessage, onForgot }: { successMessage: string | null; onForgot: () => void }) {
+function LoginForm({
+  successMessage,
+  onForgot,
+  getTurnstileToken,
+}: {
+  successMessage: string | null;
+  onForgot: () => void;
+  getTurnstileToken: () => Promise<string | null>;
+}) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -183,7 +196,8 @@ function LoginForm({ successMessage, onForgot }: { successMessage: string | null
     setError(null);
     setSubmitting(true);
     try {
-      await login({ email: email.trim(), password });
+      const turnstileToken = (await getTurnstileToken()) ?? undefined;
+      await login({ email: email.trim(), password, turnstileToken });
       markAuthed();
       window.location.href = "/";
     } catch (err) {
@@ -217,7 +231,7 @@ function LoginForm({ successMessage, onForgot }: { successMessage: string | null
   );
 }
 
-function SignupForm() {
+function SignupForm({ getTurnstileToken }: { getTurnstileToken: () => Promise<string | null> }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -240,6 +254,7 @@ function SignupForm() {
     setError(null);
     setSubmitting(true);
     try {
+      const turnstileToken = (await getTurnstileToken()) ?? undefined;
       await signup({
         name: name.trim(),
         email: email.trim(),
@@ -249,6 +264,7 @@ function SignupForm() {
         headline: headline.trim(),
         dailyQuota: dailyQuota || 10,
         timezone: detectTimezone(),
+        turnstileToken,
       });
       markAuthed();
       window.location.href = "/";
@@ -308,7 +324,7 @@ function SignupForm() {
   );
 }
 
-function ForgotForm({ onCancel }: { onCancel: () => void }) {
+function ForgotForm({ onCancel, getTurnstileToken }: { onCancel: () => void; getTurnstileToken: () => Promise<string | null> }) {
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -320,7 +336,8 @@ function ForgotForm({ onCancel }: { onCancel: () => void }) {
     setSuccess(null);
     setSubmitting(true);
     try {
-      const data = await forgotPassword(email.trim());
+      const turnstileToken = (await getTurnstileToken()) ?? undefined;
+      const data = await forgotPassword(email.trim(), turnstileToken);
       setSuccess(data.message || "If that email is registered, we've sent a reset link.");
     } catch (err) {
       setError(errorMessage(err));

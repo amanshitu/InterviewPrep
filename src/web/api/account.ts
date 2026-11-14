@@ -1,4 +1,4 @@
-import { apiFetch, apiFetchBlob, apiPatch, apiPut } from "./client";
+import { apiFetch, apiFetchBlob, apiPatch, apiPost, apiPut } from "./client";
 import type { User } from "./types";
 
 export interface UserResponse {
@@ -62,4 +62,19 @@ export function putState(state: AppState, events?: ActivityEvent[]): Promise<{ o
 
 export function exportProgress(): Promise<Blob> {
   return apiFetchBlob("/api/export/progress");
+}
+
+export interface DeletionRequestResponse {
+  ok: true;
+  deletionRequestedAt: string;
+  purgeDate: string;
+  gracePeriodDays: number;
+}
+
+export function requestAccountDeletion(password: string): Promise<DeletionRequestResponse> {
+  return apiPost<DeletionRequestResponse>("/api/account/delete-request", { password });
+}
+
+export function cancelAccountDeletion(): Promise<UserResponse> {
+  return apiPost<UserResponse>("/api/account/delete-cancel");
 }

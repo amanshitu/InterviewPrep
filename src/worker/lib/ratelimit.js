@@ -4,8 +4,12 @@ import { json } from "./http.js";
 // Tracks request timestamps per (IP, endpoint) in D1 so brute-forcing
 // /api/login, /api/signup or /api/password/forgot gets throttled even
 // though this Worker has no in-memory state across requests.
-export async function checkRateLimit(env, request, endpoint, limit = 10, windowMinutes = 15) {
-  const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+// `keyOverride` lets a caller rate-limit by something other than IP — e.g.
+// handleLogin also calls this keyed by the attempted email address, so a
+// distributed attacker spoofing IPs still gets throttled per-account, not
+// just per-IP.
+export async function checkRateLimit(env, request, endpoint, limit = 10, windowMinutes = 15, keyOverride = null) {
+  const ip = keyOverride || request.headers.get("CF-Connecting-IP") || "unknown";
   const windowMs = windowMinutes * 60 * 1000;
   const now = Date.now();
   const windowStartIso = new Date(now - windowMs).toISOString();
