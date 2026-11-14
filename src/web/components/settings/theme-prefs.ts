@@ -9,6 +9,8 @@
 // --primary/--ring; see globals.css's `.dark.futuristic`/`.dark.midnight`/
 // `.dark.noirgold` blocks). "ivory" is the mirror case: a deliberate
 // single-look, always-light option (`:root.ivory`).
+import { withoutTransitions } from "./without-transitions";
+
 export type ThemeValue = "system" | "light" | "dark" | "futuristic" | "midnight" | "noirgold" | "ivory";
 const VALID_THEMES: ThemeValue[] = ["system", "light", "dark", "futuristic", "midnight", "noirgold", "ivory"];
 const ALWAYS_DARK_THEMES: ThemeValue[] = ["dark", "futuristic", "midnight", "noirgold"];
@@ -33,9 +35,11 @@ export function setTheme(value: ThemeValue): void {
   const resolvedDark =
     ALWAYS_DARK_THEMES.includes(value) ||
     (value === "system" && typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
-  document.documentElement.classList.toggle("dark", !!resolvedDark);
-  document.documentElement.classList.toggle("futuristic", value === "futuristic");
-  document.documentElement.classList.toggle("midnight", value === "midnight");
-  document.documentElement.classList.toggle("noirgold", value === "noirgold");
-  document.documentElement.classList.toggle("ivory", value === "ivory");
+  withoutTransitions(() => {
+    document.documentElement.classList.toggle("dark", !!resolvedDark);
+    document.documentElement.classList.toggle("futuristic", value === "futuristic");
+    document.documentElement.classList.toggle("midnight", value === "midnight");
+    document.documentElement.classList.toggle("noirgold", value === "noirgold");
+    document.documentElement.classList.toggle("ivory", value === "ivory");
+  });
 }

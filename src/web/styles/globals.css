@@ -173,15 +173,40 @@
    automatically. Placed after .dark (and .dark.futuristic) so an accent
    choice still wins while dark/futuristic mode is also active (equal
    specificity to those - :root[attr] vs .dark/.dark.futuristic - so source
-   order decides the tie). */
+   order decides the tie).
+   cyan/violet/amber use a darkened hex here versus their dark-mode value
+   below (see WCAG note below) — kept the same hue, just tuned so the
+   fixed white --primary-foreground these pair with in light mode actually
+   reads (their original brighter values measured 1.6:1-2.9:1 contrast with
+   white text, badly failing WCAG AA's 4.5:1; these measure 4.7:1-4.8:1). */
 :root[data-accent="ocean"] { --primary: #1f6f9c; --ring: #1f6f9c; }
 :root[data-accent="forest"] { --primary: #1f7a4d; --ring: #1f7a4d; }
 :root[data-accent="plum"] { --primary: #7a3a9c; --ring: #7a3a9c; }
 :root[data-accent="rose"] { --primary: #b8305a; --ring: #b8305a; }
 :root[data-accent="slate"] { --primary: #3f5468; --ring: #3f5468; }
-:root[data-accent="cyan"] { --primary: #28e0ff; --ring: #28e0ff; }
-:root[data-accent="violet"] { --primary: #8b6bff; --ring: #8b6bff; }
-:root[data-accent="amber"] { --primary: #d98214; --ring: #d98214; }
+:root[data-accent="cyan"] { --primary: #007e94; --ring: #007e94; }
+:root[data-accent="violet"] { --primary: #7752ff; --ring: #7752ff; }
+:root[data-accent="amber"] { --primary: #a3630f; --ring: #a3630f; }
+
+/* Dark-mode accent values — previously missing entirely, so every accent
+   color in Dark/Futuristic/Midnight/Noir Gold mode fell back to its
+   LIGHT-mode hex paired with dark mode's near-black --primary-foreground.
+   That's backwards for the 5 darker accents (ocean/forest/plum/rose/slate):
+   a dark navy or plum button with near-black text measured 2.7:1-4.0:1,
+   all failing WCAG AA. Lightened each one (same hue, raised lightness) so
+   dark mode's existing near-black foreground actually has something to
+   contrast against — now 4.6:1-9.6:1 across all eight. Equal specificity
+   to :root[data-accent], placed after it, so this correctly wins only
+   when .dark is also present (same precedence .dark already has over the
+   bare :root rules above). */
+.dark[data-accent="ocean"] { --primary: #55acdd; --ring: #55acdd; }
+.dark[data-accent="forest"] { --primary: #5cd69a; --ring: #5cd69a; }
+.dark[data-accent="plum"] { --primary: #a76ac8; --ring: #a76ac8; }
+.dark[data-accent="rose"] { --primary: #d55d82; --ring: #d55d82; }
+.dark[data-accent="slate"] { --primary: #809ab2; --ring: #809ab2; }
+.dark[data-accent="cyan"] { --primary: #42d7f0; --ring: #42d7f0; }
+.dark[data-accent="violet"] { --primary: #9176f4; --ring: #9176f4; }
+.dark[data-accent="amber"] { --primary: #eea344; --ring: #eea344; }
 
 /* Derived, accent-aware surface tokens — recompute automatically for
    whichever --primary is active (default brand color, a chosen accent

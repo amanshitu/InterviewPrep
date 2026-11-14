@@ -1,9 +1,15 @@
+import { withoutTransitions } from "./without-transitions";
+
 // Verbatim-ported localStorage-backed appearance preferences from app.js.
 // The accent swatches here set `data-accent` + persist the choice; the
 // actual CSS recoloring rules per `[data-accent="X"]` live in globals.css,
 // which also derives --background/--sidebar/--secondary/--accent/--border/
 // scrollbar/selection from whichever --primary is active, so an accent
-// choice recolors the whole surface, not just buttons.
+// choice recolors the whole surface, not just buttons. Swatch previews
+// here match globals.css's light-mode value for each accent exactly
+// (cyan/violet/amber are darkened from their original hex — see that
+// file's comment — so the picker preview doesn't show a brighter color
+// than what actually gets applied).
 export const ACCENT_OPTIONS = [
   { id: "terracotta", label: "Terracotta", swatch: "#c2501f" },
   { id: "ocean", label: "Ocean", swatch: "#1f6f9c" },
@@ -11,9 +17,9 @@ export const ACCENT_OPTIONS = [
   { id: "plum", label: "Plum", swatch: "#7a3a9c" },
   { id: "rose", label: "Rose", swatch: "#b8305a" },
   { id: "slate", label: "Slate", swatch: "#3f5468" },
-  { id: "cyan", label: "Cyan", swatch: "#28e0ff" },
-  { id: "violet", label: "Violet", swatch: "#8b6bff" },
-  { id: "amber", label: "Amber", swatch: "#d98214" },
+  { id: "cyan", label: "Cyan", swatch: "#007e94" },
+  { id: "violet", label: "Violet", swatch: "#7752ff" },
+  { id: "amber", label: "Amber", swatch: "#a3630f" },
 ];
 
 const ACCENT_KEY = "accent";
@@ -28,11 +34,13 @@ export function getAccent(): string {
 }
 
 export function setAccent(accentId: string): void {
-  if (accentId === "terracotta") {
-    document.documentElement.removeAttribute("data-accent");
-  } else {
-    document.documentElement.setAttribute("data-accent", accentId);
-  }
+  withoutTransitions(() => {
+    if (accentId === "terracotta") {
+      document.documentElement.removeAttribute("data-accent");
+    } else {
+      document.documentElement.setAttribute("data-accent", accentId);
+    }
+  });
   try {
     localStorage.setItem(ACCENT_KEY, accentId);
   } catch {
