@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { Outlet, useLocation, useOutletContext } from "react-router";
 import type { User } from "../../api/types";
 import { logout } from "../../api/auth";
@@ -37,6 +37,28 @@ interface ShellContext {
 // not here — so an early event is never missed.
 export function AppShell() {
   const { pathname } = useLocation();
+  const shellRef = useRef<HTMLDivElement | null>(null);
+  const bannerStackRef = useRef<HTMLDivElement | null>(null);
+
+  // The banner stack (offline/verify-email/enable-notifications) is sticky
+  // and can appear, disappear, or change height (dismiss, resend-pending
+  // text, wrapping on a narrow screen) — everything else that's pinned
+  // right below it (the desktop sidebar, the mobile header bar, and
+  // PageHeader's compact bar) needs to offset by its real height, not a
+  // guessed constant, or the sidebar/header render partly below the fold
+  // whenever a banner is showing. Measured here and exposed as --banner-h
+  // on the shell root so every one of those (DOM descendants) can read it
+  // via CSS instead of each re-measuring it themselves.
+  useLayoutEffect(() => {
+    const stack = bannerStackRef.current;
+    const shell = shellRef.current;
+    if (!stack || !shell) return;
+    const update = () => shell.style.setProperty("--banner-h", `${stack.offsetHeight}px`);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(stack);
+    return () => observer.disconnect();
+  });
 
   // Suppress the browser's native pull-to-refresh (a full document reload)
   // for the whole authenticated app, not just the few pages that implement
@@ -60,12 +82,14 @@ export function AppShell() {
       <ConfirmProvider>
         <AuthGate>
           {(user, refreshUser) => (
-            <div className="flex min-h-dvh flex-col bg-background text-foreground">
-              <OfflineBanner />
-              <EmailVerificationBanner user={user} />
-              {/* Only one "nudge" banner at a time — verification comes first;
-                  the notifications prompt waits until that's resolved. */}
-              {user.emailVerified ? <EnableNotificationsBanner user={user} /> : null}
+            <div ref={shellRef} className="flex min-h-dvh flex-col bg-background text-foreground">
+              <div ref={bannerStackRef} className="sticky top-0 z-20 flex flex-col">
+                <OfflineBanner />
+                <EmailVerificationBanner user={user} />
+                {/* Only one "nudge" banner at a time — verification comes first;
+                    the notifications prompt waits until that's resolved. */}
+                {user.emailVerified ? <EnableNotificationsBanner user={user} /> : null}
+              </div>
               <div className="flex min-h-0 flex-1">
                 <Sidebar user={user} refreshUser={refreshUser} onLogout={() => void handleLogout()} />
                 <div className="flex min-w-0 flex-1 flex-col">

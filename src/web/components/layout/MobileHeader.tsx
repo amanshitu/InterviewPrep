@@ -16,7 +16,7 @@ export function MobileHeader({ user, onLogout }: { user: User; onLogout: () => v
 
   return (
     <>
-      <header className="sm:hidden sticky top-0 z-30 flex min-h-14 items-center justify-between border-b border-border bg-background/90 px-4 backdrop-blur pt-[env(safe-area-inset-top,0px)]">
+      <header className="sm:hidden sticky top-(--banner-h,0px) z-30 flex min-h-14 items-center justify-between border-b border-border bg-background/90 px-4 backdrop-blur pt-[env(safe-area-inset-top,0px)]">
         <Link to="/" className="flex items-center gap-2">
           <LogoMark size={20} />
           <span className="leading-tight">

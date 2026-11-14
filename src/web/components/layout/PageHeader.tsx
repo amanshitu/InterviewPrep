@@ -36,7 +36,13 @@ export function PageHeader({
     let frame = 0;
     const update = () => {
       frame = 0;
-      const top = desktop.matches ? 0 : 56; // phones: under the sticky mobile top bar
+      // --banner-h (set by AppShell) shifts the sticky mobile top bar / the
+      // top of the desktop sidebar down by the banner stack's live height,
+      // so the threshold where this header is considered "scrolled past"
+      // has to shift by the same amount or the compact bar fades in/out at
+      // the wrong scroll position whenever a banner is showing.
+      const bannerH = parseFloat(getComputedStyle(header).getPropertyValue("--banner-h")) || 0;
+      const top = (desktop.matches ? 0 : 56) + bannerH; // phones: under the sticky mobile top bar
       setCompact(titleEl.getBoundingClientRect().top < top + 4);
       const rect = header.getBoundingClientRect();
       const p = Math.min(1, Math.max(0, (top - rect.top) / Math.max(1, rect.height * 0.6)));
@@ -85,7 +91,7 @@ export function PageHeader({
 
   const compactBar = sticky && (
     <div
-      className="fixed inset-x-0 top-[calc(3.5rem+env(safe-area-inset-top,0px))] md:top-0 z-30 h-0"
+      className="fixed inset-x-0 top-[calc(3.5rem+env(safe-area-inset-top,0px)+var(--banner-h,0px))] md:top-(--banner-h,0px) z-30 h-0"
       style={box ? { left: box.left, width: box.width, right: "auto" } : undefined}
       aria-hidden={!compact}
       inert={!compact}
