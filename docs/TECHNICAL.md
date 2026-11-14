@@ -13,7 +13,7 @@ user's perspective, see `FUNCTIONAL.md`.
 | Backend | A single Cloudflare Worker, raw SQL, no framework/ORM |
 | Database | Cloudflare D1 (SQLite) |
 | AI | Cloudflare Workers AI (default) or BYOK OpenAI/Anthropic |
-| Email | Resend HTTP API (falls back to console logging if unconfigured) |
+| Email | Brevo transactional API, admin-configured at runtime (falls back to console logging if unconfigured) |
 | Captcha | Cloudflare Turnstile (invisible mode) |
 | Push | Web Push (VAPID), hourly Cron Trigger |
 | Hosting | Cloudflare Workers + Workers Assets (`[assets]` in `wrangler.toml`) |
@@ -157,8 +157,8 @@ the public ones (`/api/signup`, `/api/login`, `/api/categories/public`,
 | `crypto.js` | Password hashing (PBKDF2-SHA256), AES-GCM encrypt/decrypt for BYOK keys |
 | `ratelimit.js` | D1-backed rate limiting, by IP or by an explicit key override (used for per-account login lockout) |
 | `turnstile.js` | Server-side Turnstile siteverify, fails closed, no-ops if unconfigured |
-| `settings.js` | `app_settings` key/value store (`getSetting`/`setSetting`/`isCaptchaEnabled`) |
-| `email.js` | Resend wrapper (verification/reset/deletion emails), console-log fallback |
+| `settings.js` | `app_settings` key/value store (captcha toggle, AES-GCM-encrypted Brevo config) |
+| `email.js` | Brevo wrapper (verification/reset/deletion emails), console-log fallback |
 | `accountDeletion.js` | Grace-period purge logic, run from the existing hourly cron |
 | `audit.js` | `logAdminAction()`, called from every admin mutation handler |
 | `ai.js` | Workers AI / OpenAI / Anthropic dispatch, model lists, usage capping |

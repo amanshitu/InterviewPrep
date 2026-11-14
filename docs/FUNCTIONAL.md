@@ -208,7 +208,11 @@ rest and never shown back in full once saved.
 A platform-wide **captcha on/off switch** sits at the top of every admin
 tab — flips whether login/signup/forgot-password require the invisible
 Turnstile check, with no redeploy needed. Every toggle is recorded in the
-audit log. Below it, eight tabs:
+audit log. Right below it, an **email (Brevo) card** lets an admin set
+the sender address/name and the Brevo API key that verification,
+password-reset, and account-deletion emails send through — also with no
+redeploy, and the key is never shown back once saved. Below those, eight
+tabs:
 
 | Tab | Purpose |
 |---|---|

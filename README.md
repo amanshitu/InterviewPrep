@@ -194,25 +194,30 @@ creates their own account and gets their own progress, streak, and
 review history; nothing is shared between accounts except the content
 itself.
 
-## Email (password reset + verification)
+## Email (password reset + verification + account deletion)
 
-Password reset and email verification both send through
-[Resend](https://resend.com) (`src/worker/lib/email.js`) if
-`RESEND_API_KEY` is configured:
+Password reset, email verification, and account-deletion notices all
+send through [Brevo](https://www.brevo.com)'s transactional API
+(`src/worker/lib/email.js`). Unlike every other integration in this
+app, Brevo isn't a Worker secret — it's configured from the Admin page
+(Admin → the "Email (Brevo)" card near the top): sender email, sender
+name, and the Brevo API key (from Brevo → Settings → SMTP & API → API
+Keys). The key is AES-GCM encrypted at rest in `app_settings`
+(`src/worker/lib/settings.js`, reusing the same `AI_KEY_ENCRYPTION_SECRET`
+master key as BYOK AI keys) rather than stored in plain text, and the
+admin UI never echoes it back — leave the field blank when re-saving
+just the sender name/email to keep the existing key.
 
-```
-npx wrangler secret put RESEND_API_KEY
-```
-
-Without that secret set, both emails fall back to logging the link to
-the Worker's console instead of failing outright — useful for local dev:
+Without Brevo configured yet (e.g. a fresh deploy before an admin has
+filled it in), every email falls back to logging the link to the
+Worker's console instead of failing outright — useful for local dev:
 
 ```
 npm run tail
 ```
 
 (or watch the `wrangler dev` terminal locally) and look for a line like
-`[email:password-reset] RESEND_API_KEY not set — would have sent to
+`[email:password-reset] Brevo not configured — would have sent to
 someone@example.com: "Reset your ExamStreak password"` followed by the
 link. Reset links are valid for 30 minutes and single-use; verification
 links for 24 hours.

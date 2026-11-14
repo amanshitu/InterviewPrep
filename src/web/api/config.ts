@@ -2,6 +2,7 @@ import { apiFetch } from "./client";
 
 export interface PublicConfig {
   captchaEnabled: boolean;
+  turnstileSiteKey: string;
 }
 
 // Unauthenticated — the Login page needs this before there's a session,

@@ -1,30 +1,42 @@
-// Thin wrapper around Resend's HTTP API (https://resend.com), chosen since
-// it needs nothing but fetch() — no SMTP, no SDK. Without RESEND_API_KEY
-// configured (e.g. a fresh local clone), falls back to logging the email to
-// the console — the same "no provider wired up yet" behavior this app had
-// for password resets before Resend was added, now shared by every email
-// this app sends. Set it with `npx wrangler secret put RESEND_API_KEY`.
-const RESEND_URL = "https://api.resend.com/emails";
-const FROM_ADDRESS = "ExamStreak <noreply@xynora.in>";
+// Thin wrapper around Brevo's transactional email API
+// (https://developers.brevo.com/reference/send-transac-email), chosen since
+// it needs nothing but fetch() — no SMTP, no SDK. Unlike every other
+// integration in this app, the API key and sender address aren't a Worker
+// secret/env var — they're admin-configurable at runtime (Admin → Email),
+// stored in app_settings with the key AES-GCM encrypted at rest (see
+// settings.js's getBrevoConfig/setBrevoConfig). Without it configured (e.g.
+// a fresh deploy before an admin has filled it in), falls back to logging
+// the email to the console — the same "no provider wired up yet" behavior
+// this app had for password resets originally, now shared by every email
+// this app sends.
+import { getBrevoConfig } from "./settings.js";
+
+const BREVO_URL = "https://api.brevo.com/v3/smtp/email";
 
 export async function sendEmail(env, { to, subject, html, logLabel }) {
-  if (!env.RESEND_API_KEY) {
-    console.log(`[email:${logLabel || "send"}] RESEND_API_KEY not set — would have sent to ${to}: "${subject}"\n${html}`);
+  const config = await getBrevoConfig(env);
+  if (!config) {
+    console.log(`[email:${logLabel || "send"}] Brevo not configured — would have sent to ${to}: "${subject}"\n${html}`);
     return { sent: false, reason: "no-provider" };
   }
 
   try {
-    const res = await fetch(RESEND_URL, {
+    const res = await fetch(BREVO_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${env.RESEND_API_KEY}`,
+        "api-key": config.apiKey,
       },
-      body: JSON.stringify({ from: FROM_ADDRESS, to: [to], subject, html }),
+      body: JSON.stringify({
+        sender: { email: config.senderEmail, name: config.senderName || "ExamStreak" },
+        to: [{ email: to }],
+        subject,
+        htmlContent: html,
+      }),
     });
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      console.error(`[email:${logLabel || "send"}] Resend returned ${res.status}: ${body.slice(0, 500)}`);
+      console.error(`[email:${logLabel || "send"}] Brevo returned ${res.status}: ${body.slice(0, 500)}`);
       return { sent: false, reason: "provider-error" };
     }
     return { sent: true };

@@ -15,6 +15,8 @@ import { ReportsPanel } from "../../components/admin/ReportsPanel";
 import { FeedbackPanel } from "../../components/admin/FeedbackPanel";
 import { AuditLogPanel } from "../../components/admin/AuditLogPanel";
 import { CaptchaToggle } from "../../components/admin/CaptchaToggle";
+import { BrevoSettings } from "../../components/admin/BrevoSettings";
+import { TurnstileSettings } from "../../components/admin/TurnstileSettings";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { QuestionSetsSection } from "../../components/settings/QuestionSetsSection";
 import { CategoryAiPromptSection } from "../../components/settings/CategoryAiPromptSection";
@@ -112,6 +114,8 @@ function AdminDashboard({ user }: { user: User }) {
       <PageHeader title="Admin" />
 
       <CaptchaToggle />
+      <TurnstileSettings />
+      <BrevoSettings />
 
       {overview ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">

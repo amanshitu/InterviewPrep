@@ -54,6 +54,7 @@ export function UsersPanel() {
                 <th className="py-2 pr-3">Email</th>
                 <th className="py-2 pr-3">Role</th>
                 <th className="py-2 pr-3">Joined</th>
+                <th className="py-2 pr-3">Last login</th>
                 <th className="py-2 pr-3">Categories</th>
                 <th className="py-2 pr-3" />
               </tr>
@@ -71,6 +72,11 @@ export function UsersPanel() {
                       {new Date(u.createdAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
                     </td>
                     <td className="py-2 pr-3 text-muted-foreground">
+                      {u.lastLoginAt
+                        ? new Date(u.lastLoginAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })
+                        : "Never"}
+                    </td>
+                    <td className="py-2 pr-3 text-muted-foreground">
                       {u.enrolledCategories.map((c) => c.name).join(", ") || "—"}
                     </td>
                     <td className="py-2 pr-3">
@@ -85,7 +91,7 @@ export function UsersPanel() {
                   </tr>
                   {expandedId === u.id ? (
                     <tr>
-                      <td colSpan={6} className="pb-4">
+                      <td colSpan={7} className="pb-4">
                         <UserStatsPanel userId={u.id} />
                       </td>
                     </tr>

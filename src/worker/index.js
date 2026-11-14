@@ -89,7 +89,7 @@ import {
 } from "./routes/admin.js";
 import { handleReportQuestion, handleAdminListReports, handleAdminResolveReport } from "./routes/reports.js";
 import { handleReportAiContent, handleAdminListAiReports, handleAdminResolveAiReport } from "./routes/aiReports.js";
-import { handlePublicConfig, handleAdminGetSettings, handleAdminSetCaptchaEnabled } from "./routes/platformSettings.js";
+import { handlePublicConfig, handleAdminGetSettings, handleAdminSetCaptchaEnabled, handleAdminSetBrevoConfig, handleAdminSetTurnstileConfig } from "./routes/platformSettings.js";
 import { handleSubmitFeedback, handleAdminListFeedback, handleAdminResolveFeedback } from "./routes/feedback.js";
 import { handlePushSubscribe, handlePushUnsubscribe, handleScheduled } from "./routes/push.js";
 
@@ -344,6 +344,14 @@ export default {
         if (url.pathname === "/api/admin/settings/captcha" && request.method === "POST") {
           if (user.role !== "admin") return applySecurityHeaders(json({ error: "Forbidden." }, { status: 403 }));
           return applySecurityHeaders(await handleAdminSetCaptchaEnabled(request, env, user));
+        }
+        if (url.pathname === "/api/admin/settings/brevo" && request.method === "POST") {
+          if (user.role !== "admin") return applySecurityHeaders(json({ error: "Forbidden." }, { status: 403 }));
+          return applySecurityHeaders(await handleAdminSetBrevoConfig(request, env, user));
+        }
+        if (url.pathname === "/api/admin/settings/turnstile" && request.method === "POST") {
+          if (user.role !== "admin") return applySecurityHeaders(json({ error: "Forbidden." }, { status: 403 }));
+          return applySecurityHeaders(await handleAdminSetTurnstileConfig(request, env, user));
         }
 
         if (url.pathname === "/api/feedback" && request.method === "POST") {

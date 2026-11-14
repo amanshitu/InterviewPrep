@@ -49,12 +49,16 @@ export function Login() {
   // behind this is what actually matters; this just decides whether the
   // widget is worth loading at all.
   const [captchaEnabled, setCaptchaEnabled] = useState(true);
+  const [turnstileSiteKey, setTurnstileSiteKey] = useState<string | null>(null);
   useEffect(() => {
     getPublicConfig()
-      .then((c) => setCaptchaEnabled(c.captchaEnabled))
+      .then((c) => {
+        setCaptchaEnabled(c.captchaEnabled);
+        setTurnstileSiteKey(c.turnstileSiteKey);
+      })
       .catch(() => { /* keep the safe default */ });
   }, []);
-  const { containerRef: turnstileRef, getToken: getTurnstileToken } = useTurnstileToken(captchaEnabled);
+  const { containerRef: turnstileRef, getToken: getTurnstileToken } = useTurnstileToken(turnstileSiteKey, captchaEnabled);
 
   // A signed-in visitor landing here (e.g. "Back to sign in" from the About
   // page, or a bookmark) otherwise just sees the sign-in form again with no

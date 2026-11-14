@@ -52,20 +52,33 @@ export async function handleAdminUsers(request, env, user) {
   const rows = usersRows.results || [];
   const userIds = rows.map((r) => r.id);
   let categoriesByUser = new Map();
+  let lastLoginByUser = new Map();
   if (userIds.length) {
     const placeholders = userIds.map(() => "?").join(",");
-    const { results } = await env.DB.prepare(
-      `SELECT uc.user_id as user_id, c.id as id, c.name as name
-       FROM user_categories uc JOIN categories c ON c.id = uc.category_id
-       WHERE uc.user_id IN (${placeholders})`,
-    )
-      .bind(...userIds)
-      .all();
+    const [{ results: categoryResults }, { results: loginResults }] = await Promise.all([
+      env.DB.prepare(
+        `SELECT uc.user_id as user_id, c.id as id, c.name as name
+         FROM user_categories uc JOIN categories c ON c.id = uc.category_id
+         WHERE uc.user_id IN (${placeholders})`,
+      )
+        .bind(...userIds)
+        .all(),
+      // A session row is created exactly at login time, so the most
+      // recent one per user is that user's last login — distinct from
+      // `last_seen_at`, which tracks ongoing activity within a session
+      // rather than when it started.
+      env.DB.prepare(
+        `SELECT user_id, MAX(created_at) as last_login FROM sessions WHERE user_id IN (${placeholders}) GROUP BY user_id`,
+      )
+        .bind(...userIds)
+        .all(),
+    ]);
     categoriesByUser = new Map();
-    for (const r of results || []) {
+    for (const r of categoryResults || []) {
       if (!categoriesByUser.has(r.user_id)) categoriesByUser.set(r.user_id, []);
       categoriesByUser.get(r.user_id).push({ id: r.id, name: r.name });
     }
+    lastLoginByUser = new Map((loginResults || []).map((r) => [r.user_id, r.last_login]));
   }
 
   return json({
@@ -75,6 +88,7 @@ export async function handleAdminUsers(request, env, user) {
       email: r.email,
       role: r.role,
       createdAt: r.created_at,
+      lastLoginAt: lastLoginByUser.get(r.id) || null,
       enrolledCategories: categoriesByUser.get(r.id) || [],
     })),
     total: totalRow?.n || 0,

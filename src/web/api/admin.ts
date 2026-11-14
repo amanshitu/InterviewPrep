@@ -74,6 +74,7 @@ export interface AdminUserRow {
   email: string;
   role: "user" | "admin";
   createdAt: string;
+  lastLoginAt: string | null;
   enrolledCategories: { id: string; name: string }[];
 }
 
@@ -154,6 +155,11 @@ export function getAuditLog(): Promise<{ entries: AuditLogEntry[] }> {
 
 export interface AdminSettings {
   captchaEnabled: boolean;
+  brevoConfigured: boolean;
+  brevoSenderEmail: string;
+  brevoSenderName: string;
+  turnstileConfigured: boolean;
+  turnstileSiteKey: string;
 }
 
 export function getAdminSettings(): Promise<AdminSettings> {
@@ -162,4 +168,19 @@ export function getAdminSettings(): Promise<AdminSettings> {
 
 export function setCaptchaEnabled(enabled: boolean): Promise<{ ok: true; captchaEnabled: boolean }> {
   return apiPost("/api/admin/settings/captcha", { enabled });
+}
+
+export function setBrevoConfig(body: {
+  apiKey?: string;
+  senderEmail: string;
+  senderName: string;
+}): Promise<{ ok: true; brevoConfigured: boolean; brevoSenderEmail: string; brevoSenderName: string }> {
+  return apiPost("/api/admin/settings/brevo", body);
+}
+
+export function setTurnstileConfig(body: {
+  secret?: string;
+  siteKey: string;
+}): Promise<{ ok: true; turnstileConfigured: boolean; turnstileSiteKey: string }> {
+  return apiPost("/api/admin/settings/turnstile", body);
 }
