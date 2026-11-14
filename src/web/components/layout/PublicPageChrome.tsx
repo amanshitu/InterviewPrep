@@ -3,7 +3,8 @@
 // comment in vite.config.ts for why), but they all want the same footer
 // and the same "other pages" cross-links, so that's factored out here
 // instead of copy-pasted five times.
-import type { ComponentType, SVGProps } from "react";
+import { useEffect, useState, type ComponentType, type SVGProps } from "react";
+import { useLocation } from "react-router";
 import {
   AboutIcon,
   ArrowRightIcon,
@@ -17,24 +18,60 @@ import {
   TodayIcon,
 } from "./icons";
 
-/** Shared top bar: logo + name + tagline, and a Sign in button — same header Home uses.
- * Home's own hero sits on a tinted background right below it, which already reads as a
- * visual break; every other public page's content starts on the same flat background as
- * the header, so this gets a border to separate the two instead. */
+/** Shared top bar: logo + name + tagline, and Create account / Sign in buttons —
+ * used on every public page, Home included. Shrinks (drops the tagline, tightens
+ * padding) once scrolled, same idea as the authenticated app's own collapsing
+ * PageHeader, so it stays out of the way on a long page without ever disappearing.
+ * Home's own hero sits on a tinted background right below it, which already reads
+ * as a visual break; every other public page's content starts on the same flat
+ * background as the header, so this gets a border to separate the two instead. */
+const HEADER_NAV_LINKS = [
+  { href: "/about", label: "About" },
+  { href: "/guide", label: "Guide" },
+  { href: "/faq", label: "FAQ" },
+];
+
 export function PublicHeader() {
+  const [compact, setCompact] = useState(false);
+  const { pathname } = useLocation();
+  useEffect(() => {
+    const onScroll = () => setCompact(window.scrollY > 24);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
   return (
     <div className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur">
-      <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-5 sm:px-6">
-        <a href="/home" className="flex items-center gap-2">
-          <LogoMark size={26} />
-          <span className="flex flex-col leading-tight">
-            <span className="text-lg font-bold leading-tight">ExamStreak</span>
-            <span className="text-xs font-medium text-muted-foreground">Practice. Track. Ace it.</span>
+      <header
+        className={`mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 transition-[padding] duration-200 sm:px-6 ${compact ? "py-2.5" : "py-5"}`}
+      >
+        <a href="/home" className="flex min-w-0 items-center gap-2">
+          <LogoMark size={26} className="shrink-0" />
+          <span className="flex min-w-0 flex-col leading-tight">
+            <span className="truncate text-lg font-bold leading-tight">ExamStreak</span>
+            <span
+              className={`block overflow-hidden text-xs font-medium text-muted-foreground transition-all duration-200 ${compact ? "max-h-0 opacity-0" : "max-h-4 opacity-100"}`}
+            >
+              Practice. Track. Ace it.
+            </span>
           </span>
         </a>
+        <nav aria-label="Primary" className="hidden shrink-0 items-center gap-1 sm:flex">
+          {HEADER_NAV_LINKS.map((link) => (
+            <a
+              key={link.href}
+              href={link.href}
+              className={`rounded-md px-3 py-2 text-sm font-medium transition ${
+                pathname === link.href ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {link.label}
+            </a>
+          ))}
+        </nav>
         <a
           href="/login"
-          className="inline-flex h-9 items-center justify-center rounded-md border border-border px-4 text-sm font-semibold text-foreground transition hover:bg-secondary"
+          className="inline-flex h-9 shrink-0 items-center justify-center whitespace-nowrap rounded-md border border-border px-4 text-sm font-semibold text-foreground transition hover:bg-secondary"
         >
           Sign in
         </a>
