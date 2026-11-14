@@ -15,7 +15,7 @@
 // loads of anything already visited still work offline.
 //
 // Bump CACHE_NAME whenever static assets change in a way that matters.
-const CACHE_NAME = "interview-prep-shell-v9";
+const CACHE_NAME = "interview-prep-shell-v10";
 const SHELL_ASSETS = ["/", "/manifest.json", "/theme-init.js", "/favicon.ico"];
 
 self.addEventListener("install", (event) => {
@@ -73,6 +73,34 @@ self.addEventListener("notificationclick", (event) => {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (event.request.method !== "GET" || url.pathname.startsWith("/api/")) return;
+
+  // Navigations (the index.html shell itself, including every client-
+  // routed path via the SPA fallback) go network-first, not cache-first.
+  // This app deploys often, and Vite hashes every JS/CSS filename on each
+  // build — a cache-first shell always serves the *previous* deploy's
+  // html on the first load after a new one (same "stale-while-revalidate"
+  // staleness window below, intentional for assets), whose script tags
+  // reference hashed files the new deploy no longer has. Those requests
+  // 404 (served as index.html by the SPA fallback, actually, which is
+  // worse: a 200 with the wrong MIME type), and the page never mounts —
+  // blank screen until a manual reload picks up the now-cached fresh
+  // shell. Network-first for navigations only shows the stale cached
+  // shell when there's truly no network (offline), which is exactly the
+  // case this cache exists for.
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          }
+          return response;
+        })
+        .catch(() => caches.match(event.request).then((cached) => cached || caches.match("/"))),
+    );
+    return;
+  }
 
   event.respondWith(
     caches.match(event.request).then((cached) => {
