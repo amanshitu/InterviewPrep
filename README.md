@@ -39,13 +39,24 @@ build step beyond Vite for the frontend.
   cache, never a background sync queue), with pull-to-refresh on every
   page that has one clear "refetch" action.
 - **Themes** — System/Light/Dark plus four always-on-one-mode looks
-  (Futuristic, Midnight, Noir Gold, Ivory) and a configurable accent color.
-- Password reset/change, session sign-out-everywhere, rate limiting,
-  security headers, and one-click JSON export of your own progress.
+  (Futuristic, Midnight, Noir Gold, Ivory) and nine accent colors, each
+  with separately tuned light/dark values for real WCAG AA contrast.
+- **Account security** — email verification (with a non-nagging banner),
+  self-serve account deletion with a 30-day grace period and one-click
+  cancel, a per-device "Where you're signed in" list with individual
+  revoke, invisible Turnstile captcha on login/signup/forgot-password,
+  per-account (not just per-IP) login lockout, and an admin audit log of
+  every moderation action.
+- Password reset/change, rate limiting, security headers (CSP, HSTS,
+  Permissions-Policy), and one-click JSON export of your own progress.
+- **Public pages** — Home (marketing), About, Guide (illustrated
+  walkthrough), FAQ, Privacy Policy, Terms of Service, Grievance, and
+  Press — one consolidated single-page app, no separate documents.
 
 See `DEVELOPMENT.md` for the phased build history and the "Locked
 decisions" section for the reasoning behind the quota/backlog and
-content-sharing behavior.
+content-sharing behavior. See `docs/TECHNICAL.md` and
+`docs/FUNCTIONAL.md` for a deeper architecture and feature reference.
 
 ## Categories
 
@@ -109,10 +120,11 @@ JSON into one).
 ## Stack
 
 - **Frontend**: React 19 + TypeScript (`src/web/`), built with Vite +
-  Tailwind v4, served as static assets by the Worker (`[assets]` in
-  `wrangler.toml`) with `run_worker_first = true` so the Worker's own
-  `fetch()` still attaches security headers to every response, including
-  static files.
+  Tailwind v4 into a single document (`index.html` + one React Router
+  tree, every route lazy-loaded — see `src/web/entries/app.tsx`), served
+  as static assets by the Worker (`[assets]` in `wrangler.toml`) with
+  `run_worker_first = true` so the Worker's own `fetch()` still attaches
+  security headers to every response, including static files.
 - **Backend**: a single Cloudflare Worker (`src/worker/`), raw SQL over
   D1 — no ORM, no framework.
 - **Database**: Cloudflare D1 (SQLite), `migrations/` is the single
@@ -182,30 +194,52 @@ creates their own account and gets their own progress, streak, and
 review history; nothing is shared between accounts except the content
 itself.
 
-## Password reset emails
+## Email (password reset + verification)
 
-Forgot-password currently does **not** send a real email — no email
-provider is wired up. Requesting a reset logs the reset link to the
-Worker's console instead:
+Password reset and email verification both send through
+[Resend](https://resend.com) (`src/worker/lib/email.js`) if
+`RESEND_API_KEY` is configured:
+
+```
+npx wrangler secret put RESEND_API_KEY
+```
+
+Without that secret set, both emails fall back to logging the link to
+the Worker's console instead of failing outright — useful for local dev:
 
 ```
 npm run tail
 ```
 
 (or watch the `wrangler dev` terminal locally) and look for a line like
-`[password reset] someone@example.com -> https://.../?reset=<token> (expires in 30 min)`.
-The link is valid for 30 minutes and single-use.
+`[email:password-reset] RESEND_API_KEY not set — would have sent to
+someone@example.com: "Reset your ExamStreak password"` followed by the
+link. Reset links are valid for 30 minutes and single-use; verification
+links for 24 hours.
 
-To send real emails, add an HTTP-API provider (e.g.
-[Resend](https://resend.com)):
+## Invisible captcha
+
+Login, signup, and forgot-password are gated by an invisible Cloudflare
+Turnstile widget (`src/web/lib/turnstile.ts`, site key hardcoded since
+it's safe to expose client-side). The secret lives in
+`TURNSTILE_SECRET`:
 
 ```
-npx wrangler secret put RESEND_API_KEY
+npx wrangler secret put TURNSTILE_SECRET
 ```
 
-then replace the reset-link logging in `handleForgotPassword`
-(`src/worker/routes/auth.js`) with a `fetch()` call to the provider's
-send-email endpoint.
+Without it set, `verifyTurnstile()` (`src/worker/lib/turnstile.js`)
+no-ops and lets the request through — so a fresh local clone still
+works end-to-end before you've created a Turnstile widget.
+
+An admin can also turn the captcha off platform-wide from the Admin
+page (a switch at the top of `/admin`), without touching any secret or
+redeploying. This flips `app_settings.captcha_enabled`
+(`src/worker/lib/settings.js`), which `GET /api/config` exposes to the
+frontend (so Login skips loading the Turnstile script entirely when
+off) and which `checkCaptcha()` in `src/worker/routes/auth.js` checks
+server-side before calling `verifyTurnstile()`. Every toggle is
+recorded in the admin audit log.
 
 ## What's stored where
 
@@ -236,10 +270,15 @@ send-email endpoint.
 - D1 `mcq_variants` — cached AI-generated multiple-choice distractors for
   the Daily Test, one row per question, generated once and reused forever.
 - D1 `daily_test_results` — per-user, per-day Daily Test answers.
-- D1 `sessions` / `password_resets` — login sessions and short-lived
-  (30 min), single-use password reset tokens.
-- D1 `rate_limit_attempts` — per-IP, per-endpoint request timestamps used
-  to throttle `/api/login`, `/api/signup`, and `/api/password/forgot`.
+- D1 `sessions` — login sessions: a cookie-only `token` plus a separate,
+  non-sensitive `id` (used by the "Where you're signed in" list and
+  per-device revoke so that endpoint never has to return the real
+  token), `ip_address`/`user_agent`/`last_seen_at` for display there.
+- D1 `password_resets` / `email_verifications` — short-lived, single-use
+  tokens (30 min / 24h respectively).
+- D1 `rate_limit_attempts` — per-(IP or account), per-endpoint request
+  timestamps; throttles `/api/login` (both by IP and by the attempted
+  email, independently), `/api/signup`, and `/api/password/forgot`.
 - D1 `activity_log` — append-only history of every reveal/review/test
   action, the source for the Stats view.
 - D1 `ai_usage` — per-user, per-day token/request usage against the
@@ -247,6 +286,17 @@ send-email endpoint.
   unlimited, capped by their own provider account instead).
 - D1 `push_subscriptions` — Web Push subscriptions for the daily
   reminder cron.
+- D1 `admin_audit_log` — who did what admin action (resolve a report,
+  edit a question, approve/reject a set, view a user's stats) and when.
+- D1 `ai_reports` — user-flagged issues with AI-generated output (Self
+  Test feedback, the Stats coaching insight) — separate from
+  `question_reports` since there's no underlying `questions.id` to point
+  at, so a snapshot of the flagged text is stored instead.
+- `users.deletion_requested_at` — set when an account schedules self-serve
+  deletion; purged by the existing hourly `scheduled()` cron once 30 days
+  pass (`src/worker/lib/accountDeletion.js`), cleared by canceling.
+- D1 `app_settings` — generic admin-toggleable key/value store; today
+  just `captcha_enabled` (`src/worker/lib/settings.js`).
 
 ## Security notes / decisions made
 
@@ -255,12 +305,21 @@ send-email endpoint.
   of a generic message. `/api/password/forgot`, reachable by anyone with
   just an email address, stays fully generic.
 - **CSP allows `'unsafe-inline'` for `style-src` only**, never
-  `script-src`.
+  `script-src` (Turnstile's own script/frame are allowlisted by host, not
+  `'unsafe-inline'`).
 - **Rate limiting uses a D1 table**, not Cloudflare's dashboard-level
   Rate Limiting rules, so the behavior stays in code and testable with
-  `wrangler dev --local`.
-- **Turnstile was not added** — worth adding if this app ever gets a
-  wider public link.
+  `wrangler dev --local`. Login is throttled both per-IP and per-account
+  independently, so a distributed attempt against one account is still
+  caught even if it's spread across many IPs.
+- **Passwords**: PBKDF2-SHA256, 100,000 iterations, per-user salt.
+- **BYOK AI keys**: AES-GCM encrypted at rest (`AI_KEY_ENCRYPTION_SECRET`).
+- **Email verification doesn't block anything** — it's a soft nudge (a
+  dismissible, snoozable banner shown only after an account is 24h+ old),
+  not a login/feature gate, since there's no high-stakes action in this
+  app that specifically needs a confirmed email.
+- **Account deletion is soft, with a 30-day grace period** and an
+  explicit in-app Cancel — not immediate, and not silent.
 
 ## Custom domain (optional)
 
