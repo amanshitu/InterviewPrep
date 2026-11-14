@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent, type ComponentType, type ReactNode, type SVGProps } from "react";
 import { forgotPassword, login, resetPassword, signup } from "../../api/auth";
 import { listPublicCategories } from "../../api/categories";
+import { getPublicConfig } from "../../api/config";
 import { ApiError } from "../../api/client";
 import type { PublicCategory } from "../../api/types";
 import { likelyAuthed, markAuthed } from "../../lib/auth-flag";
@@ -43,7 +44,17 @@ export function Login() {
   const initialForm: FormKind = resetToken ? "reset" : searchParams.get("form") === "signup" ? "signup" : "login";
   const [form, setForm] = useState<FormKind>(initialForm);
   const [loginSuccessMessage, setLoginSuccessMessage] = useState<string | null>(null);
-  const { containerRef: turnstileRef, getToken: getTurnstileToken } = useTurnstileToken();
+  // Defaults to enabled (fails safe — i.e. still shows the captcha widget)
+  // until the real admin-toggle value loads, since the server-side check
+  // behind this is what actually matters; this just decides whether the
+  // widget is worth loading at all.
+  const [captchaEnabled, setCaptchaEnabled] = useState(true);
+  useEffect(() => {
+    getPublicConfig()
+      .then((c) => setCaptchaEnabled(c.captchaEnabled))
+      .catch(() => { /* keep the safe default */ });
+  }, []);
+  const { containerRef: turnstileRef, getToken: getTurnstileToken } = useTurnstileToken(captchaEnabled);
 
   // A signed-in visitor landing here (e.g. "Back to sign in" from the About
   // page, or a bookmark) otherwise just sees the sign-in form again with no
@@ -68,9 +79,9 @@ export function Login() {
           </div>
         </a>
         <p className="mb-5 mt-2 text-sm text-muted-foreground">
-          A daily interview and exam prep tracker: everyone gets the shared HR/behavioral curriculum, plus whatever question
-          sets you or others upload — a fresh batch every day sized to your own pace, plus spaced-repetition review
-          of everything you've covered.
+          A daily interview and exam prep tracker: a fresh batch of questions every day sized to your own pace,
+          spaced-repetition review of everything you've covered, and AI-generated practice — across interview
+          curriculum and competitive-exam tracks like Railway, SSC, Banking, Teaching, and Mathematics.
         </p>
 
         {form === "login" || form === "signup" ? (

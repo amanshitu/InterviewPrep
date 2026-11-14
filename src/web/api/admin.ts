@@ -151,3 +151,15 @@ export interface AuditLogEntry {
 export function getAuditLog(): Promise<{ entries: AuditLogEntry[] }> {
   return apiFetch("/api/admin/audit-log");
 }
+
+export interface AdminSettings {
+  captchaEnabled: boolean;
+}
+
+export function getAdminSettings(): Promise<AdminSettings> {
+  return apiFetch("/api/admin/settings");
+}
+
+export function setCaptchaEnabled(enabled: boolean): Promise<{ ok: true; captchaEnabled: boolean }> {
+  return apiPost("/api/admin/settings/captcha", { enabled });
+}

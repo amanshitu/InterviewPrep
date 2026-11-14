@@ -233,7 +233,7 @@ export function Guide() {
   return (
     <PublicPage>
       {/* Hero */}
-      <header className="-mx-4 -mt-10 rounded-b-3xl border-b border-border bg-linear-to-b from-primary/10 to-background px-4 pb-8 pt-10 sm:-mx-0 sm:mt-0 sm:rounded-3xl sm:border sm:px-6">
+      <header className="-mx-4 -mt-10 rounded-b-3xl border-b border-border bg-linear-to-b from-primary/10 to-background px-4 pb-8 pt-10 sm:mx-0 sm:mt-0 sm:rounded-3xl sm:border sm:px-6">
         <p className="inline-flex items-center gap-1.5 rounded-full bg-primary/12 px-3 py-1 text-xs font-semibold text-primary">
           <SparkleIcon width={14} height={14} /> Visual guide
         </p>

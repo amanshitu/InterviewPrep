@@ -5,6 +5,7 @@ import { SESSION_COOKIE, clearCookieHeader, startSession } from "../lib/session.
 import { clampQuota, mapUserRow, userPayloadWithCategories, defaultState } from "../lib/user.js";
 import { normalizeTimezone } from "../lib/datetime.js";
 import { verifyTurnstile } from "../lib/turnstile.js";
+import { isCaptchaEnabled } from "../lib/settings.js";
 import { checkRateLimit } from "../lib/ratelimit.js";
 import { sendPasswordResetEmail, sendVerificationEmail } from "../lib/email.js";
 
@@ -13,6 +14,14 @@ const EMAIL_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 function turnstileFailure() {
   return json({ error: "Please complete the verification check and try again." }, { status: 403 });
+}
+
+// Admin-toggleable (Admin -> captcha switch, Settings -> app_settings) —
+// when off, every signup/login/forgot-password request skips Turnstile
+// entirely rather than calling siteverify with no token to check.
+async function checkCaptcha(env, token, ip) {
+  if (!(await isCaptchaEnabled(env))) return true;
+  return verifyTurnstile(env, token, ip);
 }
 
 async function createEmailVerification(env, userId) {
@@ -45,7 +54,7 @@ export async function handleSignup(request, env) {
   if (password.length < 8) return json({ error: "Password must be at least 8 characters." }, { status: 400 });
 
   const ip = request.headers.get("CF-Connecting-IP");
-  if (!(await verifyTurnstile(env, body.turnstileToken, ip))) return turnstileFailure();
+  if (!(await checkCaptcha(env, body.turnstileToken, ip))) return turnstileFailure();
 
   // The signup form always sends a categoryId (it's a required picker, not
   // free text), but we fall back to the original 'interview-prep' default
@@ -134,7 +143,7 @@ export async function handleLogin(request, env) {
   const password = (body.password || "").toString();
 
   const ip = request.headers.get("CF-Connecting-IP");
-  if (!(await verifyTurnstile(env, body.turnstileToken, ip))) return turnstileFailure();
+  if (!(await checkCaptcha(env, body.turnstileToken, ip))) return turnstileFailure();
 
   // Per-account lockout, on top of the per-IP one the router already
   // applies — throttles a distributed attempt that spreads across many IPs
@@ -189,7 +198,7 @@ export async function handleForgotPassword(request, env) {
   const email = (parsed.body.email || "").toString().trim().toLowerCase();
 
   const ip = request.headers.get("CF-Connecting-IP");
-  if (!(await verifyTurnstile(env, parsed.body.turnstileToken, ip))) return turnstileFailure();
+  if (!(await checkCaptcha(env, parsed.body.turnstileToken, ip))) return turnstileFailure();
 
   // Always the same response, whether or not the account exists — this
   // endpoint is reachable by anyone with just an email address, so it must

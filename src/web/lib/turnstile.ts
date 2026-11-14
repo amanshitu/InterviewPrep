@@ -40,12 +40,16 @@ function loadTurnstileScript(): Promise<void> {
 // `getToken()` resolves null (never throws) on any failure, so a signup
 // attempt before the widget script has loaded degrades to "no captcha
 // token" rather than a thrown error blocking the whole form.
-export function useTurnstileToken() {
+// `enabled` (default true) is the admin-toggled captcha switch — when
+// false, the script is never even loaded, so a visitor isn't charged a
+// third-party request for a check the server won't enforce anyway.
+export function useTurnstileToken(enabled = true) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const widgetIdRef = useRef<string | null>(null);
   const resolverRef = useRef<((token: string | null) => void) | null>(null);
 
   useEffect(() => {
+    if (!enabled) return;
     let cancelled = false;
     loadTurnstileScript()
       .then(() => {
@@ -64,9 +68,10 @@ export function useTurnstileToken() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [enabled]);
 
   const getToken = useCallback((): Promise<string | null> => {
+    if (!enabled) return Promise.resolve(null);
     return new Promise((resolve) => {
       const turnstile = window.turnstile;
       const widgetId = widgetIdRef.current;
@@ -78,7 +83,7 @@ export function useTurnstileToken() {
       turnstile.reset(widgetId); // tokens are single-use; reset before every attempt
       turnstile.execute(widgetId);
     });
-  }, []);
+  }, [enabled]);
 
   return { containerRef, getToken };
 }

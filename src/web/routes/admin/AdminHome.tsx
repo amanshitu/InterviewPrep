@@ -14,6 +14,7 @@ import { UsersPanel } from "../../components/admin/UsersPanel";
 import { ReportsPanel } from "../../components/admin/ReportsPanel";
 import { FeedbackPanel } from "../../components/admin/FeedbackPanel";
 import { AuditLogPanel } from "../../components/admin/AuditLogPanel";
+import { CaptchaToggle } from "../../components/admin/CaptchaToggle";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { QuestionSetsSection } from "../../components/settings/QuestionSetsSection";
 import { CategoryAiPromptSection } from "../../components/settings/CategoryAiPromptSection";
@@ -109,6 +110,8 @@ function AdminDashboard({ user }: { user: User }) {
   return (
     <div className="space-y-5">
       <PageHeader title="Admin" />
+
+      <CaptchaToggle />
 
       {overview ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
