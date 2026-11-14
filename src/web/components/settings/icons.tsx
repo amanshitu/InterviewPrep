@@ -30,3 +30,5 @@ export function MoonIcon(p: SVGProps<SVGSVGElement>) { return <Icon {...p}><path
 export function MonitorIcon(p: SVGProps<SVGSVGElement>) { return <Icon {...p}><rect x="3" y="4" width="18" height="13" rx="1.5" /><path d="M8 21h8M12 17v4" /></Icon>; }
 export function CheckIcon(p: SVGProps<SVGSVGElement>) { return <Icon {...p}><path d="M5 13l4 4L19 7" /></Icon>; }
 export function LayersIcon(p: SVGProps<SVGSVGElement>) { return <Icon {...p}><path d="M12 3 3 8l9 5 9-5-9-5Z" strokeLinejoin="round" /><path d="M3 13l9 5 9-5M3 18l9 5 9-5" strokeLinejoin="round" /></Icon>; }
+export function GridIcon(p: SVGProps<SVGSVGElement>) { return <Icon {...p}><rect x="3.5" y="3.5" width="7" height="7" rx="1.2" /><rect x="13.5" y="3.5" width="7" height="7" rx="1.2" /><rect x="3.5" y="13.5" width="7" height="7" rx="1.2" /><rect x="13.5" y="13.5" width="7" height="7" rx="1.2" /></Icon>; }
+export function ListIcon(p: SVGProps<SVGSVGElement>) { return <Icon {...p}><path d="M8 6h13M8 12h13M8 18h13" /><circle cx="3.5" cy="6" r="1" fill="currentColor" /><circle cx="3.5" cy="12" r="1" fill="currentColor" /><circle cx="3.5" cy="18" r="1" fill="currentColor" /></Icon>; }

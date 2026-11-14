@@ -4,8 +4,12 @@ import type { Category, User } from "../../api/types";
 import { useRefreshUser } from "../layout/AppShell";
 import { useConfirm } from "../../hooks/use-confirm";
 import { useToast } from "../../hooks/use-toast";
+import { usePersistedPreference } from "../../hooks/use-persisted-preference";
 import { GhostButton, PrimaryButton, SecondaryButton, SectionCard } from "./SectionCard";
-import { CheckIcon, LayersIcon, PlusIcon, TrashIcon } from "./icons";
+import { CheckIcon, GridIcon, LayersIcon, ListIcon, PlusIcon, TrashIcon } from "./icons";
+
+type BrowseViewMode = "card" | "list";
+const BROWSE_VIEW_KEY = "examstreak-category-browse-view";
 
 // Lets a user see every category they're enrolled in, switch which one is
 // active (drives Today/Stats/Daily Test/etc. server-side), and enroll in a
@@ -26,6 +30,7 @@ export function CategorySection({ user }: { user: User }) {
   const [categories, setCategories] = useState<Category[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [browseView, setBrowseView] = usePersistedPreference<BrowseViewMode>(BROWSE_VIEW_KEY, "card");
 
   // Fetched once, for the catalogue (names/descriptions) only — which ones
   // are enrolled comes from user.enrolledCategories below, so the single
@@ -143,20 +148,60 @@ export function CategorySection({ user }: { user: User }) {
 
           {notEnrolled.length > 0 ? (
             <div>
-              <div className="mb-1.5 text-sm font-semibold text-foreground">Enroll in another category</div>
-              <div className="flex flex-col gap-2">
-                {notEnrolled.map((c) => (
-                  <div key={c.id} className="flex items-center justify-between gap-3 rounded-md border border-dashed border-border p-3">
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium text-foreground">{c.name}</div>
-                      {c.description ? <p className="mt-0.5 text-xs text-muted-foreground">{c.description}</p> : null}
-                    </div>
-                    <PrimaryButton onClick={() => void handleEnroll(c.id)} loading={busyId === c.id} loadingText="Enrolling…" className="shrink-0">
-                      <PlusIcon width={14} height={14} /> Enroll
-                    </PrimaryButton>
-                  </div>
-                ))}
+              <div className="mb-1.5 flex items-center justify-between">
+                <div className="text-sm font-semibold text-foreground">Enroll in another category</div>
+                <div className="flex shrink-0 overflow-hidden rounded-md border border-border">
+                  <button
+                    type="button"
+                    onClick={() => setBrowseView("card")}
+                    aria-pressed={browseView === "card"}
+                    aria-label="Show as cards"
+                    title="Card view"
+                    className={`flex h-7 w-7 items-center justify-center ${browseView === "card" ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-muted"}`}
+                  >
+                    <GridIcon width={14} height={14} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBrowseView("list")}
+                    aria-pressed={browseView === "list"}
+                    aria-label="Show as list"
+                    title="List view"
+                    className={`flex h-7 w-7 items-center justify-center border-l border-border ${browseView === "list" ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-muted"}`}
+                  >
+                    <ListIcon width={14} height={14} />
+                  </button>
+                </div>
               </div>
+              {browseView === "card" ? (
+                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+                  {notEnrolled.map((c) => (
+                    <div key={c.id} className="flex flex-col gap-2.5 rounded-md border border-dashed border-border p-3">
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-foreground">{c.name}</div>
+                        {c.description ? <p className="mt-0.5 text-xs text-muted-foreground">{c.description}</p> : null}
+                      </div>
+                      <PrimaryButton onClick={() => void handleEnroll(c.id)} loading={busyId === c.id} loadingText="Enrolling…" className="mt-auto self-start">
+                        <PlusIcon width={14} height={14} /> Enroll
+                      </PrimaryButton>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {notEnrolled.map((c) => (
+                    <div key={c.id} className="flex items-center justify-between gap-3 rounded-md border border-dashed border-border p-3">
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-foreground">{c.name}</div>
+                        {c.description ? <p className="mt-0.5 text-xs text-muted-foreground">{c.description}</p> : null}
+                      </div>
+                      <PrimaryButton onClick={() => void handleEnroll(c.id)} loading={busyId === c.id} loadingText="Enrolling…" className="shrink-0">
+                        <PlusIcon width={14} height={14} /> Enroll
+                      </PrimaryButton>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ) : null}
         </div>
