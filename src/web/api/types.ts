@@ -36,6 +36,7 @@ export interface Category {
   name: string;
   description: string | null;
   enrolled: boolean;
+  questionCount: number;
 }
 
 // Same rows as Category, minus `enrolled` — returned by the unauthenticated
@@ -45,6 +46,7 @@ export interface PublicCategory {
   id: string;
   name: string;
   description: string | null;
+  questionCount: number;
 }
 
 export interface Question {

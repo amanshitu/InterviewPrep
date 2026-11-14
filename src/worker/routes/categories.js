@@ -3,6 +3,15 @@ import { readJsonBody } from "../lib/request.js";
 
 // ---------- categories (multi-category platform) ----------
 
+// Shared by both listings below — a category's "size" as shown to a user
+// browsing/enrolling, counting each distinct question once even if its set
+// is tagged into more than one category (see question_set_categories).
+const QUESTION_COUNT_SUBQUERY = `(
+  SELECT COUNT(DISTINCT q.id) FROM question_set_categories qsc
+  JOIN questions q ON q.set_id = qsc.set_id
+  WHERE qsc.category_id = c.id
+)`;
+
 // Unauthenticated listing for the signup form's category picker — same
 // rows as handleListCategories below, minus the per-user `enrolled` flag
 // (there's no user yet at signup time). Kept deliberately read-only and
@@ -10,7 +19,9 @@ import { readJsonBody } from "../lib/request.js";
 // platform already applies to every request.
 export async function handleListPublicCategories(request, env) {
   const { results } = await env.DB.prepare(
-    `SELECT id, name, description FROM categories WHERE is_active = 1 ORDER BY name ASC`,
+    `SELECT c.id as id, c.name as name, c.description as description,
+            ${QUESTION_COUNT_SUBQUERY} as questionCount
+     FROM categories c WHERE c.is_active = 1 ORDER BY c.name ASC`,
   ).all();
   return json({ categories: results || [] });
 }
@@ -18,7 +29,8 @@ export async function handleListPublicCategories(request, env) {
 export async function handleListCategories(request, env, user) {
   const { results } = await env.DB.prepare(
     `SELECT c.id as id, c.name as name, c.description as description,
-            uc.user_id IS NOT NULL as enrolled
+            uc.user_id IS NOT NULL as enrolled,
+            ${QUESTION_COUNT_SUBQUERY} as questionCount
      FROM categories c
      LEFT JOIN user_categories uc ON uc.category_id = c.id AND uc.user_id = ?
      WHERE c.is_active = 1
