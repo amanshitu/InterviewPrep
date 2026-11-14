@@ -28,7 +28,7 @@ run_worker_first = true
 [[d1_databases]]
 binding = "DB"
 database_name = "interview-prep-db"
-database_id = "e68c64ae-fe6a-4935-b665-245aebcad8a3"
+database_id = "cf7f1830-9063-45d1-b403-3d67c330847a"
 
 [vars]
 # Public VAPID key for Web Push — safe to expose client-side, it's the
