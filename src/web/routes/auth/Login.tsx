@@ -33,8 +33,12 @@ function detectTimezone(): string {
 // bounce the freshly-signed-in user back here before /api/me gets a
 // chance to confirm the new session cookie.
 export function Login() {
-  const resetToken = new URLSearchParams(window.location.search).get("reset");
-  const [form, setForm] = useState<FormKind>(resetToken ? "reset" : "login");
+  const searchParams = new URLSearchParams(window.location.search);
+  const resetToken = searchParams.get("reset");
+  // ?form=signup lets the Home page's "Create free account" CTAs land
+  // straight on the signup tab instead of the sign-in default.
+  const initialForm: FormKind = resetToken ? "reset" : searchParams.get("form") === "signup" ? "signup" : "login";
+  const [form, setForm] = useState<FormKind>(initialForm);
   const [loginSuccessMessage, setLoginSuccessMessage] = useState<string | null>(null);
 
   // A signed-in visitor landing here (e.g. "Back to sign in" from the About
@@ -52,13 +56,13 @@ export function Login() {
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-background px-4 py-[calc(2.5rem+env(safe-area-inset-top,0px))]">
       <div className="w-full max-w-md rounded-lg border border-border bg-card p-6 text-card-foreground shadow-sm sm:p-8">
-        <div className="mb-1 flex items-center gap-2">
+        <a href="/home" className="mb-1 flex items-center gap-2">
           <LogoMark size={30} />
           <div>
             <span className="block text-lg font-bold leading-tight">ExamStreak</span>
             <span className="block text-xs font-medium leading-tight text-muted-foreground">Practice. Track. Ace it.</span>
           </div>
-        </div>
+        </a>
         <p className="mb-5 mt-2 text-sm text-muted-foreground">
           A daily interview and exam prep tracker: everyone gets the shared HR/behavioral curriculum, plus whatever question
           sets you or others upload — a fresh batch every day sized to your own pace, plus spaced-repetition review

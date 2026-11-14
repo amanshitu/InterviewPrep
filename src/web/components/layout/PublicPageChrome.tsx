@@ -12,6 +12,7 @@ import {
   HelpCircleIcon,
   MegaphoneIcon,
   ShieldIcon,
+  TodayIcon,
 } from "./icons";
 
 export interface PublicPage {
@@ -23,6 +24,7 @@ export interface PublicPage {
 }
 
 export const PUBLIC_PAGES: PublicPage[] = [
+  { id: "home", href: "/home", label: "Home", tagline: "The full tour — hero, features, and how it works.", icon: TodayIcon },
   { id: "about", href: "/about", label: "About", tagline: "What ExamStreak does and how the daily loop works.", icon: AboutIcon },
   { id: "guide", href: "/guide", label: "Guide", tagline: "A walkthrough of every page, feature by feature.", icon: BookOpenIcon },
   { id: "faq", href: "/faq", label: "FAQ", tagline: "Quick answers to common questions.", icon: HelpCircleIcon },

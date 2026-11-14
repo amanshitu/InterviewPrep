@@ -42,6 +42,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         index: resolve(__dirname, "src/web/index.html"),
+        home: resolve(__dirname, "src/web/home.html"),
         about: resolve(__dirname, "src/web/about.html"),
         login: resolve(__dirname, "src/web/login.html"),
         guide: resolve(__dirname, "src/web/guide.html"),
