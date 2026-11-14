@@ -135,7 +135,7 @@ function DailyTestBody() {
                       ) : item.answered && optIdx === item.selectedIndex ? (
                         <CloseIcon width={15} height={15} className="shrink-0 text-destructive" />
                       ) : null}
-                      <span>{opt}</span>
+                      <span>{renderInline(opt, `opt-${item.id}-${optIdx}`)}</span>
                     </button>
                   );
                 })}

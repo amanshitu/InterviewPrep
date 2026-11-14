@@ -68,17 +68,17 @@ export function FeedbackBubble({ feedback, modelAnswer }: { feedback: SelfTestFe
         </div>
       ) : null}
       <p className="mt-1">
-        <strong>Strengths:</strong> {feedback.strengths || "—"}
+        <strong>Strengths:</strong> {feedback.strengths ? renderInline(feedback.strengths, "fb-strengths") : "—"}
       </p>
       <p className="mt-2">
-        <strong>Gaps:</strong> {feedback.gaps || "—"}
+        <strong>Gaps:</strong> {feedback.gaps ? renderInline(feedback.gaps, "fb-gaps") : "—"}
       </p>
       <p className="mt-2">
-        <strong>Try this next:</strong> {feedback.suggestion || "—"}
+        <strong>Try this next:</strong> {feedback.suggestion ? renderInline(feedback.suggestion, "fb-suggestion") : "—"}
       </p>
       {feedback.star ? (
         <p className="mt-2">
-          <strong>STAR structure:</strong> {feedback.star}
+          <strong>STAR structure:</strong> {renderInline(feedback.star, "fb-star")}
         </p>
       ) : null}
       <div className="answer-text mt-3.5 rounded-md bg-card p-3 text-card-foreground">
