@@ -224,7 +224,7 @@ export async function handleForgotPassword(request, env) {
     .run();
 
   const origin = new URL(request.url).origin;
-  const resetLink = `${origin}/?reset=${token}`;
+  const resetLink = `${origin}/login?reset=${token}`;
   await sendPasswordResetEmail(env, { to: email, resetLink });
 
   return genericResponse;
