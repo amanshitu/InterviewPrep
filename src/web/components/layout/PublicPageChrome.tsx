@@ -9,6 +9,7 @@ import {
   ArrowRightIcon,
   BookOpenIcon,
   FileTextIcon,
+  FlagIcon,
   HelpCircleIcon,
   MegaphoneIcon,
   ShieldIcon,
@@ -30,6 +31,7 @@ export const PUBLIC_PAGES: PublicPage[] = [
   { id: "faq", href: "/faq", label: "FAQ", tagline: "Quick answers to common questions.", icon: HelpCircleIcon },
   { id: "privacy", href: "/privacy", label: "Privacy Policy", tagline: "What we collect, why, and how to get it deleted.", icon: ShieldIcon },
   { id: "terms", href: "/terms", label: "Terms of Service", tagline: "The ground rules for using ExamStreak.", icon: FileTextIcon },
+  { id: "grievance", href: "/grievance", label: "Grievance", tagline: "How to raise a concern, and who handles it.", icon: FlagIcon },
   { id: "press", href: "/press", label: "Press", tagline: "Fact sheet, boilerplate, and media contact.", icon: MegaphoneIcon },
 ];
 

@@ -49,6 +49,7 @@ export default defineConfig({
         faq: resolve(__dirname, "src/web/faq.html"),
         privacy: resolve(__dirname, "src/web/privacy.html"),
         terms: resolve(__dirname, "src/web/terms.html"),
+        grievance: resolve(__dirname, "src/web/grievance.html"),
         press: resolve(__dirname, "src/web/press.html"),
       },
     },
