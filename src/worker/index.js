@@ -386,9 +386,13 @@ export default {
 
         return applySecurityHeaders(json({ error: "Not found." }, { status: 404 }));
       } catch (err) {
-        return applySecurityHeaders(
-          json({ error: "Server error.", detail: String(err && err.message ? err.message : err) }, { status: 500 }),
-        );
+        // The exception's own message (D1 error text can include table/
+        // column names; a provider's error body) is logged for
+        // `wrangler tail`, never returned to the caller — an
+        // unauthenticated request hitting an unhandled error shouldn't
+        // get a peek at internal detail.
+        console.error(`[unhandled] ${url.pathname}: ${err && err.message ? err.message : err}`);
+        return applySecurityHeaders(json({ error: "Server error." }, { status: 500 }));
       }
     }
 
